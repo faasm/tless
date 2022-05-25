@@ -16,21 +16,18 @@ from faasmcli.util.env import (
 )
 from faasmcli.util.version import get_faasm_version
 
-SGX_HW_CONTAINER_SUFFIX = "-sgx"
-SGX_SIMULATION_CONTAINER_SUFFIX = "-sgx-sim"
+SGX_HW_CONTAINER_SUFFIX = "-hw"
+SGX_SIMULATION_CONTAINER_SUFFIX = "-sim"
 CONTAINER_NAME2FILE_MAP = {
     "redis": "redis.dockerfile",
     "minio": "minio.dockerfile",
     "base": "base.dockerfile",
-    "base-sgx": "base-sgx.dockerfile",
-    "base-sgx-sim": "base-sgx.dockerfile",
+    "base-sim": "base-sgx.dockerfile",
+    "base-hw": "base-sgx.dockerfile",
     "upload": "upload.dockerfile",
-    "worker": "worker.dockerfile",
-    "worker-sgx": "worker.dockerfile",
-    "worker-sgx-sim": "worker.dockerfile",
-    "cli": "cli.dockerfile",
-    "cli-sgx": "cli.dockerfile",
-    "cli-sgx-sim": "cli.dockerfile",
+    "worker-sim": "worker.dockerfile",
+    "worker-hw": "worker.dockerfile",
+    "tless": "cli.dockerfile",
     "cpp-root": "cpp-root.dockerfile",
     "sgx-aesmd": "sgx-aesmd.dockerfile",
 }
