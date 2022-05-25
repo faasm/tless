@@ -72,7 +72,7 @@ complete -F _complete_invoke -o default invoke inv
 VERSION_FILE=${PROJ_ROOT}/VERSION
 export LOG_LEVEL=debug
 export FAASM_ROOT=$(pwd)
-export FAASM_VERSION=$(cat ${VERSION_FILE})
+export TLESS_VERSION=$(cat ${VERSION_FILE})
 
 if [[ "$MODE" == "terminal" ]]; then
     export FAASM_BUILD_DIR=$(pwd)/dev/native/build
@@ -85,7 +85,7 @@ fi
 # Build binaries on path
 export PATH=${FAASM_BUILD_DIR}/bin:$PATH
 
-export PS1="(faasm) $PS1"
+export PS1="(tless) $PS1"
 
 # -----------------------------
 # Splash
@@ -93,8 +93,8 @@ export PS1="(faasm) $PS1"
 
 echo ""
 echo "----------------------------------"
-echo "Faasm CLI"
-echo "Version: ${FAASM_VERSION}"
+echo "TLess CLI"
+echo "Version: ${TLESS_VERSION}"
 echo "Project root: ${PROJ_ROOT}"
 echo "Mode: ${MODE}"
 echo "----------------------------------"
