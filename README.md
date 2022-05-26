@@ -32,8 +32,10 @@ inv dev.cc detect_sgx
 detect_sgx
 ```
 
+Then, run either in simulation (default) or hardware mode:
+
 ```bash
-docker-compose up -d --scale worker=2 nginx
+SGX_MODE=Hardware docker-compose up -d --scale worker=2 nginx
 ```
 
 To compile, upload and invoke a C++ function using this local cluster you can

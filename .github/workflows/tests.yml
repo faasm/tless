@@ -60,7 +60,7 @@ jobs:
       image: faasm/cpp-sysroot:0.1.6
     defaults:
       run:
-        working-directory: /__w/faasm/tless/clients/cpp
+        working-directory: /__w/faasm/faasm/clients/cpp
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v2
@@ -89,7 +89,7 @@ jobs:
       image: faasm/cpython:0.1.1
     defaults:
       run:
-        working-directory: /__w/faasm/tless/clients/python
+        working-directory: /__w/faasm/faasm/clients/python
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v2
@@ -115,7 +115,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/cli:3.0.1
+      image: faasm/tless-cli-sim:3.0.1
     steps:
       - name: "Conan cache"
         uses: faasm/conan-cache-action@v1
