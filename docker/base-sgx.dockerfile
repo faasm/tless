@@ -1,5 +1,5 @@
 ARG FAASM_VERSION
-FROM faasm/base:${FAASM_VERSION}
+FROM faasm/base-tless:${FAASM_VERSION}
 
 # ----------------------------
 # Install SGX SDK and PSW

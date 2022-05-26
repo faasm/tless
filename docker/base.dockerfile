@@ -16,7 +16,8 @@ WORKDIR /usr/local/code
 RUN rm -rf faasm
 RUN git clone \
     -b v${FAASM_VERSION} \
-    https://github.com/faasm/tless
+    https://github.com/faasm/tless \
+    /usr/local/code/faasm
 WORKDIR /usr/local/code/faasm
 
 RUN git submodule update --init
