@@ -12,8 +12,8 @@ def main():
     setup(
         name=PKG_NAME,
         version=PKG_VERSION,
-        description="Faasm CLI",
-        url="https://github.com/faasm/faasm",
+        description="TLess CLI",
+        url="https://github.com/faasm/tless",
         long_description=long_desc,
         long_description_content_type="text/markdown",
         license="Apache-2.0",

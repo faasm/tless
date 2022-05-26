@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        sgx-mode: [[-sgx, Hardware], [-sgx-sim, Simulation]]
+        sgx-mode: [[-sgx, Hardware], [-sim, Simulation]]
     steps:
       - name: "Get the code"
         uses: actions/checkout@v2
@@ -113,7 +113,7 @@ jobs:
     strategy:
       matrix:
         image: [worker, cli]
-        sgx-mode: [[-sgx, Hardware], [-sgx-sim, Simulation]]
+        sgx-mode: [[-sgx, Hardware], [-sim, Simulation]]
     steps:
       - name: "Get the code"
         uses: actions/checkout@v2

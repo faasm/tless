@@ -17,7 +17,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/cli:0.8.12
+      image: faasm/tless-cli-sim:3.0.1
     steps:
       # Get the code
       - name: "Fetch ref"
@@ -44,7 +44,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/cli:0.8.12
+      image: faasm/tless-cli-sim:3.0.1
     steps:
       - name: "Fetch ref"
         run: git fetch origin ${GITHUB_REF}:ci-branch
@@ -60,13 +60,13 @@ jobs:
       image: faasm/cpp-sysroot:0.1.6
     defaults:
       run:
-        working-directory: /__w/faasm/faasm/clients/cpp
+        working-directory: /__w/tless/tless/clients/cpp
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v2
       - name: "CPP submodule"
         run: git submodule update --init clients/cpp
-        working-directory: /__w/faasm/faasm
+        working-directory: /__w/tless/tless
       - name: "Build C++ functions"
         run: inv func.local
       - name: "Build libfake"
@@ -89,13 +89,13 @@ jobs:
       image: faasm/cpython:0.1.1
     defaults:
       run:
-        working-directory: /__w/faasm/faasm/clients/python
+        working-directory: /__w/tless/tless/clients/python
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v2
       - name: "Python submodule"
         run: git submodule update --init clients/python
-        working-directory: /__w/faasm/faasm
+        working-directory: /__w/tless/tless
       - name: "Build CPython function"
         run: inv func
       - name: "Put Python functions in place"
@@ -115,7 +115,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/cli:0.8.12
+      image: faasm/tless-cli-sim:3.0.1
     steps:
       - name: "Conan cache"
         uses: faasm/conan-cache-action@v1
@@ -144,14 +144,14 @@ jobs:
       TSAN_OPTIONS: "halt_on_error=1:suppressions=/usr/local/code/faasm/thread-sanitizer-ignorelist.txt:history_size=7:second_deadlock_stack=1"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/cli:0.8.12
+      image: faasm/tless-cli-sim:3.0.1
     services:
       redis:
-        image: faasm/redis:0.8.12
+        image: faasm/redis:3.0.1
         ports:
           - 6379:6379
       minio:
-        image: faasm/minio:0.8.12
+        image: faasm/minio:3.0.1
         env:
           MINIO_ROOT_USER: minio
           MINIO_ROOT_PASSWORD: minio123
@@ -236,14 +236,14 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/cli-sgx-sim:0.8.12
+      image: faasm/tless-cli-sim:3.0.1
     services:
       redis:
-        image: faasm/redis:0.8.12
+        image: faasm/redis:3.0.1
         ports:
           - 6379:6379
       minio:
-        image: faasm/minio:0.8.12
+        image: faasm/minio:3.0.1
         env:
           MINIO_ROOT_USER: minio
           MINIO_ROOT_PASSWORD: minio123
