@@ -1,5 +1,5 @@
 ARG FAASM_VERSION
-FROM faasm/base:${FAASM_VERSION}
+FROM faasm/tless-base:${FAASM_VERSION}
 
 # Build the upload and codegen targets
 WORKDIR /build/faasm

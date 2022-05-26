@@ -21,14 +21,14 @@ SGX_SIMULATION_CONTAINER_SUFFIX = "-sim"
 CONTAINER_NAME2FILE_MAP = {
     "redis": "redis.dockerfile",
     "minio": "minio.dockerfile",
-    "base-tless": "base.dockerfile",
-    "base-sim": "base-sgx.dockerfile",
-    "base-hw": "base-sgx.dockerfile",
-    "upload-tless": "upload.dockerfile",
-    "worker-sim": "worker.dockerfile",
-    "worker-hw": "worker.dockerfile",
-    "cli-sim": "cli.dockerfile",
-    "cpp-root": "cpp-root.dockerfile",
+    "tless-base": "base.dockerfile",
+    "tless-base-sim": "base-sgx.dockerfile",
+    "tless-base-hw": "base-sgx.dockerfile",
+    "tless-upload": "upload.dockerfile",
+    "tless-worker-sim": "worker.dockerfile",
+    "tless-worker-hw": "worker.dockerfile",
+    "tless-cli-sim": "cli.dockerfile",
+    "tless-cpp-root": "cpp-root.dockerfile",
     "sgx-aesmd": "sgx-aesmd.dockerfile",
 }
 
