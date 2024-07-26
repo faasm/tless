@@ -1,5 +1,6 @@
-# Build the experiments' code
-FROM faasm.azurecr.io/examples-build:0.5.0_0.4.0 as build
+# We inherit from the examples repo because it is likely that we want to use
+# off-the-shelve examples like tensorflow
+FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0 as build
 
 # Prepare repository structure
 RUN rm -rf /code \
