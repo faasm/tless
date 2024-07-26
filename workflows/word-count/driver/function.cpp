@@ -91,5 +91,7 @@ int main(int argc, char** argv)
     }
 #endif
 
+    std::string output = "Workflow executed succesfully!";
+    faasmSetOutput(output.c_str(), output.size());
     return 0;
 }

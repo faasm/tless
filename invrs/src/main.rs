@@ -23,7 +23,8 @@ fn main() {
             println!("invrs: supported tasks (and commands) are:");
             println!("- list (ls): list available tasks");
             println!("- docker:");
-            println!("\t- build: build experiments artifcat docker image");
+            println!("\t- build: build experiments artifact docker image");
+            println!("\t- push: push experiments artifact docker image to ACR");
             println!("- workflows:");
             println!("\t- list: list available workflows");
         },

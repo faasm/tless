@@ -8,15 +8,12 @@ impl Docker {
     pub fn do_cmd(cmd: String) -> () {
         match cmd.as_str() {
             "build" => Self::build(),
+            "push" => Self::push(),
             _ => panic!("invrs: unrecognised command for task 'build': {cmd:?}")
         }
     }
 
-    fn build() -> () {
-        // Prepare dockerfile path
-        let mut dockerfile_path = Env::docker_root();
-        dockerfile_path.push("tless-experiments.dockerfile");
-
+    fn get_docker_tag() -> String {
         // Prepare image tag
         let version;
         match Env::get_version() {
@@ -25,7 +22,16 @@ impl Docker {
                 panic!("invrs: error getting version from file: {}", e);
             }
         }
-        let image_tag = format!("{}/tless-experiments:{}", Env::CONTAINER_REGISTRY_URL, version);
+
+        format!("{}/tless-experiments:{}", Env::CONTAINER_REGISTRY_URL, version)
+    }
+
+    fn build() -> () {
+        // Prepare dockerfile path
+        let mut dockerfile_path = Env::docker_root();
+        dockerfile_path.push("tless-experiments.dockerfile");
+
+        let image_tag = Self::get_docker_tag();
 
         // Set arguments for the command
         let mut cmd = Command::new("docker");
@@ -39,6 +45,22 @@ impl Docker {
            .arg(dockerfile_path.to_string_lossy().into_owned())
            .arg("--no-cache")
            .arg(".")
+           .stdout(Stdio::inherit())
+           .stderr(Stdio::inherit())
+           .output()
+           .expect("invrs: failed executing command");
+    }
+
+    fn push() -> () {
+        let image_tag = Self::get_docker_tag();
+
+        // Set arguments for the command
+        let mut cmd = Command::new("docker");
+        cmd.env("DOCKER_BUILDKIT", "1");
+        cmd.current_dir(Env::proj_root());
+
+        cmd.arg("push")
+           .arg(image_tag)
            .stdout(Stdio::inherit())
            .stderr(Stdio::inherit())
            .output()

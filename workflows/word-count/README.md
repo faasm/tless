@@ -12,7 +12,7 @@ To run the workflow, you must first upload the wikipedia dump to S3:
 # Clean bucket first
 faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
 
-# Upload all files in the directory
+# Upload all data files in the directory
 faasmctl s3.upload-dir \
   --bucket ${BUCKET_NAME} \
   --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
@@ -22,8 +22,10 @@ faasmctl s3.upload-dir \
 Second, upload the WASM files for each stage in the workflow:
 
 ```bash
-faasmctl upload.workflow word-count \
-  --from-ctr faasm.azurecr.io/tless-experiments:0.1.0
+
+faasmctl upload.workflow \
+  word-count \
+  faasm.azurecr.io/tless-experiments:$(cat ${PROJ_DIR}/VERSION):/usr/local/faasm/wasm/word-count
 ```
 
 Lastly, you may invoke the driver function to trigger workflow execution:
