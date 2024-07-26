@@ -12,8 +12,23 @@ pushd ${PROJ_ROOT}>>/dev/null
 
 export VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(exp-tless) $PS1"
+source ${PROJ_ROOT}/bin/env.sh
 
 alias invrs="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
+
+# ----------------------------
+# Python deps
+# ----------------------------
+
+VENV_PATH=${PROJ_ROOT}/venv
+
+if [ ! -d ${VENV_PATH} ]; then
+    ${PROJ_ROOT}/bin/create_venv.sh
+fi
+
+export VIRTUAL_ENV_DISABLE_PROMPT=1
+source ${VENV_PATH}/bin/activate
+
 
 # -----------------------------
 # Splash
