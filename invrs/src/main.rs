@@ -19,9 +19,9 @@ fn main() {
     let args = Cli::parse();
 
     match args.task.as_str() {
-        "list" => {
+        "list" | "ls" => {
             println!("invrs: supported tasks (and commands) are:");
-            println!("- list: list available tasks");
+            println!("- list (ls): list available tasks");
             println!("- docker:");
             println!("\t- build: build experiments artifcat docker image");
             println!("- workflows:");

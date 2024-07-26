@@ -4,16 +4,41 @@ Workflow based on the MapReduce [example](https://github.com/ddps-lab/serverless
 
 ![workflow diagram](./serverless_workflows_word_count.png)
 
-### Stages Explained
+## Run the Workflow (Faasm)
 
-1. Splitter:
-  - Takes as inputs:
-    - `N`, the scale factor of the fan out.
-    - The bucket with all the documents
-  - Work:
-    - Works out how many documents (i.e. keys) each function will process.
-    - Chains to `N` mapper functions, passing the corresponding slice of the keys.
-2. Mapper:
-  - Work:
-    - Accumulate a histogram of words in the text. TODO: is this what it does actually?
-    - Prune to the top 10?
+To run the workflow, you must first upload the wikipedia dump to S3:
+
+```bash
+# Clean bucket first
+faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
+
+# Upload all files in the directory
+faasmctl s3.upload-dir \
+  --bucket ${BUCKET_NAME} \
+  --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
+  --s3-path word-count/few-files
+```
+
+Second, upload the WASM files for each stage in the workflow:
+
+```bash
+faasmctl upload.workflow word-count \
+  --from-ctr faasm.azurecr.io/tless-experiments:0.1.0
+```
+
+Lastly, you may invoke the driver function to trigger workflow execution:
+
+```bash
+faasmctl invoke.wasm word-count driver
+```
+
+## Stages Explained
+
+0. Driver: orchestrates function execution (could be removed)
+1. Splitter: takes as an input an S3 path. Chains to one `mapper` function per
+  key (i.e. file) in the S3 path.
+2. Mapper: takes as an input an S3 path, and as an output writes to S3 a
+  serialised map of the appearences of different programming languages in the
+  wikipedia dump.
+3. Reducer: once all mapper functions are done, iterates over the results S3
+  dir and accumulates all results.

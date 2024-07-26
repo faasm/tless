@@ -12,7 +12,7 @@ RUN rm -rf /code \
     && git submodule update --init -f cpp \
     # Checkout this repo to a specific commit
     && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
-    && cp /code/experiment-tless/workflows /code/faasm-examples/ \
+    && cp -r /code/experiment-tless/workflows /code/faasm-examples/ \
     && mv /code/faasm-examples/workflows/build.py /code/faasm-examples/build_workflows.py
 
 # Build WASM code
