@@ -20,18 +20,10 @@ set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
 
 set(FAASM_FUNC_LIBS faasm)
 
-function(faasm_example_func_c func_name file_name)
-    add_executable(${func_name} ${file_name})
-    target_link_libraries(${func_name} ${FAASM_FUNC_LIBS})
-endfunction(faasm_example_func_c)
-
-function(faasm_example_func func_name file_name)
-    set(target_name "${FAASM_USER}_${func_name}")
+function(faasm_wflow_func wflow_name func_name file_name)
+    set(target_name "${wflow_name}_${func_name}")
     add_executable(${target_name} ${file_name})
     target_link_libraries(${target_name} ${FAASM_FUNC_LIBS})
-endfunction(faasm_example_func)
+endfunction(faasm_wflow_func)
 
-add_subdirectory(ffmpeg)
-add_subdirectory(lammps)
-add_subdirectory(mpi)
-add_subdirectory(tf)
+add_subdirectory(word-count)

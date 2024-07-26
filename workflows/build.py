@@ -1,36 +1,46 @@
 from faasmtools.compile_util import wasm_cmake, wasm_copy_upload
-from os.path import join
-from tasks.env import PROJ_ROOT
+from os import listdir, makedirs
+from os.path import dirname, exists, join, realpath
+from shutil import rmtree
 
-FUNC_DIR = join(PROJ_ROOT, "func")
-FUNC_BUILD_DIR = join(PROJ_ROOT, "build", "func")
+WORKFLOWS_ROOT = dirname(realpath(__file__))
 
-
-def _copy_built_function(user, func):
-    exe_name = "{}_{}.{}".format(user, func, "wasm")
-    src_file = join(FUNC_BUILD_DIR, user, exe_name)
-    wasm_copy_upload(user, func, src_file)
+WORKFLOWS = {
+    "word-count": ["driver", "splitter", "mapper", "reducer"],
+}
 
 
-def compile(ctx, user, func, clean=False, debug=False):
+def _copy_built_function(build_dir, wflow, func):
+    exe_name = "{}_{}.{}".format(wflow, func, "wasm")
+    src_file = join(build_dir, wflow, exe_name)
+    wasm_copy_upload(wflow, func, src_file)
+
+
+def compile():
     """
     Compile a function to test a sample library
     """
-    # Keep track of which functions require the threads target
-    is_threads = user in ["tf"]
+    build_dir = join(WORKFLOWS_ROOT, "build")
 
-    # Build the function (gets written to the build dir)
-    wasm_cmake(
-        FUNC_DIR,
-        FUNC_BUILD_DIR,
-        "{}_{}".format(user, func),
-        clean,
-        debug,
-        is_threads=is_threads,
-    )
+    if exists(build_dir):
+        rmtree(build_dir)
 
-    # Copy into place
-    _copy_built_function(user, func)
+    makedirs(build_dir)
+
+    for wflow in WORKFLOWS:
+        for function in WORKFLOWS[wflow]:
+            # Build the function (gets written to the build dir)
+            wasm_cmake(
+                WORKFLOWS_ROOT,
+                build_dir,
+                "{}_{}".format(wflow, function),
+                clean=False,
+                debug=False,
+                is_threads=False,
+            )
+
+            # Copy into place in /usr/local/faasm/wasm/<user>/<func>
+            _copy_built_function(build_dir, wflow, function)
 
 
 if __name__ == "__main__":

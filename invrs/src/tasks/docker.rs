@@ -37,6 +37,7 @@ impl Docker {
            .arg(image_tag)
            .arg("-f")
            .arg(dockerfile_path.to_string_lossy().into_owned())
+           .arg("--no-cache")
            .arg(".")
            .stdout(Stdio::inherit())
            .stderr(Stdio::inherit())
