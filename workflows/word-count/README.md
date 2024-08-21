@@ -22,7 +22,6 @@ faasmctl s3.upload-dir \
 Second, upload the WASM files for each stage in the workflow:
 
 ```bash
-
 faasmctl upload.workflow \
   word-count \
   faasm.azurecr.io/tless-experiments:$(cat ${PROJ_DIR}/VERSION):/usr/local/faasm/wasm/word-count
@@ -31,7 +30,7 @@ faasmctl upload.workflow \
 Lastly, you may invoke the driver function to trigger workflow execution:
 
 ```bash
-faasmctl invoke.wasm word-count driver
+faasmctl invoke.wasm word-count driver --cmdline "word-count/few-files"
 ```
 
 ## Stages Explained
