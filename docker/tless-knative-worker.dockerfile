@@ -2,7 +2,10 @@
 ARG TLESS_VERSION
 FROM faasm.azurecr.io/tless-experiments:${TLESS_VERSION:-d34d} AS build
 
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
 COPY --from=build /code/faasm-examples /code/faasm-examples
-WORKDIR /code/faasm-examples/build-native
+COPY --from=build /usr/local/lib /usr/local/lib
+COPY --from=build /lib/x86_64-linux-gnu/ /lib/x86_64-linux-gnu/
+
+WORKDIR /code/faasm-examples/workflows/build-native

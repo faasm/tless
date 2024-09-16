@@ -40,6 +40,10 @@ pub enum DockerCommand {
         #[arg(long)]
         push: bool,
     },
+    BuildAll {
+        #[arg(long)]
+        push: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -79,6 +83,13 @@ async fn main() {
         Command::Docker { docker_command } => match docker_command {
             DockerCommand::Build { ctr, push } => {
                 Docker::build(ctr.to_string(), *push);
+            }
+            DockerCommand::BuildAll { push } => {
+                let ctrs = vec!["tless-experiments", "tless-knative-worker"];
+
+                for ctr in &ctrs {
+                    Docker::build(ctr.to_string(), *push);
+                }
             }
         },
         Command::S3 { s3_command } => match s3_command {
