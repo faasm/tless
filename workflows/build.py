@@ -23,10 +23,8 @@ def compile(wasm=False, native=False):
     """
     build_dir = join(WORKFLOWS_ROOT, "build-wasm" if wasm else "build-native")
 
-#     if exists(build_dir):
-#         rmtree(build_dir)
-#
-#     makedirs(build_dir)
+    if not exists(build_dir):
+        makedirs(build_dir)
 
     for wflow in WORKFLOWS:
         for function in WORKFLOWS[wflow]:
