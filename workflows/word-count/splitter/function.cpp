@@ -5,6 +5,10 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include <cstdlib>
+#include <iostream>
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 
 #include <stdio.h>
@@ -31,6 +35,21 @@ int main(int argc, char** argv)
     char s3dirChar[inputSize];
     faasmGetInput((uint8_t*)s3dirChar, inputSize);
     s3dir.assign(s3dirChar, s3dirChar + inputSize);
+#else
+    s3::initS3Wrapper();
+
+    s3::S3Wrapper s3cli;
+
+    // In non-WASM deployments we can get the object key as an env. variable
+    char* s3dirChar = std::getenv("TLESS_S3_DIR");
+
+    if (s3dirChar == nullptr) {
+        std::cerr << "word-count(splitter): error: must populate TLESS_S3_DIR"
+                  << " env. variable!"
+                  << std::endl;
+
+        return 1;
+    }
 #endif
 
     // Get the list of files in the s3 dir
@@ -60,6 +79,8 @@ int main(int argc, char** argv)
             }
         }
     }
+#else
+    s3files = s3cli.listKeys(bucketName);
 #endif
 
     // Chain to one mapper function per file, and store the message id to be
@@ -70,6 +91,11 @@ int main(int argc, char** argv)
         printf("word-count(splitter): chaining to mapper with file %s\n", s3file.c_str());
         int splitterId = faasmChainNamed("mapper", (uint8_t*) s3file.c_str(), s3file.size());
         splitterCallIds.push_back(splitterId);
+#else
+        std::cout << "file: " << s3file << std::endl;
+        // TODO: chain in knative
+        // i'm thinking we wrap the c++ function in a CloudEvent handler in
+        // Rust (no official C++ SDK for CloudEvents alas)
 #endif
     }
 
@@ -83,6 +109,8 @@ int main(int argc, char** argv)
 
 #ifdef __faasm
     faasmSetOutput(outputStr.c_str(), outputStr.size());
+#else
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

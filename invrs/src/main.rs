@@ -18,7 +18,8 @@ enum Command {
     List {},
 
     Docker {
-        function: String,
+        #[command(subcommand)]
+        docker_command: DockerCommand,
     },
 
     S3 {
@@ -28,6 +29,16 @@ enum Command {
 
     Workflows {
         function: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DockerCommand {
+    Build {
+        #[arg(long)]
+        ctr: String,
+        #[arg(long)]
+        push: bool,
     },
 }
 
@@ -65,7 +76,11 @@ async fn main() {
 
     match &cli.task {
         Command::List {} => {}
-        Command::Docker { function } => Docker::do_cmd(function.to_string()),
+        Command::Docker { docker_command } => match docker_command {
+            DockerCommand::Build { ctr, push } => {
+                Docker::build(ctr.to_string(), *push);
+            }
+        },
         Command::S3 { s3_command } => match s3_command {
             S3Command::ClearBucket { bucket_name } => {
                 S3::clear_bucket(bucket_name.to_string()).await;

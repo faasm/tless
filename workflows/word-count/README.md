@@ -33,9 +33,38 @@ Lastly, you may invoke the driver function to trigger workflow execution:
 faasmctl invoke.wasm word-count driver --cmdline "word-count/few-files"
 ```
 
+## Run the Workflow (Knative)
+
+To run the workflow, you must first upload the wikipedia dump to S3:
+
+```bash
+# Clean bucket first
+invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
+
+# Upload all data files in the directory
+invrs s3 upload-dir \
+  --bucket-name ${BUCKET_NAME} \
+  --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
+  --s3-path word-count/few-files
+```
+
+### NOTES (delete me):
+
+The `driver` function requires the following env. vars:
+
+```
+export S3_BUCKET=tless;
+export S3_HOST=localhost;
+export S3_PASSWORD=minio123;
+export S3_PORT=9000;
+export S3_USER=minio;
+
+export TLESS_S3_DIR=word-count/few-files;
+```
+
 ## Stages Explained
 
-0. Driver: orchestrates function execution (could be removed)
+0. Driver: orchestrates function execution (needed in Faasm, not in Knative)
 1. Splitter: takes as an input an S3 path. Chains to one `mapper` function per
   key (i.e. file) in the S3 path.
 2. Mapper: takes as an input an S3 path, and as an output writes to S3 a
