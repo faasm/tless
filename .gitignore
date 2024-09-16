@@ -2,3 +2,6 @@ target
 
 workflows/build
 venv
+
+build-native
+build-wasm

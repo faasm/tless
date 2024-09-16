@@ -5,14 +5,14 @@ use std::fs;
 pub struct Workflows {}
 
 impl Workflows {
-    pub fn do_cmd(cmd: String) -> () {
+    pub fn do_cmd(cmd: String) {
         match cmd.as_str() {
             "list" => Self::list(),
-            _ => panic!("invrs: unrecognised command for task 'workflows': {cmd:?}")
+            _ => panic!("invrs: unrecognised command for task 'workflows': {cmd:?}"),
         }
     }
 
-    fn list() -> () {
+    fn list() {
         let paths = fs::read_dir(Env::workflows_root()).unwrap();
 
         println!("invrs: listing available workflows");

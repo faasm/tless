@@ -1,6 +1,6 @@
 # We inherit from the examples repo because it is likely that we want to use
 # off-the-shelve examples like tensorflow
-FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0 as build
+FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0
 
 # Prepare repository structure
 RUN rm -rf /code \
@@ -20,6 +20,3 @@ RUN cd /code/faasm-examples \
     && ./bin/create_venv.sh \
     && source ./venv/bin/activate \
     && python3 ./workflows/build.py
-
-# Prepare the runtime to run the native experiments
-# TODO
