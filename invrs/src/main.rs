@@ -1,6 +1,7 @@
-use clap::Parser;
 use crate::tasks::docker::Docker;
+use crate::tasks::s3::S3;
 use crate::tasks::workflows::Workflows;
+use clap::{Parser, Subcommand};
 
 pub mod env;
 pub mod tasks;
@@ -8,28 +9,86 @@ pub mod tasks;
 #[derive(Parser)]
 struct Cli {
     // The name of the task to execute
-    task: String,
-
-    // The command in the task to execute
-    #[arg(default_value = "")]
-    command: String,
+    #[clap(subcommand)]
+    task: Command,
 }
 
-fn main() {
-    let args = Cli::parse();
+#[derive(Debug, Subcommand)]
+enum Command {
+    List {},
 
-    match args.task.as_str() {
-        "list" | "ls" => {
-            println!("invrs: supported tasks (and commands) are:");
-            println!("- list (ls): list available tasks");
-            println!("- docker:");
-            println!("\t- build: build experiments artifact docker image");
-            println!("\t- push: push experiments artifact docker image to ACR");
-            println!("- workflows:");
-            println!("\t- list: list available workflows");
+    Docker {
+        function: String,
+    },
+
+    S3 {
+        #[command(subcommand)]
+        s3_command: S3Command,
+    },
+
+    Workflows {
+        function: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum S3Command {
+    ClearBucket {
+        #[arg(long)]
+        bucket_name: String,
+    },
+    /// List all buckets in an S3 server
+    ListBuckets {},
+    /// List all keys in an S3 bucket
+    ListKeys {
+        /// Name of the bucket
+        #[arg(long)]
+        bucket_name: String,
+    },
+    /// Upload a directory to S3
+    UploadDir {
+        /// Name of the bucket to store files in
+        #[arg(long)]
+        bucket_name: String,
+        /// Host path to upload files from
+        #[arg(long)]
+        host_path: String,
+        /// Path in the S3 server to store files to
+        #[arg(long)]
+        s3_path: String,
+    },
+}
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse();
+
+    match &cli.task {
+        Command::List {} => {}
+        Command::Docker { function } => Docker::do_cmd(function.to_string()),
+        Command::S3 { s3_command } => match s3_command {
+            S3Command::ClearBucket { bucket_name } => {
+                S3::clear_bucket(bucket_name.to_string()).await;
+            }
+            S3Command::ListBuckets {} => {
+                S3::list_buckets().await;
+            }
+            S3Command::ListKeys { bucket_name } => {
+                S3::list_keys(bucket_name.to_string()).await;
+            }
+            S3Command::UploadDir {
+                bucket_name,
+                host_path,
+                s3_path,
+            } => {
+                S3::upload_dir(
+                    bucket_name.to_string(),
+                    host_path.to_string(),
+                    s3_path.to_string(),
+                )
+                .await;
+            }
         },
-        "docker" => Docker::do_cmd(args.command),
-        "workflows" => Workflows::do_cmd(args.command),
-        _ => panic!("invrs: unrecognised task: {0}", args.task)
+        Command::Workflows { function } => Workflows::do_cmd(function.to_string()),
     }
 }

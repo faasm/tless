@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
+futures-util = "0.3"
+minio = { git = "https://github.com/minio/minio-rs.git", rev = "b254b2f7aeaf18a1588a8800ff9b877b7885236e" }
+tokio = { version = "1", features = ["full"] }

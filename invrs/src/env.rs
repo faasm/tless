@@ -36,4 +36,3 @@ impl Env {
         Ok(version.trim().to_string())
     }
 }
-
