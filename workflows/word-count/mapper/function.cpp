@@ -5,6 +5,8 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 
 #include <map>
@@ -59,6 +61,20 @@ int main(int argc, char** argv)
     char keyName[inputSize];
     faasmGetInput((uint8_t*)keyName, inputSize);
     s3ObjectKey.assign(keyName, keyName + inputSize);
+#else
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
+
+    // In Knative, we get the object key as an env. var
+    char* s3fileChar = std::getenv("TLESS_S3_FILE");
+    if (s3fileChar == nullptr) {
+        std::cerr << "word-count(splitter): error: must populate TLESS_S3_FILE"
+                  << " env. variable!"
+                  << std::endl;
+
+        return 1;
+    }
+    s3ObjectKey.assign(s3fileChar);
 #endif
 
     // Read object from S3
@@ -73,8 +89,12 @@ int main(int argc, char** argv)
                s3ObjectKey.c_str(),
                bucketName.c_str());
     }
+#else
+    auto keyBytesVec = s3cli.getKeyBytes(bucketName, s3ObjectKey);
+    keyBytes = keyBytesVec.data();
 #endif
 
+    // Read object file line-by-line, and map the inputs to our word-count map
     std::stringstream stringStream((char*) keyBytes);
     std::string currentLine;
     while (std::getline(stringStream, currentLine, '\n')) {
@@ -101,6 +121,9 @@ int main(int argc, char** argv)
                                s3ObjectKey.c_str(),
                                (void*) thisWordCount.c_str(),
                                thisWordCount.size());
+#else
+    s3cli.addKeyStr(bucketName, s3ObjectKey, thisWordCount);
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

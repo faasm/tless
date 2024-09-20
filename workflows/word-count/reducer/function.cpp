@@ -5,6 +5,8 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 #include <map>
 #include <stdio.h>
@@ -58,11 +60,24 @@ int main(int argc, char** argv)
     char s3dirChar[inputSize];
     faasmGetInput((uint8_t*)s3dirChar, inputSize);
     s3dir.assign(s3dirChar, s3dirChar + inputSize);
+#else
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
+
+    // In Knative, we get the rsults dir as an env. var
+    char* s3dirChar = std::getenv("TLESS_S3_RESULTS_DIR");
+    if (s3dirChar == nullptr) {
+        std::cerr << "word-count(splitter): error: must populate TLESS_S3_RESULTS_DIR"
+                  << " env. variable!"
+                  << std::endl;
+
+        return 1;
+    }
+    s3dir.assign(s3dirChar);
 #endif
 
     // Get the list of files in the s3 dir
     std::vector<std::string> s3files;
-
 #ifdef __faasm
     // In Faasm we need to do a bit of work because: (i) we can not pass
     // structured objects (i.e. vectors) through the WASM calling interface,
@@ -81,6 +96,15 @@ int main(int argc, char** argv)
         // Filter by prefix
         if (tmpString.rfind(s3dir, 0) == 0) {
             s3files.push_back(tmpString);
+        }
+    }
+#else
+    auto rawS3Keys = s3cli.listKeys(bucketName);
+    for (const auto& key : rawS3Keys) {
+
+        // Filter by prefix
+        if (key.rfind(s3dir, 0) == 0) {
+            s3files.push_back(key);
         }
     }
 #endif
@@ -103,6 +127,8 @@ int main(int argc, char** argv)
         }
 
         fileContents.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+#else
+        fileContents = s3cli.getKeyStr(bucketName, outFile);
 #endif
 
         auto keyValPairs = splitByDelimiter(fileContents, ",");
@@ -121,8 +147,10 @@ int main(int argc, char** argv)
                                resultKey.c_str(),
                                (void*) resultsStr.c_str(),
                                resultsStr.size());
+#else
+    s3cli.addKeyStr(bucketName, resultKey, resultsStr);
+    s3::shutdownS3Wrapper();
 #endif
-
 
     return 0;
 }

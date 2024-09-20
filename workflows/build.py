@@ -58,6 +58,20 @@ def compile(wasm=False, native=False):
                 run(f"ninja {wflow}_{function}", shell=True, check=True, cwd=build_dir)
 
 
+def compile_driver():
+    """
+    Compile the driver function to enable Knative chaining (written in Rust)
+    """
+    for workflow in list(WORKFLOWS.keys()):
+        build_dir = join(WORKFLOWS_ROOT, workflow, "knative")
+        cargo_cmd = "cargo build --release"
+        run(cargo_cmd, shell=True, check=True, cwd=build_dir)
+
+
 if __name__ == "__main__":
-    # compile(wasm=True)
+    # First, build the workflows
+    compile(wasm=True)
     compile(native=True)
+
+    # Second, build the driver function for Knative
+    compile_driver()

@@ -7,6 +7,7 @@ extern "C"
 #include <faasm/faasm.h>
 #else
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include "libs/s3/S3Wrapper.hpp"
 #endif
@@ -86,6 +87,11 @@ int main(int argc, char** argv)
     // Chain to one mapper function per file, and store the message id to be
     // able to wait on it
     std::vector<int> splitterCallIds;
+#ifndef __faasm
+    // For Knative, we write the output to a file
+    std::ofstream outfile("./output_splitter.txt");
+    assert(outfile.is_open());
+#endif
     for (const auto& s3file : s3files) {
 #ifdef __faasm
         printf("word-count(splitter): chaining to mapper with file %s\n", s3file.c_str());
@@ -93,13 +99,11 @@ int main(int argc, char** argv)
         splitterCallIds.push_back(splitterId);
 #else
         std::cout << "file: " << s3file << std::endl;
-        // TODO: chain in knative
-        // i'm thinking we wrap the c++ function in a CloudEvent handler in
-        // Rust (no official C++ SDK for CloudEvents alas)
+        outfile << s3file << std::endl;
 #endif
     }
 
-
+#ifdef __faasm
     // Prepare the output: comma separated list of message ids
     std::string outputStr;
     for (const auto& splitterId : splitterCallIds) {
@@ -107,7 +111,6 @@ int main(int argc, char** argv)
     }
     outputStr.pop_back();
 
-#ifdef __faasm
     faasmSetOutput(outputStr.c_str(), outputStr.size());
 #else
     s3::shutdownS3Wrapper();
