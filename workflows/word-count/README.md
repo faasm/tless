@@ -35,9 +35,20 @@ faasmctl invoke.wasm word-count driver --cmdline "word-count/few-files"
 
 ## Run the Workflow (Knative)
 
+First, deploy the local kubernetes cluster:
+
+```bash
+TODO
+
+kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
+kubectl apply -f ${PROJ_ROOT}/workflows/word-count/knative/workflow.yaml
+```
+
 To run the workflow, you must first upload the wikipedia dump to S3:
 
 ```bash
+export MINIO_URL=$(kubectl -n tless get services -o jsonpath='{.items[?(@.metadata.name=="minio")].spec.clusterIP}')
+
 # Clean bucket first
 invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
 
@@ -46,6 +57,12 @@ invrs s3 upload-dir \
   --bucket-name ${BUCKET_NAME} \
   --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
   --s3-path word-count/few-files
+```
+
+then you may execute the workflow by running:
+
+```bash
+${PROJ_ROOT}/workflows/word-count/knative/curl_cmd.sh
 ```
 
 ### NOTES (delete me):

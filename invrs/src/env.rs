@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct Env {}
 
 impl Env {
-    pub const CONTAINER_REGISTRY_URL: &'static str = "faasm.azurecr.io";
+    pub const CONTAINER_REGISTRY_URL: &'static str = "ghcr.io/coco-serverless";
 
     pub fn proj_root() -> PathBuf {
         env::current_dir().expect("invrs: failed to get current directory")

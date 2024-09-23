@@ -164,7 +164,7 @@ pub fn process_event(mut event: Event) -> Event {
             let mut scaled_event = event.clone();
 
             // Write the new destination channel for the 'mapper' function
-            scaled_event.set_type("http://mapper-to-reducer.tless.svc.cluster.local");
+            scaled_event.set_type("http://mapper-to-reducer-kn-channel.tless.svc.cluster.local");
 
             println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
 

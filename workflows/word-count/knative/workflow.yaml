@@ -5,11 +5,6 @@
 # fans-out, instantiatating many mapper functions. Then the reducer function
 # waits for all mapper functions to finish, and aggreagates the results.
 # -----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tless
----
 # We need to have as many channels as edges in our workflow DAG. Alternatively,
 # we could enforce edges by using a Broker/Trigger pattern and filtering on
 # CloudEvent properties
@@ -54,11 +49,12 @@ metadata:
 spec:
   template:
     spec:
-      runtimeClassName: kata-qemu-sev
+      # runtimeClassName: kata-qemu-sev
       containers:
-        - image: faasm.azurecr.io/tless-knative-worker:0.2.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
           ports:
             - containerPort: 8080
+          workingDir: /code/faasm-examples/workflows/word-count/knative
           command: [ "cargo", "run", "--release" ]
     metadata:
       labels:
@@ -83,13 +79,14 @@ spec:
       parallelism: 1
       template:
         spec:
-          runtimeClassName: kata-qemu-sev
+          # runtimeClassName: kata-qemu-sev
           restartPolicy: Never
           containers:
             - name: main
-              image: faasm.azurecr.io/tless-knative-worker:0.2.0
+              image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
               ports:
                 - containerPort: 8080
+              workingDir: /code/faasm-examples/workflows/word-count/knative
               command: [ "cargo", "run", "--release" ]
               env:
                 - name: CE_FROM_FILE
@@ -112,11 +109,12 @@ metadata:
 spec:
   template:
     spec:
-      runtimeClassName: kata-qemu-sev
+      # runtimeClassName: kata-qemu-sev
       containers:
-        - image: faasm.azurecr.io/tless-knative-worker:0.2.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
           ports:
             - containerPort: 8080
+          workingDir: /code/faasm-examples/workflows/word-count/knative
           command: [ "cargo", "run", "--release" ]
     metadata:
       labels:
@@ -179,3 +177,4 @@ spec:
       apiVersion: serving.knative.dev/v1
       kind: Service
       name: word-count-reducer
+---

@@ -5,15 +5,28 @@ use minio::s3::client::{Client, ClientBuilder};
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{S3Api, ToStream};
-use std::fs;
 use std::path::Path;
+use std::{env, fs};
 
 #[derive(Debug)]
 pub struct S3 {}
 
 impl S3 {
     fn init_s3_client() -> Client {
-        let base_url = "http://localhost:9000".parse::<BaseUrl>().unwrap();
+        let minio_url: &str = match env::var("MINIO_URL") {
+            Ok(value) => &value.clone(),
+            Err(env::VarError::NotPresent) => "localhost",
+            Err(e) => panic!("invrs(s3): failed to read env. var: {}", e),
+        };
+        let minio_port: &str = match env::var("MINIO_PORT") {
+            Ok(value) => &value.clone(),
+            Err(env::VarError::NotPresent) => "9000",
+            Err(e) => panic!("invrs(s3): failed to read env. var: {}", e),
+        };
+
+        let base_url = format!("http://{minio_url}:{minio_port}")
+            .parse::<BaseUrl>()
+            .unwrap();
 
         let static_provider = StaticProvider::new("minio", "minio123", None);
 
@@ -28,6 +41,17 @@ impl S3 {
 
         // First, remove all objects in the bucket
         let client = Self::init_s3_client();
+
+        // Return fast if the bucket does not exist
+        let exists: bool = client
+            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        if !exists {
+            println!("invrs(s3): skipping non-existant bucket: {bucket_name}");
+            return;
+        }
 
         let mut objects = client
             .list_objects(&bucket_name)

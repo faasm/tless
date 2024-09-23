@@ -17,7 +17,7 @@ impl Docker {
         format!("{}/{}:{}", Env::CONTAINER_REGISTRY_URL, ctr_name, version)
     }
 
-    fn do_build(ctr_name: String) {
+    fn do_build(ctr_name: String, nocache: bool) {
         // Prepare dockerfile path
         let mut dockerfile_path = Env::docker_root();
         dockerfile_path.push(format!("{ctr_name}.dockerfile"));
@@ -36,9 +36,13 @@ impl Docker {
             .arg(dockerfile_path.to_string_lossy().into_owned())
             .arg("--build-arg")
             .arg(format!("TLESS_VERSION={}", Env::get_version().unwrap()))
-            .arg("--no-cache")
-            .arg(".")
-            .stdout(Stdio::inherit())
+            .arg(".");
+
+        if nocache {
+            cmd.arg("--no-cache");
+        }
+
+        cmd.stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()
             .expect("invrs: failed executing command");
@@ -60,8 +64,8 @@ impl Docker {
             .expect("invrs: failed executing command");
     }
 
-    pub fn build(ctr_name: String, push: bool) {
-        Self::do_build(ctr_name.clone());
+    pub fn build(ctr_name: String, push: bool, nocache: bool) {
+        Self::do_build(ctr_name.clone(), nocache);
 
         if push {
             Self::do_push(ctr_name.clone());

@@ -39,10 +39,14 @@ pub enum DockerCommand {
         ctr: String,
         #[arg(long)]
         push: bool,
+        #[arg(long)]
+        nocache: bool,
     },
     BuildAll {
         #[arg(long)]
         push: bool,
+        #[arg(long)]
+        nocache: bool,
     },
 }
 
@@ -81,14 +85,19 @@ async fn main() {
     match &cli.task {
         Command::List {} => {}
         Command::Docker { docker_command } => match docker_command {
-            DockerCommand::Build { ctr, push } => {
-                Docker::build(ctr.to_string(), *push);
+            DockerCommand::Build { ctr, push, nocache } => {
+                Docker::build(ctr.to_string(), *push, *nocache);
             }
-            DockerCommand::BuildAll { push } => {
+            DockerCommand::BuildAll { push, nocache } => {
                 let ctrs = vec!["tless-experiments", "tless-knative-worker"];
 
                 for ctr in &ctrs {
-                    Docker::build(ctr.to_string(), *push);
+                    // Do not push the base build image
+                    if *ctr == "tless-experiments" {
+                        Docker::build(ctr.to_string(), false, *nocache);
+                    } else {
+                        Docker::build(ctr.to_string(), *push, *nocache);
+                    }
                 }
             }
         },
