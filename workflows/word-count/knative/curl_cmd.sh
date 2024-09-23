@@ -7,13 +7,13 @@
 #    -H "ce-type: http://one-to-two-kn-channel.chaining-test.svc.cluster.local" \
 #    -H "ce-id: 1" \
 #    -d '{"details":"ChannelDemo"}' \
-#    http://ingress-to-one-kn-channel.chaining-test.svc.cluster.local
+#    http://ingress-to-splitter.tless.svc.cluster.local
 
 curl -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
-   -H "ce-source: mapper" \
-   -H "ce-type: http://one-to-two-kn-channel.chaining-test.svc.cluster.local" \
-   -H "ce-id: 12" \
-   -d '{"scale-factor":"1"}' \
+   -H "ce-source: cli" \
+   -H "ce-type: http://splitter-to-mapper.tless.svc.cluster.local" \
+   -H "ce-id: 1" \
+   -d '{"foo":"bar"}' \
    http://localhost:8080

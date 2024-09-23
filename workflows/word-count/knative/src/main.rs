@@ -1,15 +1,15 @@
 use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
-use serde_json::{Value, json};
-use std::{cell::RefCell, env, fs, io::BufReader, io::BufRead, thread, time};
+use serde_json::{json, Value};
 use std::process::{Command, Stdio};
+use std::{cell::RefCell, env, fs, io::BufRead, io::BufReader};
 use tokio::task::JoinHandle;
 use warp::Filter;
 
 static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
 thread_local! {
-    static S3_COUNTER: RefCell<u32> = const { RefCell::new(0) };
+    static S3_COUNTER: RefCell<i64> = const { RefCell::new(0) };
 }
 
 // We must wait for the POST event to go through before we can return, as
@@ -63,8 +63,12 @@ pub fn process_event(mut event: Event) -> Event {
                 Some(cloudevents::Data::Json(json)) => Some(json.clone()),
                 Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
                 _ => panic!("must be json data"),
-            }.unwrap();
-            let s3_file = json_file.get("input-file").and_then(Value::as_str).expect("foo");
+            }
+            .unwrap();
+            let s3_file = json_file
+                .get("input-file")
+                .and_then(Value::as_str)
+                .expect("foo");
 
             // Simulate actual function execution by a sleep
             Command::new(format!("{}/word-count_mapper", BINARY_DIR))
@@ -90,9 +94,13 @@ pub fn process_event(mut event: Event) -> Event {
                 Some(cloudevents::Data::Json(json)) => Some(json.clone()),
                 Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
                 _ => panic!("must be json data"),
-            }.unwrap();
-            // let fan_out_scale = u32::from(json_file.get("scale-factor").and_then(Value::as_i64).expect("foo"));
-            let fan_out_scale = 1;
+            }
+            .unwrap();
+            let fan_out_scale = json_file
+                .get("scale-factor")
+                .and_then(Value::as_i64)
+                .expect("foo");
+
             S3_COUNTER.with(|counter| {
                 *counter.borrow_mut() += 1;
                 println!(
@@ -116,7 +124,10 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
-                .env("TLESS_S3_RESULTS_DIR", "word-count/few-files/mapper-results")
+                .env(
+                    "TLESS_S3_RESULTS_DIR",
+                    "word-count/few-files/mapper-results",
+                )
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
@@ -152,27 +163,31 @@ pub fn process_event(mut event: Event) -> Event {
 
             let mut scaled_event = event.clone();
 
-            // Write the new destination channel
-            // FIXME: this is hardcoded in chaining.yaml
-            scaled_event.set_type("http://two-to-three-kn-channel.chaining-test.svc.cluster.local");
+            // Write the new destination channel for the 'mapper' function
+            scaled_event.set_type("http://mapper-to-reducer.tless.svc.cluster.local");
 
             println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
 
             for i in 1..lines.len() {
                 scaled_event.set_id(i.to_string());
-                scaled_event.set_data("aplication/json", json!({"input-file": lines[i]}));
+                scaled_event.set_data(
+                    "aplication/json",
+                    json!({"scale-factor": lines.len(), "input-file": lines[i]}),
+                );
 
                 println!(
                     "cloudevent(s1): posting to {dst} event {i}/{}: {scaled_event}",
                     lines.len()
                 );
-                // TODO: uncomment me
-                // post_event(dst.to_string(), scaled_event.clone());
+                post_event(dst.to_string(), scaled_event.clone());
             }
 
             // Return the last event through the HTTP respnse
             scaled_event.set_id("0");
-            scaled_event.set_data("aplication/json", json!({"input-file": lines[0]}));
+            scaled_event.set_data(
+                "aplication/json",
+                json!({"scale-factor": lines.len(), "input-file": lines[0]}),
+            );
             scaled_event
         }
         // Process the output of the 'mapper' function and chain to 'reducer'
