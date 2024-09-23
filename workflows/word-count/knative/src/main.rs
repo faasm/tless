@@ -4,9 +4,10 @@ use cloudevents::{AttributesReader, AttributesWriter, Event};
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
-use std::{env, fs, io::BufRead, io::BufReader};
 use std::sync::{Arc, Mutex};
+use std::{env, fs, io::BufRead, io::BufReader};
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 use warp::Filter;
 
 static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
@@ -95,7 +96,7 @@ pub fn process_event(mut event: Event) -> Event {
         "mapper" => {
             println!("tless(driver): executing 'reducer' from 'mapper': {event}");
 
-            let fan_out_scale : i64 = get_json_from_event(&event)
+            let fan_out_scale: i64 = get_json_from_event(&event)
                 .get("scale-factor")
                 .and_then(Value::as_i64)
                 .expect("foo");
@@ -104,11 +105,7 @@ pub fn process_event(mut event: Event) -> Event {
             // function when all fan-in functions have executed
             let mut count = INVOCATION_COUNTER.lock().unwrap();
             *count += 1;
-            println!(
-                "tless(driver): counted {}/{}",
-                *count,
-                fan_out_scale
-            );
+            println!("tless(driver): counted {}/{}", *count, fan_out_scale);
 
             if *count == fan_out_scale {
                 println!("tless(driver): done!");
@@ -168,11 +165,11 @@ pub fn process_event(mut event: Event) -> Event {
 
             println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
 
+            // JobSink executes one event per different CloudEvent id. So,
+            // to make sure we can re-run the whole workflow without
+            // re-deploying it, we generate random event ids
             for i in 1..lines.len() {
-                // TODO: JobSink executes one event per id, so if we always
-                // start id's from 0 we will not be able to re-runt the job
-                // multiple times
-                scaled_event.set_id(i.to_string());
+                scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
                     json!({"scale-factor": lines.len(), "input-file": lines[i]}),
@@ -186,7 +183,7 @@ pub fn process_event(mut event: Event) -> Event {
             }
 
             // Return the last event through the HTTP respnse
-            scaled_event.set_id("0");
+            scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
                 json!({"scale-factor": lines.len(), "input-file": lines[0]}),
