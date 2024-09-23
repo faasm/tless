@@ -52,9 +52,17 @@ pub enum DockerCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum S3Command {
+    /// Clear a given bucket in an S3 server
     ClearBucket {
         #[arg(long)]
         bucket_name: String,
+    },
+    /// Clear a sub-tree in an S3 bucket indicated by a prefix
+    ClearDir {
+        #[arg(long)]
+        bucket_name: String,
+        #[arg(long)]
+        prefix: String,
     },
     /// List all buckets in an S3 server
     ListBuckets {},
@@ -104,6 +112,9 @@ async fn main() {
         Command::S3 { s3_command } => match s3_command {
             S3Command::ClearBucket { bucket_name } => {
                 S3::clear_bucket(bucket_name.to_string()).await;
+            }
+            S3Command::ClearDir { bucket_name, prefix } => {
+                S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
             }
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;

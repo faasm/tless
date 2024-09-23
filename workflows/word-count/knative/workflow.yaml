@@ -50,12 +50,15 @@ spec:
   template:
     spec:
       # runtimeClassName: kata-qemu-sev
+      # runtimeClassName: kata-qemu
+      securityContext:
+        runAsUser: 1000
       containers:
         - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative
-          command: [ "cargo", "run", "--release" ]
+          command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
         tless.workflows/name: word-count-splitter
@@ -81,14 +84,22 @@ spec:
       template:
         spec:
           # runtimeClassName: kata-qemu-sev
+          # runtimeClassName: kata-qemu
+          securityContext:
+            runAsUser: 1000
           restartPolicy: Never
           containers:
             - name: main
-              image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
+              # WARNING: JobSink seems to, unlike Services, not pick up changes
+              # in a tag's digest. So, while we are heavily developing, we
+              # should stick to specifying the image via tag digest. Eventually,
+              # we can move to a pinned tag
+              # image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:413166ff9a1405f86411a81b2de6fe4f6b3d50b18005104ab9c7b325a7637423
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/word-count/knative
-              command: [ "cargo", "run", "--release" ]
+              command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
@@ -111,12 +122,15 @@ spec:
   template:
     spec:
       # runtimeClassName: kata-qemu-sev
+      # runtimeClassName: kata-qemu
+      securityContext:
+        runAsUser: 1000
       containers:
         - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative
-          command: [ "cargo", "run", "--release" ]
+          command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
         tless.workflows/name: word-count-reducer

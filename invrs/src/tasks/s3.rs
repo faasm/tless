@@ -80,6 +80,46 @@ impl S3 {
             .unwrap();
     }
 
+    pub async fn clear_dir(bucket_name: String, prefix: String) {
+        println!("invrs(s3): clearing s3 dir: {bucket_name}/{prefix}");
+
+        // First, remove all objects in the bucket
+        let client = Self::init_s3_client();
+
+        // Return fast if the bucket does not exist
+        let exists: bool = client
+            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        if !exists {
+            println!("invrs(s3): warning: bucket does not exist: {bucket_name}");
+            return;
+        }
+
+        let mut objects = client
+            .list_objects(&bucket_name)
+            .recursive(true)
+            .prefix(Some(prefix))
+            .to_stream()
+            .await;
+
+        while let Some(result) = objects.next().await {
+            match result {
+                Ok(resp) => {
+                    for item in resp.contents {
+                        client
+                            .remove_object(&bucket_name, item.name.as_str())
+                            .send()
+                            .await
+                            .unwrap();
+                    }
+                }
+                Err(e) => println!("invrs(s3): error: {:?}", e),
+            }
+        }
+    }
+
     pub async fn list_buckets() {
         let buckets = Self::init_s3_client().list_buckets().send().await.unwrap();
 

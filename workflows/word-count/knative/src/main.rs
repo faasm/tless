@@ -148,7 +148,12 @@ pub fn process_event(mut event: Event) -> Event {
             // Read the output file to work-out the scale-out pattern and the
             // files to chain-to
             let mut lines: Vec<String> = Vec::new();
-            let file = fs::File::open(format!("{}/{}", BINARY_DIR, "output_splitter.txt")).unwrap();
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(format!("{}/{}", BINARY_DIR, "output_splitter.txt"))
+                .unwrap();
             let reader = BufReader::new(file);
 
             for line in reader.lines() {
