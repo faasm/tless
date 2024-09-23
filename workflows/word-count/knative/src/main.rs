@@ -44,7 +44,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .current_dir(BINARY_DIR)
                 .env("LD_LIBRARY_PATH", "/usr/local/lib")
                 .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "localhost")
+                .env("S3_HOST", "minio")
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
