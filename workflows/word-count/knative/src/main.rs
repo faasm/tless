@@ -61,6 +61,7 @@ pub fn process_event(mut event: Event) -> Event {
 
             let json_file = match event.data() {
                 Some(cloudevents::Data::Json(json)) => Some(json.clone()),
+                Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
                 Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
                 _ => panic!("must be json data"),
             }
