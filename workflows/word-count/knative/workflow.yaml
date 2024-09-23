@@ -50,11 +50,11 @@ spec:
   template:
     spec:
       # runtimeClassName: kata-qemu-sev
-      # runtimeClassName: kata-qemu
-      securityContext:
-        runAsUser: 1000
+      runtimeClassName: kata-qemu
+      # securityContext:
+      # runAsUser: 1000
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative
@@ -84,9 +84,9 @@ spec:
       template:
         spec:
           # runtimeClassName: kata-qemu-sev
-          # runtimeClassName: kata-qemu
-          securityContext:
-            runAsUser: 1000
+          runtimeClassName: kata-qemu
+          # securityContext:
+          # runAsUser: 1000
           restartPolicy: Never
           containers:
             - name: main
@@ -94,8 +94,8 @@ spec:
               # in a tag's digest. So, while we are heavily developing, we
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
-              # image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:413166ff9a1405f86411a81b2de6fe4f6b3d50b18005104ab9c7b325a7637423
+              # image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:0f1b8417c7d62cd41f2cee2875da16614797208c03b04fb1ba6da5b32e761dd5
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/word-count/knative
@@ -122,11 +122,11 @@ spec:
   template:
     spec:
       # runtimeClassName: kata-qemu-sev
-      # runtimeClassName: kata-qemu
-      securityContext:
-        runAsUser: 1000
+      runtimeClassName: kata-qemu
+      # securityContext:
+      # runAsUser: 1000
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.2.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative
