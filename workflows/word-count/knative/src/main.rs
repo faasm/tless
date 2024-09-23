@@ -76,7 +76,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .current_dir(BINARY_DIR)
                 .env("LD_LIBRARY_PATH", "/usr/local/lib")
                 .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "localhost")
+                .env("S3_HOST", "minio")
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
@@ -103,41 +103,41 @@ pub fn process_event(mut event: Event) -> Event {
                 .and_then(Value::as_i64)
                 .expect("foo");
 
-            let mut done_waiting : bool = false;
-            while !done_waiting {
-                S3_COUNTER.with(|counter| {
-                    *counter.borrow_mut() += 1;
-                    println!(
-                        "tless(driver): counted {}/{}",
-                        counter.borrow(),
-                        fan_out_scale
-                    );
+            let mut enough_posts : bool = false;
+            S3_COUNTER.with(|counter| {
+                *counter.borrow_mut() += 1;
+                println!(
+                    "tless(driver): counted {}/{}",
+                    counter.borrow(),
+                    fan_out_scale
+                );
 
-                    if *counter.borrow() == fan_out_scale {
-                        println!("tless(driver): done!");
-                        done_waiting = true;
-                    }
-                });
-            }
+                if *counter.borrow() == fan_out_scale {
+                    println!("tless(driver): done!");
+                    enough_posts = true;
+                }
+            });
 
             // Execute the function only after enough POST requests have been
             // received
-            Command::new(format!("{}/word-count_reducer", BINARY_DIR))
-                .current_dir(BINARY_DIR)
-                .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "localhost")
-                .env("S3_PASSWORD", "minio123")
-                .env("S3_PORT", "9000")
-                .env("S3_USER", "minio")
-                .env(
-                    "TLESS_S3_RESULTS_DIR",
-                    "word-count/few-files/mapper-results",
-                )
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .output()
-                .expect("tless(reducer): failed executing command");
+            if enough_posts {
+                Command::new(format!("{}/word-count_reducer", BINARY_DIR))
+                    .current_dir(BINARY_DIR)
+                    .env("LD_LIBRARY_PATH", "/usr/local/lib")
+                    .env("S3_BUCKET", "tless")
+                    .env("S3_HOST", "minio")
+                    .env("S3_PASSWORD", "minio123")
+                    .env("S3_PORT", "9000")
+                    .env("S3_USER", "minio")
+                    .env(
+                        "TLESS_S3_RESULTS_DIR",
+                        "word-count/few-files/mapper-results",
+                    )
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .output()
+                    .expect("tless(reducer): failed executing command");
+            }
 
             "reducer"
         }
