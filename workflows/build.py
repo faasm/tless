@@ -1,8 +1,8 @@
 from faasmtools.compile_util import wasm_cmake, wasm_copy_upload
 from os import makedirs
 from os.path import dirname, exists, join, realpath
-from shutil import rmtree
 from subprocess import run
+from sys import argv
 
 WORKFLOWS_ROOT = dirname(realpath(__file__))
 
@@ -17,7 +17,7 @@ def _copy_built_function(build_dir, wflow, func):
     wasm_copy_upload(wflow, func, src_file)
 
 
-def compile(wasm=False, native=False):
+def compile(wasm=False, native=False, debug=False):
     """
     Compile a function to test a sample library
     """
@@ -46,8 +46,7 @@ def compile(wasm=False, native=False):
                 cmake_cmd = [
                     "cmake",
                     "-GNinja",
-                    # TODO: change to Release
-                    "-DCMAKE_BUILD_TYPE=Debug",
+                    "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
                     "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
                     "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
                     WORKFLOWS_ROOT,
@@ -58,20 +57,24 @@ def compile(wasm=False, native=False):
                 run(f"ninja {wflow}_{function}", shell=True, check=True, cwd=build_dir)
 
 
-def compile_driver():
+def compile_driver(debug=False):
     """
     Compile the driver function to enable Knative chaining (written in Rust)
     """
     for workflow in list(WORKFLOWS.keys()):
         build_dir = join(WORKFLOWS_ROOT, workflow, "knative")
-        cargo_cmd = "cargo build --release"
+        cargo_cmd = "cargo build --{}".format("debug" if debug else "release")
         run(cargo_cmd, shell=True, check=True, cwd=build_dir)
 
 
 if __name__ == "__main__":
+    debug = False
+    if len(argv) == 2 and argv[1] == "--debug":
+        debug = True
+
     # First, build the workflows
-    compile(wasm=True)
-    compile(native=True)
+    compile(wasm=True, debug=debug)
+    compile(native=True, debug=debug)
 
     # Second, build the driver function for Knative
-    compile_driver()
+    compile_driver(debug=debug)
