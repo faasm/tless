@@ -57,13 +57,13 @@ pub fn process_event(mut event: Event) -> Event {
             "splitter"
         }
         "splitter" => {
-            println!("cloudevent: executing 'mapper' from 'splitter': {event}");
+            println!("tless(driver): executing 'mapper' from 'splitter': {event}");
 
             let json_file = match event.data() {
                 Some(cloudevents::Data::Json(json)) => Some(json.clone()),
                 Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
                 Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-                _ => panic!("must be json data"),
+                _ => panic!("tless(driver): error: must be json data"),
             }
             .unwrap();
             let s3_file = json_file
@@ -89,12 +89,13 @@ pub fn process_event(mut event: Event) -> Event {
             "mapper"
         }
         "mapper" => {
-            println!("cloudevent: executing 'reducer' from 'mapper': {event}");
+            println!("tless(driver): executing 'reducer' from 'mapper': {event}");
 
             let json_file = match event.data() {
                 Some(cloudevents::Data::Json(json)) => Some(json.clone()),
+                Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
                 Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-                _ => panic!("must be json data"),
+                _ => panic!("tless(driver): error: must be json data"),
             }
             .unwrap();
             let fan_out_scale = json_file
@@ -105,13 +106,13 @@ pub fn process_event(mut event: Event) -> Event {
             S3_COUNTER.with(|counter| {
                 *counter.borrow_mut() += 1;
                 println!(
-                    "cloudevent(s3): counted {}/{}",
+                    "tless(driver): counted {}/{}",
                     counter.borrow(),
                     fan_out_scale
                 );
 
                 if *counter.borrow() == fan_out_scale {
-                    println!("cloudevent(s3): done!");
+                    println!("tless(driver): done!");
                 }
             });
 
