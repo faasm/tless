@@ -1,16 +1,16 @@
 use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
+use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
-use std::{cell::RefCell, env, fs, io::BufRead, io::BufReader};
+use std::{env, fs, io::BufRead, io::BufReader};
+use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 use warp::Filter;
 
 static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
-thread_local! {
-    static S3_COUNTER: RefCell<i64> = const { RefCell::new(0) };
-}
+static INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 
 // We must wait for the POST event to go through before we can return, as
 // otherwise the chain may not make progress
@@ -103,24 +103,21 @@ pub fn process_event(mut event: Event) -> Event {
                 .and_then(Value::as_i64)
                 .expect("foo");
 
-            let mut enough_posts : bool = false;
-            S3_COUNTER.with(|counter| {
-                *counter.borrow_mut() += 1;
-                println!(
-                    "tless(driver): counted {}/{}",
-                    counter.borrow(),
-                    fan_out_scale
-                );
+            // Increment an atomic counter, and only execute the reducer
+            // function when all fan-in functions have executed
+            let mut count = INVOCATION_COUNTER.lock().unwrap();
+            *count += 1;
+            println!(
+                "tless(driver): counted {}/{}",
+                *count,
+                fan_out_scale
+            );
 
-                if *counter.borrow() == fan_out_scale {
-                    println!("tless(driver): done!");
-                    enough_posts = true;
-                }
-            });
+            if *count == fan_out_scale {
+                println!("tless(driver): done!");
 
-            // Execute the function only after enough POST requests have been
-            // received
-            if enough_posts {
+                // Execute the function only after enough POST requests have
+                // been received
                 Command::new(format!("{}/word-count_reducer", BINARY_DIR))
                     .current_dir(BINARY_DIR)
                     .env("LD_LIBRARY_PATH", "/usr/local/lib")
