@@ -35,7 +35,7 @@ faasmctl invoke.wasm word-count driver --cmdline "word-count/few-files"
 
 ## Run the Workflow (Knative)
 
-First, deploy the local kubernetes cluster:
+First, deploy the k8s cluster with bare-metal access to SEV nodes:
 
 ```bash
 TODO

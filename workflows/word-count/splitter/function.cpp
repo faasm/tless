@@ -51,6 +51,7 @@ int main(int argc, char** argv)
 
         return 1;
     }
+    s3dir.assign(s3dirChar);
 #endif
 
     // Get the list of files in the s3 dir
@@ -81,7 +82,13 @@ int main(int argc, char** argv)
         }
     }
 #else
-    s3files = s3cli.listKeys(bucketName);
+    auto rawS3files = s3cli.listKeys(bucketName);
+    for (const auto& key : rawS3files) {
+        // Filter by prefix
+        if (key.rfind(s3dir, 0) == 0) {
+            s3files.push_back(key);
+        }
+    }
 #endif
 
     // Chain to one mapper function per file, and store the message id to be
