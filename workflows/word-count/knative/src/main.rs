@@ -98,23 +98,27 @@ pub fn process_event(mut event: Event) -> Event {
                 _ => panic!("tless(driver): error: must be json data"),
             }
             .unwrap();
-            let fan_out_scale = json_file
+            let fan_out_scale : i64 = json_file
                 .get("scale-factor")
                 .and_then(Value::as_i64)
                 .expect("foo");
 
-            S3_COUNTER.with(|counter| {
-                *counter.borrow_mut() += 1;
-                println!(
-                    "tless(driver): counted {}/{}",
-                    counter.borrow(),
-                    fan_out_scale
-                );
+            let mut done_waiting : bool = false;
+            while !done_waiting {
+                S3_COUNTER.with(|counter| {
+                    *counter.borrow_mut() += 1;
+                    println!(
+                        "tless(driver): counted {}/{}",
+                        counter.borrow(),
+                        fan_out_scale
+                    );
 
-                if *counter.borrow() == fan_out_scale {
-                    println!("tless(driver): done!");
-                }
-            });
+                    if *counter.borrow() == fan_out_scale {
+                        println!("tless(driver): done!");
+                        done_waiting = true;
+                    }
+                });
+            }
 
             // Execute the function only after enough POST requests have been
             // received
