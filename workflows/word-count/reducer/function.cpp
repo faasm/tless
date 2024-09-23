@@ -112,6 +112,8 @@ int main(int argc, char** argv)
     // For each output file, de-serialise results and aggreagate
     std::map<std::string, int> results;
     for (const auto& outFile : s3files) {
+        printf("word-count(reducer): processing result file: %s\n", outFile.c_str());
+
         // Read file contents from S3
         std::string fileContents;
 #ifdef __faasm

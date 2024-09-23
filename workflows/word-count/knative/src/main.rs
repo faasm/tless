@@ -29,6 +29,16 @@ pub fn post_event(dest: String, event: Event) -> JoinHandle<()> {
     })
 }
 
+pub fn get_json_from_event(event: &Event) -> Value {
+    match event.data() {
+        Some(cloudevents::Data::Json(json)) => Some(json.clone()),
+        Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
+        Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
+        _ => panic!("tless(driver): error: must be json data"),
+    }
+    .unwrap()
+}
+
 // This function is a general wrapper that takes a cloud event as an input,
 // decides what function to execute, and outputs another cloud event
 pub fn process_event(mut event: Event) -> Event {
@@ -59,13 +69,7 @@ pub fn process_event(mut event: Event) -> Event {
         "splitter" => {
             println!("tless(driver): executing 'mapper' from 'splitter': {event}");
 
-            let json_file = match event.data() {
-                Some(cloudevents::Data::Json(json)) => Some(json.clone()),
-                Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
-                Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-                _ => panic!("tless(driver): error: must be json data"),
-            }
-            .unwrap();
+            let json_file = get_json_from_event(&event);
             let s3_file = json_file
                 .get("input-file")
                 .and_then(Value::as_str)
@@ -91,14 +95,7 @@ pub fn process_event(mut event: Event) -> Event {
         "mapper" => {
             println!("tless(driver): executing 'reducer' from 'mapper': {event}");
 
-            let json_file = match event.data() {
-                Some(cloudevents::Data::Json(json)) => Some(json.clone()),
-                Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
-                Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-                _ => panic!("tless(driver): error: must be json data"),
-            }
-            .unwrap();
-            let fan_out_scale : i64 = json_file
+            let fan_out_scale : i64 = get_json_from_event(&event)
                 .get("scale-factor")
                 .and_then(Value::as_i64)
                 .expect("foo");
@@ -172,6 +169,9 @@ pub fn process_event(mut event: Event) -> Event {
             println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
 
             for i in 1..lines.len() {
+                // TODO: JobSink executes one event per id, so if we always
+                // start id's from 0 we will not be able to re-runt the job
+                // multiple times
                 scaled_event.set_id(i.to_string());
                 scaled_event.set_data(
                     "aplication/json",
