@@ -17,6 +17,15 @@ source ${PROJ_ROOT}/bin/env.sh
 alias invrs="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
 
 # ----------------------------
+# CoCo vars (TODO FIXME consider changing)
+# ----------------------------
+
+export COCO_SOURCE=~/git/coco-serverless/coco-serverless
+export KUBECONFIG=${COCO_SOURCE}/.config/kubeadm_kubeconfig
+alias k9s=${COCO_SOURCE}/bin/k9s
+alias kubectl=${COCO_SOURCE}/bin/kubectl
+
+# ----------------------------
 # Python deps
 # ----------------------------
 

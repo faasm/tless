@@ -1,28 +1,60 @@
-use crate::env::Env;
-use std::fs;
+use crate::tasks::s3::S3;
+use std::{env, fmt};
+use std::path::PathBuf;
+
+pub enum AvailableWorkflow {
+    WordCount,
+}
+
+impl fmt::Display for AvailableWorkflow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AvailableWorkflow::WordCount => write!(f, "word-count"),
+        }
+    }
+}
+
+impl AvailableWorkflow {
+    pub fn iter_variants() -> std::slice::Iter<'static, AvailableWorkflow> {
+        static VARIANTS: [AvailableWorkflow; 1] = [AvailableWorkflow::WordCount];
+        VARIANTS.iter()
+    }
+}
 
 #[derive(Debug)]
 pub struct Workflows {}
 
 impl Workflows {
-    pub fn do_cmd(cmd: String) {
-        match cmd.as_str() {
-            "list" => Self::list(),
-            _ => panic!("invrs: unrecognised command for task 'workflows': {cmd:?}"),
-        }
+    pub fn get_root() -> PathBuf {
+        let mut path = env::current_dir().expect("invrs: failed to get current directory");
+        path.push("workflows");
+        path
     }
 
-    fn list() {
-        let paths = fs::read_dir(Env::workflows_root()).unwrap();
+    pub async fn upload_workflow_state(workflow : &AvailableWorkflow, bucket_name : &str, clean : bool) {
+        if clean {
+            S3::clear_dir(bucket_name.to_string(), format!("{workflow}").to_string()).await;
+        }
 
-        println!("invrs: listing available workflows");
-        for entry in paths {
-            let entry = entry.unwrap();
-            let path = entry.path();
-
-            if path.is_dir() {
-                println!("- {}", path.display())
+        match workflow {
+            AvailableWorkflow::WordCount => {
+                let mut host_path = S3::get_datasets_root();
+                host_path.push(format!("{workflow}"));
+                host_path.push("few-files");
+                S3::upload_dir(bucket_name.to_string(), host_path.display().to_string(), format!("{workflow}/few-files")).await;
             }
+        };
+    }
+
+    // TODO: write me!
+    pub async fn upload_state(bucket_name : &str, clean : bool) {
+        if clean {
+            S3::clear_bucket(bucket_name.to_string()).await;
+        }
+
+        // Upload state for different workflows
+        for workflow in AvailableWorkflow::iter_variants() {
+            Self::upload_workflow_state(&workflow, bucket_name, clean).await;
         }
     }
 }

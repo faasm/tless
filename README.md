@@ -23,9 +23,14 @@ This repository implements one different workflow:
 
 ### Progress Summary
 
-| Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | SEV-Knative | TLess-Knative |
+| Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
 |---|---|---|---|---|---|---|
 | FINRA | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
 | ML Training | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
 | ML Inference | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
 | Word Count | :heavy_check_mark: | :heavy_check_mark: | :heavy_multiplication_x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_multiplication_x: |
+
+## Experiments
+
+We run the following experiments:
+- [End-to-end latency](./eval/e2e-latenc/README.md): measures the end-to-end execution latency for each workflow.

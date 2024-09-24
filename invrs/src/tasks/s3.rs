@@ -5,7 +5,7 @@ use minio::s3::client::{Client, ClientBuilder};
 use minio::s3::creds::StaticProvider;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{S3Api, ToStream};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 #[derive(Debug)]
@@ -34,6 +34,12 @@ impl S3 {
             .provider(Some(Box::new(static_provider)))
             .build()
             .unwrap()
+    }
+
+    pub fn get_datasets_root() -> PathBuf {
+        let mut path = env::current_dir().expect("invrs: failed to get current directory");
+        path.push("datasets");
+        path
     }
 
     pub async fn clear_bucket(bucket_name: String) {
@@ -118,6 +124,30 @@ impl S3 {
                 Err(e) => println!("invrs(s3): error: {:?}", e),
             }
         }
+    }
+
+    /// Try to get a key from an S3 bucket, and return whether we foun dit
+    pub async fn get_key(bucket_name : &str, key_name : &str) -> bool {
+        let client = Self::init_s3_client();
+
+        // Return fast if the bucket does not exist
+        let exists: bool = client
+            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        if !exists {
+            println!("invrs(s3): warning: bucket does not exist: {bucket_name}");
+            return false;
+        }
+
+        // mathc on result
+        // FINISH ME: probably need to use the last_modified option, only
+        // available when _listing_ objects!
+        let object = client.get_object(bucket_name, key_name).send().await.unwrap();
+        println!("object: {}", object.etag.unwrap());
+
+        return true;
     }
 
     pub async fn list_buckets() {
