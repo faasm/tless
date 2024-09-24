@@ -49,10 +49,7 @@ metadata:
 spec:
   template:
     spec:
-      # runtimeClassName: kata-qemu-sev
-      runtimeClassName: kata-qemu
-      # securityContext:
-      # runAsUser: 1000
+      runtimeClassName: kata-qemu-sev
       containers:
         - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
           ports:
@@ -83,10 +80,7 @@ spec:
       backoffLimit: 4
       template:
         spec:
-          # runtimeClassName: kata-qemu-sev
-          runtimeClassName: kata-qemu
-          # securityContext:
-          # runAsUser: 1000
+          runtimeClassName: kata-qemu-sev
           restartPolicy: Never
           containers:
             - name: main
@@ -121,10 +115,7 @@ metadata:
 spec:
   template:
     spec:
-      # runtimeClassName: kata-qemu-sev
-      runtimeClassName: kata-qemu
-      # securityContext:
-      # runAsUser: 1000
+      runtimeClassName: kata-qemu-sev
       containers:
         - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
           ports:
