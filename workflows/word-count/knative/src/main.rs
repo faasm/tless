@@ -131,6 +131,7 @@ pub fn process_event(mut event: Event) -> Event {
             }
 
             // Reset counter for next (warm) execution
+            println!("tless(reducer): resetting counter to 0");
             *count = 0;
 
             "reducer"
