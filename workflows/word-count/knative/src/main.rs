@@ -130,6 +130,9 @@ pub fn process_event(mut event: Event) -> Event {
                     .expect("tless(reducer): failed executing command");
             }
 
+            // Reset counter for next (warm) execution
+            *count = 0;
+
             "reducer"
         }
         _ => panic!(

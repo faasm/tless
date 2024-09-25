@@ -2,6 +2,7 @@ use crate::tasks::docker::Docker;
 use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
 use clap::{Parser, Subcommand};
+use env_logger;
 
 pub mod env;
 pub mod tasks;
@@ -11,6 +12,9 @@ struct Cli {
     // The name of the task to execute
     #[clap(subcommand)]
     task: Command,
+
+    #[arg(short, long, global = true)]
+    debug: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -114,6 +118,17 @@ enum S3Command {
 async fn main() {
     let cli = Cli::parse();
 
+    // Initialize the logger based on the debug flag
+    if cli.debug {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Debug)
+            .init();
+    } else {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .init();
+    }
+
     match &cli.task {
         Command::Docker { docker_command } => match docker_command {
             DockerCommand::Build { ctr, push, nocache } => {
@@ -135,11 +150,11 @@ async fn main() {
         Command::Eval { eval_command } => match eval_command {
             EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(EvalExperiment::E2eLatency, run_args).await;
-                },
+                    Eval::run(&EvalExperiment::E2eLatency, run_args).await;
+                }
                 EvalSubCommand::Plot {} => {
                     Eval::plot(EvalExperiment::E2eLatency);
-                },
+                }
             },
         },
         // FIXME: move all S3 methods to &str
@@ -147,11 +162,15 @@ async fn main() {
             S3Command::ClearBucket { bucket_name } => {
                 S3::clear_bucket(bucket_name.to_string()).await;
             }
-            S3Command::ClearDir { bucket_name, prefix } => {
+            S3Command::ClearDir {
+                bucket_name,
+                prefix,
+            } => {
                 S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
             }
+            // TODO: delete me!
             S3Command::GetKey { bucket_name, key } => {
-                S3::get_key(bucket_name, key).await;
+                S3::wait_for_key(bucket_name, key).await;
             }
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;

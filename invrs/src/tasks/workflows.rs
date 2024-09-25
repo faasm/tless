@@ -1,6 +1,6 @@
 use crate::tasks::s3::S3;
-use std::{env, fmt};
 use std::path::PathBuf;
+use std::{env, fmt};
 
 pub enum AvailableWorkflow {
     WordCount,
@@ -31,7 +31,11 @@ impl Workflows {
         path
     }
 
-    pub async fn upload_workflow_state(workflow : &AvailableWorkflow, bucket_name : &str, clean : bool) {
+    pub async fn upload_workflow_state(
+        workflow: &AvailableWorkflow,
+        bucket_name: &str,
+        clean: bool,
+    ) {
         if clean {
             S3::clear_dir(bucket_name.to_string(), format!("{workflow}").to_string()).await;
         }
@@ -41,13 +45,18 @@ impl Workflows {
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
                 host_path.push("few-files");
-                S3::upload_dir(bucket_name.to_string(), host_path.display().to_string(), format!("{workflow}/few-files")).await;
+                S3::upload_dir(
+                    bucket_name.to_string(),
+                    host_path.display().to_string(),
+                    format!("{workflow}/few-files"),
+                )
+                .await;
             }
         };
     }
 
     // TODO: write me!
-    pub async fn upload_state(bucket_name : &str, clean : bool) {
+    pub async fn upload_state(bucket_name: &str, clean: bool) {
         if clean {
             S3::clear_bucket(bucket_name.to_string()).await;
         }
