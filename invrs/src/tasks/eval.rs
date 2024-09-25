@@ -1,9 +1,12 @@
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
+use csv::ReaderBuilder;
 use chrono::{DateTime, Duration, Utc};
 use clap::{Args, ValueEnum};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error};
+use plotters::prelude::*;
+use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::{collections::HashMap, env, fmt, fs, io::Write, thread, time};
@@ -30,6 +33,13 @@ impl fmt::Display for EvalBaseline {
             EvalBaseline::CcKnative => write!(f, "cc-knative"),
             EvalBaseline::TlessKnative => write!(f, "tless-knative"),
         }
+    }
+}
+
+impl EvalBaseline {
+    pub fn iter_variants() -> std::slice::Iter<'static, EvalBaseline> {
+        static VARIANTS: [EvalBaseline; 6] = [EvalBaseline::Faasm, EvalBaseline::SgxFaasm, EvalBaseline::TlessFaasm, EvalBaseline::Knative, EvalBaseline::CcKnative, EvalBaseline::TlessKnative];
+        VARIANTS.iter()
     }
 }
 
@@ -118,6 +128,22 @@ impl Eval {
                     .expect("invrs(eval): failed to write to file");
             }
         }
+    }
+
+    fn get_all_data_files(exp: &EvalExperiment) -> Vec<PathBuf> {
+        // TODO: change to data
+        let data_path = format!("{}/{exp}/data-bup", Self::get_root().display());
+
+        // Collect all CSV files in the directory
+        let mut csv_files = Vec::new();
+        for entry in fs::read_dir(data_path).unwrap() {
+            let entry = entry.unwrap();
+            if entry.path().extension().and_then(|e| e.to_str()) == Some("csv") {
+                csv_files.push(entry.path());
+            }
+        }
+
+        return csv_files;
     }
 
     fn get_kubectl_cmd() -> String {
@@ -346,6 +372,9 @@ impl Eval {
             }
         }
 
+        // Cautionary sleep between runs
+        thread::sleep(time::Duration::from_secs(5));
+
         return exp_result;
     }
 
@@ -383,7 +412,7 @@ impl Eval {
                     .expect("invrs(eval): error creating progress bar")
                     .progress_chars("#>-"),
             );
-            pb.set_message(format!("{exp}/{workflow}"));
+            pb.set_message(format!("{exp}/{baseline}/{workflow}"));
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
@@ -408,7 +437,7 @@ impl Eval {
             Self::delete_workflow(workflow, &baseline);
 
             // Finish progress bar
-            pb.finish_with_message("Done!");
+            pb.finish();
         }
 
         // Experiment-wide clean-up
@@ -428,5 +457,108 @@ impl Eval {
         }
     }
 
-    pub fn plot(_exp: EvalExperiment) {}
+    fn plot_e2e_latency(data_files: &Vec<PathBuf>) {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Record {
+            #[allow(dead_code)]
+            run: u32,
+            time_ms: u64,
+        }
+
+        let mut averages = Vec::new();
+        let mut baselines = Vec::new();
+        let total_baselines = EvalBaseline::iter_variants(); // .collect::Vec<EvalBaseline>()
+
+        // Collect data
+        for csv_file in data_files {
+            let file_name = csv_file.file_name().and_then(|f| f.to_str()).unwrap_or_default();
+            println!("file name: {file_name}");
+            baselines.push(file_name.split("_").collect::<Vec<&str>>()[0]);
+
+            // Open the CSV and deserialize records
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .from_path(csv_file)
+                .unwrap();
+            let mut total_time = 0;
+            let mut count = 0;
+
+            for result in reader.deserialize() {
+                let record: Record = result.unwrap();
+                total_time += record.time_ms;
+                count += 1;
+            }
+
+            // Calculate average TimeMs for this file
+            let average_time = total_time as f64 / count as f64;
+            averages.push(average_time as i64);
+        }
+
+        // Plot data
+        let root = BitMapBackend::new("plot.png", (800, 600)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption("Average TimeMs for Each File", ("sans-serif", 40))
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .build_cartesian_2d(
+                (0..total_baselines.len()).into_segmented(),
+                0i64..*averages.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(&0),
+            ).unwrap();
+
+        chart.configure_mesh()
+            .y_desc("")
+            .x_desc("Files")
+            .x_labels(total_baselines.len())
+            .y_labels(10) // .x_label_formatter(&|x| total_baselines[*x].clone())
+            .disable_x_mesh()
+            .y_label_formatter(&|y| format!("{:.0}", y))
+            .light_line_style(ShapeStyle {
+                color: RGBColor(200, 200, 200).to_rgba().mix(0.5),
+                filled: true,
+                stroke_width: 1,
+            })
+            .draw()
+            .unwrap();
+
+        // Draw bars
+        chart.draw_series((0..).zip(averages.iter()).map(|(x, y)| {
+            let x0 = SegmentValue::Exact(x);
+            let x1 = SegmentValue::Exact(x + 1);
+            let mut bar = Rectangle::new([(x0, 0), (x1, *y)], BLUE.filled());
+            bar.set_margin(0, 0, 5, 5);
+            bar
+        })).unwrap();
+        /*
+        for (i, &avg) in averages.iter().enumerate() {
+             // Draw the rectangle for the bar
+            let bar_width = 0.3; // Width of the bar
+            chart.draw_series(vec![Rectangle::new(
+                [(i as f64 - bar_width / 2.0, 0.0), (i as f64 + bar_width / 2.0, avg)],
+                ShapeStyle {
+                    color: BLUE.to_rgba(),
+                    filled: true,
+                    stroke_width: 1,
+                    ..ShapeStyle::from(&BLACK)
+                },
+            )]).unwrap();
+        }
+        */
+
+        root.present().unwrap();
+    }
+
+    pub fn plot(exp: &EvalExperiment) {
+        // First, get all the data files
+        let data_files = Self::get_all_data_files(exp);
+
+        match exp {
+            EvalExperiment::E2eLatency => {
+                Self::plot_e2e_latency(&data_files);
+            },
+        }
+    }
 }

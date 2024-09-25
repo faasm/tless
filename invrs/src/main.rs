@@ -153,7 +153,7 @@ async fn main() {
                     Eval::run(&EvalExperiment::E2eLatency, run_args).await;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(EvalExperiment::E2eLatency);
+                    Eval::plot(&EvalExperiment::E2eLatency);
                 }
             },
         },
