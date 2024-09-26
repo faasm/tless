@@ -33,4 +33,4 @@ This repository implements one different workflow:
 ## Experiments
 
 We run the following experiments:
-- [End-to-end latency](./eval/e2e-latenc/README.md): measures the end-to-end execution latency for each workflow.
+- [End-to-end latency](./eval/e2e-latency/README.md): measures the end-to-end execution latency for each workflow.
