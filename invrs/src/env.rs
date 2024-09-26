@@ -12,12 +12,6 @@ impl Env {
         env::current_dir().expect("invrs: failed to get current directory")
     }
 
-    pub fn workflows_root() -> PathBuf {
-        let mut path = Self::proj_root();
-        path.push("workflows");
-        path
-    }
-
     pub fn docker_root() -> PathBuf {
         let mut path = Self::proj_root();
         path.push("docker");

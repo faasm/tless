@@ -128,6 +128,10 @@ pub fn process_event(mut event: Event) -> Event {
                     .stderr(Stdio::inherit())
                     .output()
                     .expect("tless(reducer): failed executing command");
+
+                // Reset counter for next (warm) execution
+                println!("tless(reducer): resetting counter to 0");
+                *count = 0;
             }
 
             "reducer"

@@ -1,7 +1,8 @@
 use crate::tasks::docker::Docker;
+use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
-use crate::tasks::workflows::Workflows;
 use clap::{Parser, Subcommand};
+use env_logger;
 
 pub mod env;
 pub mod tasks;
@@ -11,29 +12,32 @@ struct Cli {
     // The name of the task to execute
     #[clap(subcommand)]
     task: Command,
+
+    #[arg(short, long, global = true)]
+    debug: bool,
 }
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    List {},
-
+    /// Build and push different docker images
     Docker {
         #[command(subcommand)]
         docker_command: DockerCommand,
     },
-
+    /// Run evaluation experiments and plot results
+    Eval {
+        #[command(subcommand)]
+        eval_command: EvalCommand,
+    },
+    /// Interact with an S3 (MinIO server)
     S3 {
         #[command(subcommand)]
         s3_command: S3Command,
     },
-
-    Workflows {
-        function: String,
-    },
 }
 
 #[derive(Debug, Subcommand)]
-pub enum DockerCommand {
+enum DockerCommand {
     Build {
         #[arg(long)]
         ctr: String,
@@ -51,7 +55,24 @@ pub enum DockerCommand {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum S3Command {
+enum EvalSubCommand {
+    /// Run
+    Run(EvalRunArgs),
+    /// Plot
+    Plot {},
+}
+
+#[derive(Debug, Subcommand)]
+enum EvalCommand {
+    /// Evaluate end-to-end execution latency for different workflows
+    E2eLatency {
+        #[command(subcommand)]
+        eval_sub_command: EvalSubCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum S3Command {
     /// Clear a given bucket in an S3 server
     ClearBucket {
         #[arg(long)]
@@ -63,6 +84,13 @@ pub enum S3Command {
         bucket_name: String,
         #[arg(long)]
         prefix: String,
+    },
+    /// Clear a sub-tree in an S3 bucket indicated by a prefix
+    GetKey {
+        #[arg(long)]
+        bucket_name: String,
+        #[arg(long)]
+        key: String,
     },
     /// List all buckets in an S3 server
     ListBuckets {},
@@ -90,8 +118,18 @@ pub enum S3Command {
 async fn main() {
     let cli = Cli::parse();
 
+    // Initialize the logger based on the debug flag
+    if cli.debug {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Debug)
+            .init();
+    } else {
+        env_logger::Builder::from_default_env()
+            .filter_level(log::LevelFilter::Info)
+            .init();
+    }
+
     match &cli.task {
-        Command::List {} => {}
         Command::Docker { docker_command } => match docker_command {
             DockerCommand::Build { ctr, push, nocache } => {
                 Docker::build(ctr.to_string(), *push, *nocache);
@@ -109,12 +147,30 @@ async fn main() {
                 }
             }
         },
+        Command::Eval { eval_command } => match eval_command {
+            EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
+                EvalSubCommand::Run(run_args) => {
+                    Eval::run(&EvalExperiment::E2eLatency, run_args).await;
+                }
+                EvalSubCommand::Plot {} => {
+                    Eval::plot(&EvalExperiment::E2eLatency);
+                }
+            },
+        },
+        // FIXME: move all S3 methods to &str
         Command::S3 { s3_command } => match s3_command {
             S3Command::ClearBucket { bucket_name } => {
                 S3::clear_bucket(bucket_name.to_string()).await;
             }
-            S3Command::ClearDir { bucket_name, prefix } => {
+            S3Command::ClearDir {
+                bucket_name,
+                prefix,
+            } => {
                 S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
+            }
+            // TODO: delete me!
+            S3Command::GetKey { bucket_name, key } => {
+                S3::wait_for_key(bucket_name, key).await;
             }
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;
@@ -135,6 +191,5 @@ async fn main() {
                 .await;
             }
         },
-        Command::Workflows { function } => Workflows::do_cmd(function.to_string()),
     }
 }
