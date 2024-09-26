@@ -1,7 +1,9 @@
 use crate::tasks::s3::S3;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{env, fmt};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AvailableWorkflow {
     WordCount,
 }
@@ -10,6 +12,17 @@ impl fmt::Display for AvailableWorkflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AvailableWorkflow::WordCount => write!(f, "word-count"),
+        }
+    }
+}
+
+impl FromStr for AvailableWorkflow {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<AvailableWorkflow, Self::Err> {
+        match input {
+            "word-count" => Ok(AvailableWorkflow::WordCount),
+            _ => Err(()),
         }
     }
 }

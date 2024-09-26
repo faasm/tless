@@ -1,19 +1,20 @@
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
-use csv::ReaderBuilder;
 use chrono::{DateTime, Duration, Utc};
 use clap::{Args, ValueEnum};
+use csv::ReaderBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error};
 use plotters::prelude::*;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::{collections::HashMap, env, fmt, fs, io::Write, thread, time};
+use std::str::FromStr;
+use std::{collections::BTreeMap, env, fmt, fs, io::Write, thread, time};
 
 static EVAL_BUCKET_NAME: &str = "tless";
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, ValueEnum, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EvalBaseline {
     Faasm,
     SgxFaasm,
@@ -36,10 +37,44 @@ impl fmt::Display for EvalBaseline {
     }
 }
 
+impl FromStr for EvalBaseline {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<EvalBaseline, Self::Err> {
+        match input {
+            "faasm" => Ok(EvalBaseline::Faasm),
+            "sgx-faasm" => Ok(EvalBaseline::SgxFaasm),
+            "tless-faasm" => Ok(EvalBaseline::TlessFaasm),
+            "knative" => Ok(EvalBaseline::Knative),
+            "cc-knative" => Ok(EvalBaseline::CcKnative),
+            "tless-knative" => Ok(EvalBaseline::TlessKnative),
+            _ => Err(()),
+        }
+    }
+}
+
 impl EvalBaseline {
     pub fn iter_variants() -> std::slice::Iter<'static, EvalBaseline> {
-        static VARIANTS: [EvalBaseline; 6] = [EvalBaseline::Faasm, EvalBaseline::SgxFaasm, EvalBaseline::TlessFaasm, EvalBaseline::Knative, EvalBaseline::CcKnative, EvalBaseline::TlessKnative];
+        static VARIANTS: [EvalBaseline; 6] = [
+            EvalBaseline::Faasm,
+            EvalBaseline::SgxFaasm,
+            EvalBaseline::TlessFaasm,
+            EvalBaseline::Knative,
+            EvalBaseline::CcKnative,
+            EvalBaseline::TlessKnative,
+        ];
         VARIANTS.iter()
+    }
+
+    pub fn get_color(&self) -> RGBColor {
+        match self {
+            EvalBaseline::Faasm => RGBColor(171, 222, 230),
+            EvalBaseline::SgxFaasm => RGBColor(203, 170, 203),
+            EvalBaseline::TlessFaasm => RGBColor(255, 255, 181),
+            EvalBaseline::Knative => RGBColor(255, 204, 182),
+            EvalBaseline::CcKnative => RGBColor(243, 176, 195),
+            EvalBaseline::TlessKnative => RGBColor(151, 193, 169),
+        }
     }
 }
 
@@ -192,7 +227,7 @@ impl Eval {
         Self::wait_for_pods(namespace, label, 1);
     }
 
-    fn template_yaml(yaml_path: PathBuf, env_vars: HashMap<&str, &str>) -> String {
+    fn template_yaml(yaml_path: PathBuf, env_vars: BTreeMap<&str, &str>) -> String {
         let yaml_content = fs::read_to_string(yaml_path).expect("invrs(eval): failed to read yaml");
 
         // Use envsubst to substitute environment variables in the YAML
@@ -229,7 +264,7 @@ impl Eval {
         workflow_yaml.push("workflow.yaml");
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
-            HashMap::from([(
+            BTreeMap::from([(
                 "RUNTIME_CLASS_NAME",
                 match baseline {
                     EvalBaseline::Knative => "kata-qemu",
@@ -278,7 +313,7 @@ impl Eval {
         workflow_yaml.push("workflow.yaml");
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
-            HashMap::from([(
+            BTreeMap::from([(
                 "RUNTIME_CLASS_NAME",
                 match baseline {
                     EvalBaseline::Knative => "kata-qemu",
@@ -466,15 +501,37 @@ impl Eval {
             time_ms: u64,
         }
 
-        let mut averages = Vec::new();
-        let mut baselines = Vec::new();
-        let total_baselines = EvalBaseline::iter_variants(); // .collect::Vec<EvalBaseline>()
+        // Initialize the structure to hold the data
+        let mut data = BTreeMap::<AvailableWorkflow, BTreeMap<EvalBaseline, f64>>::new();
+        for workflow in AvailableWorkflow::iter_variants() {
+            let mut inner_map = BTreeMap::<EvalBaseline, f64>::new();
+            for baseline in EvalBaseline::iter_variants() {
+                inner_map.insert(baseline.clone(), 0.0);
+            }
+            data.insert(workflow.clone(), inner_map);
+        }
+
+        let num_workflows = AvailableWorkflow::iter_variants().len();
+        let num_baselines = EvalBaseline::iter_variants().len();
+        let mut y_max = 0.0;
+        // Each bar has width 1 and we add padding bars between workflows
+        let x_max = num_baselines * num_workflows + num_workflows + 1;
 
         // Collect data
         for csv_file in data_files {
-            let file_name = csv_file.file_name().and_then(|f| f.to_str()).unwrap_or_default();
-            println!("file name: {file_name}");
-            baselines.push(file_name.split("_").collect::<Vec<&str>>()[0]);
+            let file_name = csv_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            let file_name_len = file_name.len();
+            let file_name_no_ext = &file_name[0..file_name_len - 4];
+
+            let wflow: AvailableWorkflow = file_name_no_ext.split("_").collect::<Vec<&str>>()[1]
+                .parse()
+                .unwrap();
+            let baseline: EvalBaseline = file_name_no_ext.split("_").collect::<Vec<&str>>()[0]
+                .parse()
+                .unwrap();
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -490,30 +547,36 @@ impl Eval {
                 count += 1;
             }
 
-            // Calculate average TimeMs for this file
-            let average_time = total_time as f64 / count as f64;
-            averages.push(average_time as i64);
+            let average_time = data.get_mut(&wflow).unwrap().get_mut(&baseline).unwrap();
+            *average_time = total_time as f64 / count as f64;
+
+            if *average_time > y_max {
+                y_max = *average_time;
+            }
         }
 
+        let mut plot_path = env::current_dir().expect("invrs: failed to get current directory");
+        plot_path.push("eval");
+        plot_path.push(format!("{}", EvalExperiment::E2eLatency));
+        plot_path.push("plots");
+        plot_path.push("e2e_latency.svg");
+
         // Plot data
-        let root = BitMapBackend::new("plot.png", (800, 600)).into_drawing_area();
+        let root = SVGBackend::new(&plot_path, (800, 600)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         let mut chart = ChartBuilder::on(&root)
-            .caption("Average TimeMs for Each File", ("sans-serif", 40))
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
-            .build_cartesian_2d(
-                (0..total_baselines.len()).into_segmented(),
-                0i64..*averages.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(&0),
-            ).unwrap();
+            .build_cartesian_2d(0..x_max, 0i64..y_max as i64)
+            .unwrap();
 
-        chart.configure_mesh()
-            .y_desc("")
-            .x_desc("Files")
-            .x_labels(total_baselines.len())
-            .y_labels(10) // .x_label_formatter(&|x| total_baselines[*x].clone())
+        chart
+            .configure_mesh()
+            .y_desc("Execution latency [ms]")
+            .x_desc("")
+            .y_labels(10)
             .disable_x_mesh()
             .y_label_formatter(&|y| format!("{:.0}", y))
             .light_line_style(ShapeStyle {
@@ -525,28 +588,60 @@ impl Eval {
             .unwrap();
 
         // Draw bars
-        chart.draw_series((0..).zip(averages.iter()).map(|(x, y)| {
-            let x0 = SegmentValue::Exact(x);
-            let x1 = SegmentValue::Exact(x + 1);
-            let mut bar = Rectangle::new([(x0, 0), (x1, *y)], BLUE.filled());
-            bar.set_margin(0, 0, 5, 5);
-            bar
-        })).unwrap();
-        /*
-        for (i, &avg) in averages.iter().enumerate() {
-             // Draw the rectangle for the bar
-            let bar_width = 0.3; // Width of the bar
-            chart.draw_series(vec![Rectangle::new(
-                [(i as f64 - bar_width / 2.0, 0.0), (i as f64 + bar_width / 2.0, avg)],
-                ShapeStyle {
-                    color: BLUE.to_rgba(),
-                    filled: true,
-                    stroke_width: 1,
-                    ..ShapeStyle::from(&BLACK)
-                },
-            )]).unwrap();
+        for (w_idx, (workflow, workflow_data)) in data.iter().enumerate() {
+            let x_orig = w_idx * num_baselines + 1;
+
+            // TODO: make the color depend on the baseline
+            chart
+                .draw_series((0..).zip(workflow_data.iter()).map(|(x, (baseline, y))| {
+                    // Bar style
+                    let bar_style = ShapeStyle {
+                        color: baseline.get_color().into(),
+                        filled: true,
+                        stroke_width: 2,
+                    };
+                    let mut bar =
+                        Rectangle::new([(x_orig + x, 0), (x_orig + x + 1, *y as i64)], bar_style);
+                    bar.set_margin(0, 0, 5, 5);
+                    bar
+                }))
+                .unwrap();
+
+            // Add label for the workflow
+            let x_workflow_label = x_orig + num_baselines / 2;
+            let label_px_coordinate = chart
+                .plotting_area()
+                .map_coordinate(&(x_workflow_label, -10));
+            root.draw(&Text::new(
+                format!("{workflow}"),
+                label_px_coordinate,
+                ("sans-serif", 20).into_font(),
+            ))
+            .unwrap();
         }
-        */
+
+        // Add dummy lines to create entries in the legend
+        for baseline in EvalBaseline::iter_variants() {
+            chart
+                .draw_series(std::iter::once(PathElement::new(
+                    vec![(0, -10), (0, -10)],
+                    baseline.get_color().stroke_width(10),
+                )))
+                .unwrap()
+                .label(format!("{baseline}"))
+                .legend(move |(x, y)| {
+                    Rectangle::new([(x, y - 5), (x + 30, y + 5)], baseline.get_color().filled())
+                });
+        }
+
+        // Draw the legend
+        chart
+            .configure_series_labels()
+            .position(SeriesLabelPosition::UpperRight)
+            .border_style(&BLACK)
+            .background_style(&WHITE.mix(0.8))
+            .draw()
+            .unwrap();
 
         root.present().unwrap();
     }
@@ -558,7 +653,7 @@ impl Eval {
         match exp {
             EvalExperiment::E2eLatency => {
                 Self::plot_e2e_latency(&data_files);
-            },
+            }
         }
     }
 }
