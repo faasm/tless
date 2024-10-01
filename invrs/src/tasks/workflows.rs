@@ -68,7 +68,6 @@ impl Workflows {
         };
     }
 
-    // TODO: write me!
     pub async fn upload_state(bucket_name: &str, clean: bool) {
         if clean {
             S3::clear_bucket(bucket_name.to_string()).await;
@@ -77,6 +76,12 @@ impl Workflows {
         // Upload state for different workflows
         for workflow in AvailableWorkflow::iter_variants() {
             Self::upload_workflow_state(&workflow, bucket_name, clean).await;
+        }
+    }
+
+    pub fn get_faasm_cmdline(workflow: &AvailableWorkflow) -> &str {
+        match workflow {
+            AvailableWorkflow::WordCount => "word-count/few-files",
         }
     }
 }

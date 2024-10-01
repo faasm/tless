@@ -11,10 +11,45 @@ two points in the design space for confidential serverless:
   [Knative](https://knative.dev) runtime to run Knative services as container
   functions inside confidential VMs (AMD SEV).
 
+To execute any code snippet in this repository, we will assume that you have
+activated your virtual environment:
+
+```bash
+source ./bin/workon.sh
+```
+
+## Pre-requisites
+
+Install `rust` and `rust-analyzer`. Then `rustup component add rust-analyzer`.
+
+```bash
+# TODO: install this in the background
+sudo apt install -y \
+  libfontconfig1-dev \
+  libssl-dev \
+  pkg-config \
+```
+
 ## Baselines
 
-TODO: add instructions to deploy each baseline
-TODO: ideally, we could have both baselines deployed at the same time
+### Faasm Baselines
+
+To deploy the Faasm-based baselines - Faasm, Sgx-Faasm, and TLess-Faasm -
+just run the following:
+
+```bash
+# TODO: move to k8s when it works
+faasmctl deploy.compose --workers=4
+```
+
+### Knative Baselines
+
+To deploy the Knative-based baselines - Knative, CC-Knative, and TLess-Knative -
+run the following:
+
+```bash
+# TODO
+```
 
 ## Workflows
 

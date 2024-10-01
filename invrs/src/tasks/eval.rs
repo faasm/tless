@@ -1,6 +1,7 @@
+use crate::tasks::docker::Docker;
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -167,7 +168,7 @@ impl Eval {
 
     fn get_all_data_files(exp: &EvalExperiment) -> Vec<PathBuf> {
         // TODO: change to data
-        let data_path = format!("{}/{exp}/data-bup", Self::get_root().display());
+        let data_path = format!("{}/{exp}/data", Self::get_root().display());
 
         // Collect all CSV files in the directory
         let mut csv_files = Vec::new();
@@ -180,6 +181,27 @@ impl Eval {
 
         return csv_files;
     }
+
+    fn get_progress_bar(
+        num_repeats: u64,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+        workflow: &AvailableWorkflow,
+    ) -> ProgressBar {
+        let pb = ProgressBar::new(num_repeats);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
+                .expect("invrs(eval): error creating progress bar")
+                .progress_chars("#>-"),
+        );
+        pb.set_message(format!("{exp}/{baseline}/{workflow}"));
+        pb
+    }
+
+    // ------------------------------------------------------------------------
+    // Run with Knative Functions
+    // ------------------------------------------------------------------------
 
     fn get_kubectl_cmd() -> String {
         // For the moment, we literally run the `kubectl` command installed
@@ -440,14 +462,7 @@ impl Eval {
             Self::init_data_file(workflow, &exp, &baseline);
 
             // Prepare progress bar for each different experiment
-            let pb = ProgressBar::new(args.num_repeats.into());
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
-                    .expect("invrs(eval): error creating progress bar")
-                    .progress_chars("#>-"),
-            );
-            pb.set_message(format!("{exp}/{baseline}/{workflow}"));
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
@@ -481,16 +496,134 @@ impl Eval {
         Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
     }
 
+    // ------------------------------------------------------------------------
+    // Run with Faasm Functions
+    // ------------------------------------------------------------------------
+
+    fn run_faasmctl_cmd(cmd: &str) -> String {
+        let args: Vec<&str> = cmd.split_whitespace().collect();
+
+        let output = Command::new("faasmctl")
+            .args(&args[0..])
+            .output()
+            .expect("invrs(eval): failed to execute faasmctl command");
+
+        let stderr = String::from_utf8(output.stderr)
+            .expect("invrs(eval): failed to convert faasmctl command output to string");
+        debug!("faasmctl stderr: {stderr}");
+
+        let stdout = String::from_utf8(output.stdout)
+            .expect("invrs(eval): failed to convert faasmctl command output to string");
+        debug!("faasmctl stdout: {stdout}");
+        stdout
+    }
+
+    fn upload_wasm() {
+        // Upload state for different workflows
+        let docker_tag = Docker::get_docker_tag("tless-experiments".to_string());
+
+        for workflow in AvailableWorkflow::iter_variants() {
+            let ctr_path = format!("/usr/local/faasm/wasm/{workflow}");
+
+            Self::run_faasmctl_cmd(
+                &format!("upload.workflow {workflow} {docker_tag}:{ctr_path}").to_string(),
+            );
+        }
+    }
+
+    fn epoch_ts_to_datetime(epoch_str: &str) -> DateTime<Utc> {
+        let epoch_seconds: f64 = epoch_str.parse().unwrap();
+        let secs = epoch_seconds as i64;
+        let nanos = ((epoch_seconds - secs as f64) * 1_000_000_000.0) as u32;
+
+        Utc.timestamp_opt(secs, nanos).single().unwrap()
+    }
+
+    async fn run_faasm_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize) {
+        let baseline = args.baseline[args_offset].clone();
+
+        // First, work out the WASM VM we need
+        let wasm_vm = match baseline {
+            EvalBaseline::Faasm => "wamr",
+            EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => "sgx",
+            _ => panic!("invrs(eval): should not be here"),
+        };
+
+        unsafe {
+            env::set_var("FAASM_WASM_VM", wasm_vm);
+        }
+        // TODO: uncomment when deploying on k8s
+        // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
+
+        // Second, work-out the MinIO URL
+        let mut minio_url = Self::run_faasmctl_cmd("s3.get-url");
+        minio_url = minio_url.strip_suffix("\n").unwrap().to_string();
+        unsafe {
+            env::set_var("MINIO_URL", minio_url);
+        }
+
+        // Upload the state for all workflows
+        Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+
+        // Upload the WASM files for all workflows
+        Self::upload_wasm();
+
+        // Invoke each workflow
+        for workflow in AvailableWorkflow::iter_variants() {
+            let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
+
+            // Initialise result file
+            Self::init_data_file(workflow, &exp, &baseline);
+
+            // Prepare progress bar for each different experiment
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
+
+            let faasmctl_cmd = format!(
+                "invoke {workflow} driver --cmdline {faasm_cmdline} --output-format start-end-ts"
+            );
+            // Do warm-up rounds
+            for _ in 0..args.num_warmup_repeats {
+                Self::run_faasmctl_cmd(&faasmctl_cmd);
+            }
+
+            // Do actual experiment
+            for i in 0..args.num_repeats {
+                let mut output = Self::run_faasmctl_cmd(&faasmctl_cmd);
+                output = output.strip_suffix("\n").unwrap().to_string();
+
+                let ts = output.split(",").collect::<Vec<&str>>();
+                let result = ExecutionResult {
+                    start_time: Self::epoch_ts_to_datetime(ts[0]),
+                    end_time: Self::epoch_ts_to_datetime(ts[1]),
+                    iter: i,
+                };
+
+                Self::write_result_to_file(workflow, &exp, &baseline, &result);
+
+                pb.inc(1);
+            }
+
+            // Finish progress bar
+            pb.finish();
+        }
+    }
+
     pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
                 EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => {
                     Self::run_knative_experiment(exp, args, i).await;
                 }
-                _ => panic!("invrs(eval): unimplemented baseline: {}", args.baseline[i]),
+                EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => {
+                    Self::run_faasm_experiment(exp, args, i).await;
+                }
             }
         }
     }
+
+    // ------------------------------------------------------------------------
+    // Plotting Functions
+    // ------------------------------------------------------------------------
 
     fn plot_e2e_latency(data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]

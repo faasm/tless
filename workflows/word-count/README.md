@@ -30,8 +30,11 @@ faasmctl upload.workflow \
 Lastly, you may invoke the driver function to trigger workflow execution:
 
 ```bash
-faasmctl invoke.wasm word-count driver --cmdline "word-count/few-files"
+faasmctl invoke word-count driver --cmdline "word-count/few-files"
 ```
+
+> [!WARNING]
+> To use with Faasm, you must make sure that we have STDOUT_CAPTURE disabled
 
 ## Run the Workflow (Knative)
 

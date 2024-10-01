@@ -17,13 +17,21 @@ source ${PROJ_ROOT}/bin/env.sh
 alias invrs="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
 
 # ----------------------------
-# CoCo vars (TODO FIXME consider changing)
+# Knative vars (TODO FIXME consider changing)
 # ----------------------------
 
 export COCO_SOURCE=~/git/coco-serverless/coco-serverless
 export KUBECONFIG=${COCO_SOURCE}/.config/kubeadm_kubeconfig
 alias k9s=${COCO_SOURCE}/bin/k9s
 alias kubectl=${COCO_SOURCE}/bin/kubectl
+
+# ----------------------------
+# Faasm vars
+# ----------------------------
+
+export FAASM_INI_FILE=${PROJ_ROOT}/faasm.ini
+# TODO: update me
+export FAASM_VERSION=0.27.0
 
 # ----------------------------
 # Python deps
