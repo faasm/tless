@@ -18,6 +18,18 @@ activated your virtual environment:
 source ./bin/workon.sh
 ```
 
+## Pre-requisites
+
+Install `rust` and `rust-analyzer`. Then `rustup component add rust-analyzer`.
+
+```bash
+# TODO: install this in the background
+sudo apt install -y \
+  libfontconfig1-dev \
+  libssl-dev \
+  pkg-config \
+```
+
 ## Baselines
 
 ### Faasm Baselines
