@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 pub struct Docker {}
 
 impl Docker {
-    fn get_docker_tag(ctr_name: String) -> String {
+    pub fn get_docker_tag(ctr_name: String) -> String {
         // Prepare image tag
         let version = match Env::get_version() {
             Ok(ver) => ver,
