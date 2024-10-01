@@ -168,7 +168,7 @@ impl Eval {
 
     fn get_all_data_files(exp: &EvalExperiment) -> Vec<PathBuf> {
         // TODO: change to data
-        let data_path = format!("{}/{exp}/data-bup", Self::get_root().display());
+        let data_path = format!("{}/{exp}/data", Self::get_root().display());
 
         // Collect all CSV files in the directory
         let mut csv_files = Vec::new();
