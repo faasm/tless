@@ -45,3 +45,4 @@ function(faasm_wflow_func wflow_name func_name file_name)
 endfunction(faasm_wflow_func)
 
 add_subdirectory(word-count)
+add_subdirectory(ml-training)
