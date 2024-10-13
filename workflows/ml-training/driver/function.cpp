@@ -78,7 +78,7 @@ int main(int argc, char** argv)
             return 1;
         }
 
-        auto thisTrainIds = splitByDelimiter(partitionOutput, ",");
+        auto thisTrainIds = splitByDelimiter(trainOutput, ",");
         for (const auto tid : thisTrainIds) {
             trainIds.push_back(std::stoi(tid));
         }
@@ -90,9 +90,22 @@ int main(int argc, char** argv)
     for (auto trainId : trainIds) {
         result = faasmAwaitCall(trainId);
         if (result != 0) {
-            printf("ml-training(driver): error: PCA execution (id: %i) failed with rc %i\n", pcaId, result);
+            printf("ml-training(driver): error: RF train execution (id: %i) failed with rc %i\n", trainId, result);
             return 1;
         }
+    }
+
+    // Finally, invoke one validation function
+    printf("ml-training(driver): invoking one validation function\n");
+#ifdef __faasm
+    // Call splitter
+    std::string validationInput = "ml-training/outputs/rf-";
+    int validationId = faasmChainNamed("validation", (uint8_t*) splitterInput.c_str(), splitterInput.size());
+#endif
+    result = faasmAwaitCall(validationId);
+    if (result != 0) {
+        printf("ml-training(driver): error: validation execution (id: %i) failed with rc %i\n", trainId, result);
+        return 1;
     }
 
     std::string output = "ml-training(driver): workflow executed succesfully!";

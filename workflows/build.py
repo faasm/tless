@@ -8,7 +8,7 @@ WORKFLOWS_ROOT = dirname(realpath(__file__))
 
 WORKFLOWS = {
     "word-count": ["driver", "splitter", "mapper", "reducer"],
-    "ml-training": ["driver", "partition", "pca"], #  "rf"
+    "ml-training": ["driver", "partition", "pca", "rf"],
 }
 
 

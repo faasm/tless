@@ -51,7 +51,23 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
     return splitString;
 }
 
-void loadImages(const std::string& bucketName,
+std::string join(const std::vector<std::string>& stringList, const std::string& delimiter)
+{
+    if (stringList.size() == 0) {
+        return "";
+    }
+
+    std::string result = stringList.at(0);
+    for (int i = 1; i < stringList.size(); i++) {
+        result += delimiter;
+        result += stringList.at(i);
+    }
+
+    return result;
+}
+
+void loadImages(const std::string& us,
+                const std::string& bucketName,
                 const std::string& s3file,
                 std::vector<cv::Mat>& data,
                 std::vector<int>& labels)
@@ -64,7 +80,8 @@ void loadImages(const std::string& bucketName,
     int ret =
       __faasm_s3_get_key_bytes(bucketName.c_str(), s3file.c_str(), &keyBytes, &keyBytesLen);
     if (ret != 0) {
-        printf("ml-training(pca): error: error getting bytes from key: %s (bucket: %s)\n",
+        printf("ml-training(%s): error: error getting bytes from key: %s (bucket: %s)\n",
+               us.c_str(),
                s3file.c_str(),
                bucketName.c_str());
     }
@@ -85,7 +102,7 @@ void loadImages(const std::string& bucketName,
     int progressEvery = numFiles / 5;
     while (std::getline(ss, image, ',')) {
         if ((label % progressEvery) == 0) {
-            std::cout << "ml-training(pca): loaded " << label << "/" << numFiles << " images" << std::endl;
+            std::cout << "ml-training(" << us << "): loaded " << label << "/" << numFiles << " images" << std::endl;
         }
 
         std::vector<uint8_t> imageContents;
@@ -96,7 +113,8 @@ void loadImages(const std::string& bucketName,
         int ret =
           __faasm_s3_get_key_bytes(bucketName.c_str(), image.c_str(), &keyBytes, &keyBytesLen);
         if (ret != 0) {
-            printf("ml-training(pca): error: error getting bytes from key: %s (bucket: %s)\n",
+            printf("ml-training(%s): error: error getting bytes from key: %s (bucket: %s)\n",
+                   us.c_str(),
                    image.c_str(),
                    bucketName.c_str());
         }
@@ -165,6 +183,7 @@ int main(int argc, char** argv) {
     std::string bucketName = "tless";
     std::string s3dir;
     int numTrainFuncs;
+    int id;
 
 #ifdef __faasm
     // Get the object key as an input
@@ -174,39 +193,41 @@ int main(int argc, char** argv) {
 
     std::string tmpStr(inputChar, inputChar + inputSize);
     auto parts = splitByDelimiter(tmpStr, ":");
-    if (parts.size() != 2) {
+    if (parts.size() != 3) {
         std::cerr << "ml-training(pca): error parsing partition input" << std::endl;
         return 1;
     }
 
-    s3dir = parts.at(0);
-    numTrainFuncs = std::stoi(parts.at(1));
+    id = std::stoi(parts.at(0));
+    s3dir = parts.at(1);
+    numTrainFuncs = std::stoi(parts.at(2));
 #endif
+    std::string us = "pca-" + std::to_string(id);
 
-    std::cout << "ml-training(pca): running PCA on S3 dir "
+    std::cout << "ml-training(" << us << "): running PCA on S3 dir "
               << s3dir
               << std::endl
-              << "ml-training(pca): chaining into "
+              << "ml-training(" << us << "): chaining into "
               << numTrainFuncs
               << " parallel random forest trees"
               << std::endl;
 
     // Load images
-    std::cout << "ml-training(pca): beginning to load images..." << std::endl;
+    std::cout << "ml-training(" << us << "): beginning to load images..." << std::endl;
     std::vector<cv::Mat> images;
     std::vector<int> labels;
-    loadImages(bucketName, s3dir, images, labels);
-    std::cout << "ml-training(pca): images loaded!" << std::endl;
+    loadImages(us, bucketName, s3dir, images, labels);
+    std::cout << "ml-training(" << us << "): images loaded!" << std::endl;
 
     // Convert data to a single matrix
-    std::cout << "ml-training(pca): converting data..." << std::endl;
+    std::cout << "ml-training(" << us << "): converting data..." << std::endl;
     cv::Mat data;
     cv::vconcat(images, data);
     data.convertTo(data, CV_32F);
-    std::cout << "ml-training(pca): data converted" << std::endl;
+    std::cout << "ml-training(" << us << "): data converted" << std::endl;
 
     // Perform PCA with 10 principal components
-    std::cout << "ml-training(pca): performing PCA analysis..." << std::endl;
+    std::cout << "ml-training(" << us << "): performing PCA analysis..." << std::endl;
     cv::PCA pca(data, cv::Mat(), cv::PCA::DATA_AS_ROW, 10);
     cv::Mat pcaResult;
     pca.project(data, pcaResult);
@@ -214,17 +235,17 @@ int main(int argc, char** argv) {
     // Prepare labels for training
     cv::Mat labelsMat(labels);
     labelsMat.convertTo(labelsMat, CV_32S);
-    std::cout << "ml-training(pca): PCA on images succeded!" << std::endl;
+    std::cout << "ml-training(" << us << "): PCA on images succeded!" << std::endl;
 
     // Split and invoke training
-    std::cout << "ml-training(pca): splitting and serializing results..." << std::endl;
+    std::cout << "ml-training(" << us << "): splitting and serializing results..." << std::endl;
     auto serializedMats = splitAndSerialize(pcaResult, numTrainFuncs);
-    auto serializedLabels = serializeMat(labelsMat);
-    std::cout << "ml-training(pca): splitting and serializing done!" << std::endl;
+    auto serializedLabels = splitAndSerialize(labelsMat, numTrainFuncs);
+    std::cout << "ml-training(" << us << "): splitting and serializing done!" << std::endl;
 
     // Upload the serialized results
     for (int i = 0; i < serializedMats.size(); i++) {
-        std::string dataKey = "ml-training/outputs/pca/rf-" + std::to_string(i);
+        std::string dataKey = "ml-training/outputs/" + us + "/rf-" + std::to_string(i) + "-data";
 #ifdef __faasm
         // Overwrite the results
         int ret =
@@ -234,36 +255,37 @@ int main(int argc, char** argv) {
                                    serializedMats.at(i).size(),
                                    true);
         if (ret != 0) {
-            std::cerr << "ml-training(pca): error uploading PCA data for training" << std::endl;
+            std::cerr << "ml-training(" << us << "): error uploading PCA data for training" << std::endl;
             return 1;
         }
 #else
         s3cli.addKeyStr(bucketName, dataKey, serializedMats.at(i));
 #endif
-    }
 
-    // Upload the labels
-    std::string labelsKey = "ml-training/outputs/pca/labels";
+        // Upload the labels
+        std::string labelsKey = "ml-training/outputs/" + us + "/rf-" + std::to_string(i) + "-labels";
 #ifdef __faasm
-    // Overwrite the results
-    int ret =
-      __faasm_s3_add_key_bytes(bucketName.c_str(),
-                               labelsKey.c_str(),
-                               serializedLabels.data(),
-                               serializedLabels.size(),
-                               true);
-    if (ret != 0) {
-        std::cerr << "ml-training(pca): error uploading labels data for training" << std::endl;
-        return 1;
-    }
+        // Overwrite the results
+        ret =
+          __faasm_s3_add_key_bytes(bucketName.c_str(),
+                                   labelsKey.c_str(),
+                                   serializedLabels.at(i).data(),
+                                   serializedLabels.at(i).size(),
+                                   true);
+        if (ret != 0) {
+            std::cerr << "ml-training(" << us << "): error uploading labels data for training" << std::endl;
+            return 1;
+        }
 #else
-    s3cli.addKeyStr(bucketName, labelsKey, serializedLabels.at(i));
+        s3cli.addKeyStr(bucketName, labelsKey, serializedLabels.at(i));
 #endif
+    }
 
     std::vector<std::string> trainFuncIds;
     for (int i = 0; i < numTrainFuncs; i++) {
-        std::string dataKey = "ml-training/outputs/pca/rf-" + std::to_string(i);
-        std::string pcaInput = dataKey + ":" + labelsKey;
+        std::string dataKey = "ml-training/outputs/" + us + "/rf-" + std::to_string(i) + "-data";
+        std::string labelsKey = "ml-training/outputs/" + us + "/rf-" + std::to_string(i) + "-labels";
+        std::string pcaInput = std::to_string(id) + ":" + std::to_string(i) + ":" + dataKey + ":" + labelsKey;
 #ifdef __faasm
         int pcaId = faasmChainNamed("rf", (uint8_t*) pcaInput.c_str(), pcaInput.size());
 #endif

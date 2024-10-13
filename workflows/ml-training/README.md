@@ -6,34 +6,37 @@ Workflow based on the ML training presented in [Orion]() and [RMMap]()
 
 In this workflow we train a random forest model using the MNIST 10k dataset.
 
+> [WARNING!] There is currently a strange bug in SGX's malloc that is giving
+> an overflow with the 10k dataset, so we use a subset (2k dataset).
+
 ## Run the Workflow (Faasm)
 
 First, upload the images:
 
 ```bash
-# Clean bucket first
+# Clean bucket first (really?)
 faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
 
 # Upload all data files in the directory
 faasmctl s3.upload-dir \
   --bucket ${BUCKET_NAME} \
-  --host-path ${PROJ_DIR}/datasets/ml-training/mnist-images-10k
-  --s3-path ml-training/mnist-images-10k
+  --host-path ${PROJ_DIR}/datasets/ml-training/mnist-images-2k
+  --s3-path ml-training/mnist-images-2k
 ```
 
 Second, upload the WASM files for each stage in the workflow:
 
 ```bash
 faasmctl upload.workflow \
-  word-count \
-  faasm.azurecr.io/tless-experiments:$(cat ${PROJ_DIR}/VERSION):/usr/local/faasm/wasm/word-count
+  ml-training \
+  faasm.azurecr.io/tless-experiments:$(cat ${PROJ_DIR}/VERSION):/usr/local/faasm/wasm/ml-training
 ```
 
-Lastly, you may invoke the driver function to trigger workflow execution:
+Lastly, you may invoke the driver function to trigger workflow execution
+with 2 PCA functions, and 8 random forest trees.
 
-0x7ff800285ab4
 ```bash
-faasmctl invoke ml-training driver --cmdline "word-count/mnist-images-10k 5 8"
+faasmctl invoke ml-training driver --cmdline "ml-training/mnist-images-2k 2 8"
 ```
 
 > [!WARNING]
@@ -41,14 +44,6 @@ faasmctl invoke ml-training driver --cmdline "word-count/mnist-images-10k 5 8"
 
 ## Run the Workflow (Knative)
 
-First, deploy the k8s cluster with bare-metal access to SEV nodes:
-
-```bash
-TODO
-
-kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
-kubectl apply -f ${PROJ_ROOT}/workflows/word-count/knative/workflow.yaml
-```
 
 To run the workflow, you must first upload the wikipedia dump to S3:
 
