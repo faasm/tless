@@ -20,7 +20,7 @@ faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
 # Upload all data files in the directory
 faasmctl s3.upload-dir \
   --bucket ${BUCKET_NAME} \
-  --host-path ${PROJ_DIR}/datasets/ml-training/mnist-images-2k
+  --host-path ${PROJ_DIR}/datasets/ml-training/mnist-images-2k \
   --s3-path ml-training/mnist-images-2k
 ```
 

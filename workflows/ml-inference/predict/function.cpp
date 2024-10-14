@@ -145,6 +145,7 @@ void loadModelParts(const std::string& us,
         tmpString.assign(keysBuffer[i], keysBuffer[i] + keysBufferLens[i]);
         s3files.push_back(tmpString);
     }
+
 #else
     auto s3files = s3cli.listKeys(bucketName, s3prefix);
 #endif
@@ -173,10 +174,42 @@ void loadModelParts(const std::string& us,
     }
 }
 
+int sanityCheckForests(const std::string& us,
+                       const std::vector<cv::Ptr<cv::ml::RTrees>>& forests)
+{
+    // Sanity check the forests
+    if (forests.empty()) {
+        std::cerr << "ml-inference(" << us << "): forest deserialization failed or is empty!" << std::endl;
+        return 1;
+    }
+    for (const auto& forest : forests) {
+        if (!forest || forest->getRoots().empty()) {
+            std::cerr << "ml-inference(" << us << "): forest deserialization failed or is empty!" << std::endl;
+            return 1;
+        }
+    }
+    for (const auto& forest : forests) {
+        int treeCount = forest->getRoots().size();
+        if (treeCount <= 0) {
+            std::cerr << "ml-inference(" << us << "): error: no trees in the forest!" << std::endl;
+            return 1;
+        }
+
+        // Optional: Check other parameters
+        int maxDepth = forest->getMaxDepth();
+        if (maxDepth <= 0) {
+            std::cerr << "ml-inference(" << us << "): error: invalid max depth!" << std::endl;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 float predictEnsemble(const std::vector<cv::Ptr<cv::ml::RTrees>>& forests, const cv::Mat& sample) {
     float aggregatedPrediction = 0.0f;
     for (const auto& forest : forests) {
-        aggregatedPrediction += forest->predict(sample);
+        aggregatedPrediction += (int) forest->predict(sample);
     }
 
     return aggregatedPrediction / forests.size();
@@ -196,7 +229,7 @@ int main(int argc, char** argv) {
 
     std::string tmpStr(inputChar, inputChar + inputSize);
     auto parts = splitByDelimiter(tmpStr, ":");
-    if (parts.size() != 4) {
+    if (parts.size() != 3) {
         std::cerr << "ml-inference(predict): error parsing driver input" << std::endl;
         return 1;
     }
@@ -219,7 +252,26 @@ int main(int argc, char** argv) {
     std::vector<cv::Mat> images;
     std::vector<int> labels;
     loadImages(us, bucketName, dataKey, images, labels);
+    int numImages = images.size();
     std::cout << "ml-inference(" << us << "): images loaded!" << std::endl;
+
+    // Convert data to a single matrix
+    std::cout << "ml-inference(" << us << "): converting data..." << std::endl;
+    cv::Mat data;
+    cv::vconcat(images, data);
+    data.convertTo(data, CV_32F);
+    std::cout << "ml-inference(" << us << "): data converted" << std::endl;
+
+    // Perform PCA with 10 principal components
+    std::cout << "ml-inference(" << us << "): performing PCA analysis..." << std::endl;
+    cv::PCA pca(data, cv::Mat(), cv::PCA::DATA_AS_ROW, 10);
+    cv::Mat pcaResult;
+    pca.project(data, pcaResult);
+
+    // Prepare labels for training
+    cv::Mat labelsMat(labels);
+    labelsMat.convertTo(labelsMat, CV_32S);
+    std::cout << "ml-inference(" << us << "): PCA on images succeded!" << std::endl;
 
     // Second, load all model data
     std::cout << "ml-inference(" << us << "): beginning to load model..." << std::endl;
@@ -227,29 +279,34 @@ int main(int argc, char** argv) {
     loadModelParts(us, bucketName, modelDir, forests);
     std::cout << "ml-inference(" << us << "): model loaded!" << std::endl;
 
+    // Sanitiy check forests
+    if (sanityCheckForests(us, forests) != 0) {
+        std::cerr << "ml-inference(" << us << "): error checking forests" << std::endl;
+        return 1;
+    }
+
     // Third, perform inference
-    std::cout << "ml-inference(" << us << "): beginning to perform inference..." << std::endl;
+    std::cout << "ml-inference(" << us << "): beginning to perform inference on " << numImages << " images..." << std::endl;
     std::vector<float> inferenceResults;
-    for (const auto& image : images) {
-        inferenceResults.push_back(predictEnsemble(forests, image));
+    for (int i = 0; i < numImages; i++) {
+        inferenceResults.push_back(predictEnsemble(forests, pcaResult.row(i)));
     }
     std::cout << "ml-inference(" << us << "): inference done!" << std::endl;
 
     // Serialize results and upload to S3
     std::string inferenceResultsStr;
     for (int i = 0; i < inferenceResults.size(); i++) {
-        inferenceResultsStr += std::to_string(i) + ": " + std::to_string(inferenceResults.at(i)) + "\n";
+        inferenceResultsStr += std::to_string(i) + "," + std::to_string(inferenceResults.at(i)) + ",";
     }
 
     // Upload the serialized results
     std::string resultsKey = "ml-inference/outputs/" + us;
 #ifdef __faasm
-    // Overwrite the results
     int ret =
       __faasm_s3_add_key_bytes(bucketName.c_str(),
                                resultsKey.c_str(),
                                (uint8_t*) inferenceResultsStr.c_str(),
-                               inferenceResults.size(),
+                               inferenceResultsStr.size(),
                                true);
     if (ret != 0) {
         std::cerr << "ml-inference(" << us << "): error uploading inference results!" << std::endl;

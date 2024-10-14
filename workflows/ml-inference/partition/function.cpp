@@ -159,7 +159,7 @@ int main(int argc, char** argv)
 
     // Upload one file per calling function
     for (int i = 0; i < numInfFuncs; i++) {
-        std::string key = "ml-training/outputs/partition/inf-" + std::to_string(i);
+        std::string key = "ml-inference/outputs/partition/inf-" + std::to_string(i);
 #ifdef __faasm
         // Overwrite the results
         int ret =

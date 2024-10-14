@@ -81,9 +81,12 @@ int main(int argc, char** argv)
               << std::endl;
     std::vector<int> inferenceIds(numInfFuncs);
     std::string loadOutput = "ml-inference/outputs/load";
-    std::string partitionOutput = "ml-inferene/outputs/partition/inf-";
+    std::string partitionOutput = "ml-inference/outputs/partition/inf-";
     for (int i = 0; i < numInfFuncs; i++) {
         std::string infInput = std::to_string(i) + ":" + loadOutput + ":" + partitionOutput + std::to_string(i);
+        std::cout << "ml-inference(driver): invoking prediction with input "
+                  << infInput
+                  << std::endl; // DELETE ME
         int infId = faasmChainNamed("predict", (uint8_t*) infInput.c_str(), infInput.size());
         inferenceIds.at(i) = infId;
     }
