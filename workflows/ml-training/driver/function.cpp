@@ -34,7 +34,7 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
 int main(int argc, char** argv)
 {
     if (argc != 4) {
-        printf("word-count(driver): usage: <s3_path_mnist> <num_pca> <num_rf>\n");
+        printf("ml-training(driver): usage: <s3_path_mnist> <num_pca> <num_rf>\n");
         return 1;
     }
     std::string s3prefix = argv[1];
