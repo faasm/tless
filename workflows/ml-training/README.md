@@ -66,20 +66,6 @@ then you may execute the workflow by running:
 ${PROJ_ROOT}/workflows/word-count/knative/curl_cmd.sh
 ```
 
-### NOTES (delete me):
-
-The `driver` function requires the following env. vars:
-
-```
-export S3_BUCKET=tless;
-export S3_HOST=localhost;
-export S3_PASSWORD=minio123;
-export S3_PORT=9000;
-export S3_USER=minio;
-
-export TLESS_S3_DIR=word-count/few-files;
-```
-
 ## Stages Explained
 
 0. Driver: orchestrates function execution (needed in Faasm, not in Knative)
@@ -87,9 +73,7 @@ export TLESS_S3_DIR=word-count/few-files;
   PCA analysis, and a parallelism for the training (i.e. num of random forests).
   It stores in `partition-output` one file for each PCA instance, with all the
   file keys to consume.
-2. PCA: takes as an input an S3 path, and as an output writes to S3 a
-  serialised map of the appearences of different programming languages in the
-  wikipedia dump.
-3. Train: once all mapper functions are done, iterates over the results S3
-  dir and accumulates all results.
-4. Validate:
+2. PCA: performs PCA of the subset of images assigned by 1, and further
+  partitions its data into different training functions.
+3. Train: train a random forest on the slice of the data given by 2.
+4. Validation: aggregate model data and upload it for the ml-inference workflow

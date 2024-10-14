@@ -99,7 +99,7 @@ int main(int argc, char** argv)
     printf("ml-training(driver): invoking one validation function\n");
 #ifdef __faasm
     std::string validationInput = "ml-training/outputs/rf-";
-    int validationId = faasmChainNamed("validation", (uint8_t*) splitterInput.c_str(), splitterInput.size());
+    int validationId = faasmChainNamed("validation", (uint8_t*) validationInput.c_str(), validationInput.size());
 #endif
     result = faasmAwaitCall(validationId);
     if (result != 0) {

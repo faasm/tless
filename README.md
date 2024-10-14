@@ -60,10 +60,10 @@ This repository implements one different workflow:
 
 | Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
 |---|---|---|---|---|---|---|
-| FINRA | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
-| ML Training | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
-| ML Inference | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: | :heavy_multiplication_x: |
-| Word Count | :heavy_check_mark: | :heavy_check_mark: | :heavy_multiplication_x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_multiplication_x: |
+| FINRA | :x: | :x: | :x: | :x: | :x: | :x: |
+| ML Training | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
+| ML Inference | :x: | :x: | :x: | :x: | :x: | :x: |
+| Word Count | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :heavy_multiplication_x: |
 
 ## Experiments
 
