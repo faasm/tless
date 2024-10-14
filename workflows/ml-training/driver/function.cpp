@@ -98,13 +98,14 @@ int main(int argc, char** argv)
     // Finally, invoke one validation function
     printf("ml-training(driver): invoking one validation function\n");
 #ifdef __faasm
-    // Call splitter
     std::string validationInput = "ml-training/outputs/rf-";
     int validationId = faasmChainNamed("validation", (uint8_t*) splitterInput.c_str(), splitterInput.size());
 #endif
     result = faasmAwaitCall(validationId);
     if (result != 0) {
-        printf("ml-training(driver): error: validation execution (id: %i) failed with rc %i\n", trainId, result);
+        printf("ml-training(driver): error: validation execution (id: %i) failed with rc %i\n",
+               validationId,
+               result);
         return 1;
     }
 

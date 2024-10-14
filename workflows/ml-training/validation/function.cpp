@@ -59,9 +59,7 @@ int main(int argc, char** argv)
 {
     // TODO: the bucket name is currently hardcoded
     std::string bucketName = "tless";
-    std::string s3dir;
-    int numPcaFuncs;
-    int numTrainFuncs;
+    std::string s3prefix;
 
 #ifdef __faasm
     // Get the object key as an input
@@ -69,16 +67,7 @@ int main(int argc, char** argv)
     char inputChar[inputSize];
     faasmGetInput((uint8_t*)inputChar, inputSize);
 
-    std::string tmpStr(inputChar, inputChar + inputSize);
-    auto parts = splitByDelimiter(tmpStr, ":");
-    if (parts.size() != 3) {
-        std::cerr << "ml-training(partition): error parsing driver input" << std::endl;
-        return 1;
-    }
-
-    s3dir = parts.at(0);
-    numPcaFuncs = std::stoi(parts.at(1));
-    numTrainFuncs = std::stoi(parts.at(2));
+    s3prefix.assign(inputChar);
 #else
     s3::initS3Wrapper();
 
@@ -94,135 +83,76 @@ int main(int argc, char** argv)
 
         return 1;
     }
-    s3dir.assign(s3dirChar);
+    s3prefix.assign(s3dirChar);
 #endif
 
     // Get the list of files for each PCA function
-    std::cout << "ml-training(partition): partitioning "
-              << s3dir
-              << " between "
-              << numPcaFuncs
-              << " PCA component functions"
-              << std::endl
-              << "ml-training(partition): (into "
-              << numTrainFuncs
-              << " train functions)"
+    std::cout << "ml-training(validation): validating rf model data from "
+              << s3prefix
               << std::endl;
-    std::vector<std::string> s3files(numPcaFuncs);
+    std::vector<std::string> s3files;
 
 #ifdef __faasm
-    // In Faasm we need to do a bit of work because: (i) we can not pass
-    // structured objects (i.e. vectors) through the WASM calling interface,
-    // and (ii) we have not implmented prefix listing, so we need to filter
-    // out entries manually
     int numKeys = __faasm_s3_get_num_keys_with_prefix(
-      bucketName.c_str(), s3dir.c_str());
+      bucketName.c_str(), s3prefix.c_str());
 
-    // In this case, we need to be careful because we have many keys, so we
-    // must heap allocate both structures
     char** keysBuffer = (char**) malloc(numKeys * sizeof(char*));
     int* keysBufferLens = (int*) malloc(numKeys * sizeof(int32_t));
 
     __faasm_s3_list_keys_with_prefix(
-      bucketName.c_str(), s3dir.c_str(), keysBuffer, keysBufferLens);
+      bucketName.c_str(), s3prefix.c_str(), keysBuffer, keysBufferLens);
 
-    // Pre-allocate the size of each string
-    std::vector<int> sizePerPca(numPcaFuncs);
-    std::vector<int> numPerPca(numPcaFuncs);
     for (int i = 0; i < numKeys; i++) {
-        // We add 1 to account for the "," separating the file names
-        sizePerPca.at(i % numPcaFuncs) += keysBufferLens[i] + 1;
-        numPerPca.at(i % numPcaFuncs) += 1;
-    }
-    // Disccount one extra comma
-    for (int i = 0; i < numPcaFuncs; i++) {
-        sizePerPca.at(i) -= 1;
+        std::string tmpString;
+        tmpString.assign(keysBuffer[i], keysBuffer[i] + keysBufferLens[i]);
+        s3files.push_back(tmpString);
     }
 
-    // Serialize the input char** into N different char* to upload them back
-    // to S3
-    std::vector<char*> s3filesPtr(numPcaFuncs);
-    for (int i = 0; i < numPcaFuncs; i++) {
-        s3filesPtr.at(i) = (char*) malloc(sizePerPca.at(i));
-    }
 
-    std::vector<int> offsets(numPcaFuncs);
-    std::vector<int> counts(numPcaFuncs);
-    for (int i = 0; i < numKeys; i++) {
-        int pcaIdx = i % numPcaFuncs;
-        int offset = offsets.at(pcaIdx);
-
-        std::memcpy(s3filesPtr.at(pcaIdx) + offsets.at(pcaIdx), keysBuffer[i], keysBufferLens[i]);
-        counts.at(pcaIdx) += 1;
-
-        if (counts.at(pcaIdx) < numPerPca.at(pcaIdx)) {
-            *(s3filesPtr.at(pcaIdx) + offset + keysBufferLens[i]) = ',';
-            offsets.at(pcaIdx) += keysBufferLens[i] + 1;
-        } else {
-            offsets.at(pcaIdx) += keysBufferLens[i];
-        }
-    }
 #else
-    auto rawS3files = s3cli.listKeys(bucketName);
-    for (int i = 0; i < rawS3files.size(); i++) {
-        auto key = rawS3files.at(i);
-        int funcIdx = i % numPcaFuncs;
-
-        // Filter by prefix
-        if (key.rfind(s3dir, 0) == 0) {
-            s3files.push_back(key);
-        }
-    }
+    auto s3files = s3cli.listKeys(bucketName, s3prefix);
 #endif
 
-    // Upload one file per calling function
-    for (int i = 0; i < numPcaFuncs; i++) {
-        std::string key = "ml-training/outputs/partition/pca-" + std::to_string(i);
+    // NOTE: for the time being, validate only re-uploads
+    for (const auto& file : s3files) {
+        // First download the file
+        std::string fileContents;
 #ifdef __faasm
-        std::string_view fileNames(s3filesPtr.at(i));
-        // Overwrite the results
+        uint8_t* keyBytes;
+        int keyBytesLen;
+
         int ret =
+          __faasm_s3_get_key_bytes(bucketName.c_str(), file.c_str(), &keyBytes, &keyBytesLen);
+        if (ret != 0) {
+            printf("ml-training(validation): error: error getting bytes from key: %s (bucket: %s)\n",
+                   file.c_str(),
+                   bucketName.c_str());
+        }
+        fileContents.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+#else
+        fileContents = s3cli.getKeyStr(bucketName, file);
+#endif
+
+        // Now upload as input for ML inference workflow
+        auto fileParts = splitByDelimiter(file, "/");
+        auto fileName = fileParts.at(fileParts.size() - 1);
+        std::string key = "ml-inference/model/" + fileName;
+#ifdef __faasm
+        // Overwrite the results
+        ret =
           __faasm_s3_add_key_bytes(bucketName.c_str(),
                                    key.c_str(),
-                                   (void*) s3filesPtr.at(i),
-                                   sizePerPca.at(i),
+                                   fileContents.data(),
+                                   fileContents.size(),
                                    true);
         if (ret != 0) {
-            std::cerr << "ml-training(partition): error uploading filenames for PCA functions" << std::endl;
+            std::cerr << "ml-training(validation): error uploading model data for ML inference" << std::endl;
             return 1;
         }
 #else
-        std::string fileNames = join(s3files.at(i), ",");
-        s3cli.addKeyStr(bucketName, key, fileNames);
+        s3cli.addKeyStr(bucketName, key, fileContents);
 #endif
     }
-
-    // Chain to all PCA functions? maybe just return. Or make each PCA
-    // function call two RF
-    // Call two PCA, tell each PCA how many training functions to spawn
-    int numTrainPerPca = numTrainFuncs / numPcaFuncs;
-    std::cout << "ml-training(partition): invoking "
-              << numPcaFuncs
-              << " partition functions with "
-              << numTrainPerPca
-              << " training functions each"
-              << std::endl;
-
-    std::vector<std::string> pcaFuncsIds;
-    for (int i = 0; i < numPcaFuncs; i++) {
-        std::string key = "ml-training/outputs/partition/pca-" + std::to_string(i);
-        std::string pcaInput = std::to_string(i) + ":" + key + ":" + std::to_string(numTrainPerPca);
-#ifdef __faasm
-        int pcaId = faasmChainNamed("pca", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-#endif
-        pcaFuncsIds.push_back(std::to_string(pcaId));
-    }
-
-    // Tell the driver the ids of the PCA funcs to wait on them
-#ifdef __faasm
-    std::string outputStr = join(pcaFuncsIds, ",");
-    faasmSetOutput(outputStr.c_str(), outputStr.size());
-#endif
 
     return 0;
 }
