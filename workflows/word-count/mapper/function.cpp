@@ -9,6 +9,7 @@ extern "C"
 #include "libs/s3/S3Wrapper.hpp"
 #endif
 
+#include <iostream>
 #include <map>
 #include <sstream>
 #include <string>
@@ -30,6 +31,21 @@ std::map<std::string, int> wordCount = {
     {"Clojure", 0},
     {"Groovy", 0}
 };
+
+std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::string& delimiter)
+{
+    std::vector<std::string> splitString;
+
+    size_t pos = 0;
+    std::string token;
+    while ((pos = stringCopy.find(delimiter)) != std::string::npos) {
+        splitString.push_back(stringCopy.substr(0, pos));
+        stringCopy.erase(0, pos + delimiter.length());
+    }
+    splitString.push_back(stringCopy);
+
+    return splitString;
+}
 
 std::string serialiseWordCount()
 {
@@ -53,14 +69,24 @@ int main(int argc, char** argv)
 {
     // TODO: this is currently hardcoded
     std::string bucketName = "tless";
+    int id;
     std::string s3ObjectKey;
 
 #ifdef __faasm
     // Get the object key as an input
     int inputSize = faasmGetInputSize();
-    char keyName[inputSize];
-    faasmGetInput((uint8_t*)keyName, inputSize);
-    s3ObjectKey.assign(keyName, keyName + inputSize);
+    char inputChar[inputSize];
+    faasmGetInput((uint8_t*)inputChar, inputSize);
+
+    std::string tmpStr(inputChar, inputChar + inputSize);
+    auto parts = splitByDelimiter(tmpStr, ":");
+    if (parts.size() != 2) {
+        std::cerr << "word-count(mapper): error parsing driver input" << std::endl;
+        return 1;
+    }
+
+    id = std::stoi(parts.at(0));
+    s3ObjectKey = parts.at(1);
 #else
     s3::initS3Wrapper();
     s3::S3Wrapper s3cli;
@@ -77,6 +103,8 @@ int main(int argc, char** argv)
     s3ObjectKey.assign(s3fileChar);
 #endif
 
+    std::string us = "mapper-" + std::to_string(id);
+
     // Read object from S3
     uint8_t* keyBytes;
 #ifdef __faasm
@@ -85,7 +113,8 @@ int main(int argc, char** argv)
     int ret =
       __faasm_s3_get_key_bytes(bucketName.c_str(), s3ObjectKey.c_str(), &keyBytes, &keyBytesLen);
     if (ret != 0) {
-        printf("error: error getting bytes from key: %s (bucket: %s)\n",
+        printf("word-count(%s): error getting bytes from key: %s (bucket: %s)\n",
+               us.c_str(),
                s3ObjectKey.c_str(),
                bucketName.c_str());
     }
@@ -107,22 +136,18 @@ int main(int argc, char** argv)
 
     // Work-out the serialised payload and directory
     auto thisWordCount = serialiseWordCount();
-    size_t lastSlash = s3ObjectKey.rfind("/");
-    if (lastSlash != std::string::npos) {
-        s3ObjectKey.insert(lastSlash + 1, "mapper-results/");
-    } else {
-        s3ObjectKey = "mapper-results/" + s3ObjectKey;
-    }
-
-    printf("word-count(mapper): writting result to %s\n", s3ObjectKey.c_str());
+    std::string resultsKey = "word-count/outputs/" + us;
+    printf("word-count(%s): writting result to %s\n", us.c_str(), resultsKey.c_str());
 #ifdef __faasm
+    // Overwrite the results key
     ret =
       __faasm_s3_add_key_bytes(bucketName.c_str(),
-                               s3ObjectKey.c_str(),
+                               resultsKey.c_str(),
                                (void*) thisWordCount.c_str(),
-                               thisWordCount.size());
+                               thisWordCount.size(),
+                               true);
 #else
-    s3cli.addKeyStr(bucketName, s3ObjectKey, thisWordCount);
+    s3cli.addKeyStr(bucketName, resultsKey, thisWordCount);
     s3::shutdownS3Wrapper();
 #endif
 

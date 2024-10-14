@@ -62,24 +62,19 @@ int main(int argc, char** argv)
     // structured objects (i.e. vectors) through the WASM calling interface,
     // and (ii) we have not implmented prefix listing, so we need to filter
     // out entries manually
-    int numKeys = __faasm_s3_get_num_keys(bucketName.c_str());
+    int numKeys = __faasm_s3_get_num_keys_with_prefix(
+      bucketName.c_str(), s3dir.c_str());
 
-    char* keysBuffer[numKeys];
-    int keysBufferLens[numKeys];
-    __faasm_s3_list_keys(bucketName.c_str(), keysBuffer, keysBufferLens);
+    char** keysBuffer = (char**) malloc(numKeys * sizeof(char*));
+    int* keysBufferLens = (int*) malloc(numKeys * sizeof(int32_t));
+    __faasm_s3_list_keys_with_prefix(
+      bucketName.c_str(), s3dir.c_str(), keysBuffer, keysBufferLens);
 
     int totalSize = 0;
     for (int i = 0; i < numKeys; i++) {
         std::string tmpString;
         tmpString.assign(keysBuffer[i], keysBuffer[i] + keysBufferLens[i]);
-
-        // Filter by prefix
-        if (tmpString.rfind(s3dir, 0) == 0) {
-            // Filter-out sub-directories to store results
-            if (tmpString.find("results") == std::string::npos) {
-                s3files.push_back(tmpString);
-            }
-        }
+        s3files.push_back(tmpString);
     }
 #else
     auto rawS3files = s3cli.listKeys(bucketName);
@@ -99,10 +94,12 @@ int main(int argc, char** argv)
     std::ofstream outfile("./output_splitter.txt");
     assert(outfile.is_open());
 #endif
-    for (const auto& s3file : s3files) {
+    for (int i = 0; i < s3files.size(); i++) {
+        auto s3file = s3files.at(i);
 #ifdef __faasm
         printf("word-count(splitter): chaining to mapper with file %s\n", s3file.c_str());
-        int splitterId = faasmChainNamed("mapper", (uint8_t*) s3file.c_str(), s3file.size());
+        std::string mapperInput = std::to_string(i) + ":" + s3file;
+        int splitterId = faasmChainNamed("mapper", (uint8_t*) mapperInput.c_str(), mapperInput.size());
         splitterCallIds.push_back(splitterId);
 #else
         std::cout << "file: " << s3file << std::endl;

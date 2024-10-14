@@ -2,6 +2,7 @@
 #include <faasm/core.h>
 #endif
 
+#include <iostream>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -57,7 +58,7 @@ int main(int argc, char** argv)
 #ifdef __faasm
     int result = faasmAwaitCallOutput(splitterId, &splitterOutput, &splitterOutputLen);
     if (result != 0) {
-        printf("error: splitter execution failed with rc %i\n", result);
+        printf("word-count(driver): error: splitter execution failed with rc %i\n", result);
         return 1;
     }
 #endif
@@ -72,28 +73,31 @@ int main(int argc, char** argv)
 #ifdef __faasm
         result = faasmAwaitCall(mapperId);
         if (result != 0) {
-            printf("error: mapper execution (id: %i) failed with rc %i\n", mapperId, result);
+            printf("word-count(driver): error: mapper execution (id: %i) failed with rc %i\n", mapperId, result);
             return 1;
         }
 #endif
     }
 
     // 3. Invoke one reducer function to aggreagate all results
-    std::string s3result = s3prefix + "/mapper-results";
-    printf("word-count(driver): invoking one reducer function\n");
+    std::string s3result = "word-count/outputs/mapper-";
+    printf("word-count(driver): invoking one reducer function on prefix %s\n",
+           s3result.c_str());
 #ifdef __faasm
     // Call reducer and await
     int reducerId = faasmChainNamed("reducer", (uint8_t*) s3result.c_str(), s3result.size());
     result = faasmAwaitCall(reducerId);
     if (result != 0) {
-        printf("error: reducer failed with rc %i\n", result);
+        printf("word-count(driver): error: reducer failed with rc %i\n", result);
         return 1;
     }
 #endif
 
-    std::string output = "Workflow executed succesfully!";
+    std::string output = "word-count(driver): workflow executed succesfully!";
+    std::cout << output << std::endl;
 #ifdef __faasm
     faasmSetOutput(output.c_str(), output.size());
 #endif
+
     return 0;
 }

@@ -1,8 +1,8 @@
 ## ML Training
 
-Workflow based on the ML training presented in [Orion]() and [RMMap]()
+Workflow based on the ML training presented in [Orion](https://www.usenix.org/conference/osdi22/presentation/mahgoub) and [RMMap](https://dl.acm.org/doi/abs/10.1145/3627703.3629568)>
 
-![workflow diagram]()
+![workflow diagram](./serverless_workflows_ml_training.png)
 
 In this workflow we train a random forest model using the MNIST 10k dataset.
 
