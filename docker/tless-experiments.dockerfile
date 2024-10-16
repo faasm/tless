@@ -28,18 +28,32 @@ RUN cd /code/faasm-examples/cpp \
     && git submodule update --init ./examples/opencv \
     && ./bin/inv_wrapper.sh opencv opencv --native
 
-# Temporary workaround to, increasingly, patch workloads
-# DELETE ME
-ARG TMP_VER=unknown
-RUN cd /code/experiment-tless/ \
-    && git pull origin workflows-knative \
-    && rm -rf /code/faasmpexamples/workflows \
-    && cp -r /code/experiment-tless/workflows /code/faasm-examples/
-
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
 RUN cd /code/faasm-examples \
     # Install faasmtools
     && ./bin/create_venv.sh \
+    && source ./venv/bin/activate \
+    && python3 ./workflows/build.py
+
+##########
+# DELETE ALL THE REST
+#########
+
+# Temporary workaround to, increasingly, patch workloads. We must manually
+# select the directories to overwrite, to minimize build times (which are,
+# alas, often)
+ARG TMP_VER=unknown
+RUN cd /code/experiment-tless/ \
+    && git pull origin workflows-knative \
+    && rm -rf /code/faasm-examples/workflows/libs \
+    && rm -rf /code/faasm-examples/workflows/word-count \
+    && cp -r /code/experiment-tless/workflows/libs /code/faasm-examples/workflows/libs \
+    && cp -r /code/experiment-tless/workflows/word-count /code/faasm-examples/workflows/word-count
+
+# Build workflow code (WASM for Faasm + Native for Knative)
+ENV PATH=${PATH}:/root/.cargo/bin
+RUN cd /code/faasm-examples \
+    && source ./bin/workon.sh \
     && source ./venv/bin/activate \
     && python3 ./workflows/build.py
