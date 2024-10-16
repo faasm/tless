@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     # First, build the workflows
     compile(wasm=True, debug=debug)
-    # compile(native=True, debug=debug)
+    compile(native=True, debug=debug)
 
     # Second, build the driver function for Knative
-    # compile_driver(debug=debug)
+    compile_driver(debug=debug)

@@ -26,7 +26,7 @@ RUN cd /code/faasm-examples/cpp \
     # Build specific examples (TODO: build native versions too)
     && cd /code/faasm-examples \
     && git submodule update --init ./examples/opencv \
-    && ./bin/inv_wrapper.sh opencv
+    && ./bin/inv_wrapper.sh opencv opencv --native
 
 # Temporary workaround to, increasingly, patch workloads
 # DELETE ME
