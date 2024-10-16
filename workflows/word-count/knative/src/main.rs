@@ -198,7 +198,7 @@ pub fn process_event(mut event: Event) -> Event {
             scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
-                json!({"scale-factor": lines.len(), "input-file": lines[0]}),
+                json!({"scale-factor": lines.len(), "input-file": lines[0], "mapper-id": 0}),
             );
             scaled_event
         }
