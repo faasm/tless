@@ -1,4 +1,5 @@
 use crate::env::Env;
+use rand::Rng;
 use std::process::{Command, Stdio};
 
 #[derive(Debug)]
@@ -36,6 +37,9 @@ impl Docker {
             .arg(dockerfile_path.to_string_lossy().into_owned())
             .arg("--build-arg")
             .arg(format!("TLESS_VERSION={}", Env::get_version().unwrap()))
+            // TODO: delete this build arg
+            .arg("--build-arg")
+            .arg(format!("TMP_VER={}", rand::thread_rng().gen_range(0..1000)))
             .arg(".");
 
         if nocache {

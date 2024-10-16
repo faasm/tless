@@ -38,11 +38,9 @@ faasmctl invoke word-count driver --cmdline "word-count/few-files"
 
 ## Run the Workflow (Knative)
 
-First, deploy the k8s cluster with bare-metal access to SEV nodes:
+First, deploy the workflow to the k8s cluster with bare-metal access to SEV nodes:
 
 ```bash
-TODO
-
 kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
 kubectl apply -f ${PROJ_ROOT}/workflows/word-count/knative/workflow.yaml
 ```

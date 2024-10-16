@@ -14,7 +14,7 @@ RUN rm -rf /code \
     && cd /code/faasm-examples \
     && git checkout 268a78df08955ceaf6307ba9b0a82bd2703b4ec7 \
     && git submodule update --init -f cpp \
-    && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
+    && git clone -b workflows-knative https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
 
 # Build specific libraries we need
@@ -28,11 +28,18 @@ RUN cd /code/faasm-examples/cpp \
     && git submodule update --init ./examples/opencv \
     && ./bin/inv_wrapper.sh opencv
 
+# Temporary workaround to, increasingly, patch workloads
+# DELETE ME
+ARG TMP_VER=unknown
+RUN cd /code/experiment-tless/ \
+    && git pull origin workflows-knative \
+    && rm -rf /code/faasmpexamples/workflows \
+    && cp -r /code/experiment-tless/workflows /code/faasm-examples/
+
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
 RUN cd /code/faasm-examples \
     # Install faasmtools
     && ./bin/create_venv.sh \
     && source ./venv/bin/activate \
-    # TODO: for the moment this does not build all workflows for Knative
     && python3 ./workflows/build.py
