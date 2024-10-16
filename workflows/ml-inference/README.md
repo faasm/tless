@@ -18,7 +18,7 @@ First, uploda the batch of images to perform inference on:
 faasmctl s3.upload-dir \
   --bucket ${BUCKET_NAME} \
   --host-path ${PROJ_DIR}/datasets/ml-inference/images-inference-1k \
-  --s3-path ml-inference/inference-images-1k
+  --s3-path ml-inference/images-inference-1k
 ```
 
 Second, upload the WASM files for each stage in the workflow:
@@ -33,7 +33,7 @@ Lastly, you may invoke the driver function to trigger workflow execution
 with 16 inference functions.
 
 ```bash
-faasmctl invoke ml-inference driver --cmdline "ml-inference/model ml-inference/inference-images-1k 16"
+faasmctl invoke ml-inference driver --cmdline "ml-inference/model ml-inference/images-inference-1k 16"
 ```
 
 > [!WARNING]

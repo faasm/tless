@@ -87,7 +87,11 @@ int main(int argc, char** argv)
     }
 #endif
 
-    std::cout << "finra(driver): workflow executed succesfully!" << std::endl;
+    std::string output = "finra(driver): workflow executed succesfully!";
+    std::cout << output << std::endl;
+#ifdef __faasm
+    faasmSetOutput(output.c_str(), output.size());
+#endif
 
     return 0;
 }

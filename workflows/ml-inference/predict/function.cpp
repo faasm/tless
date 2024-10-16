@@ -314,6 +314,7 @@ int main(int argc, char** argv) {
     }
 #else
     s3cli.addKeyStr(bucketName, resultsKey, inferenceResultsStr);
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

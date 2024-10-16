@@ -247,4 +247,30 @@ impl S3 {
                 .unwrap();
         }
     }
+
+    pub async fn upload_file(bucket_name: &str, host_path: &str, s3_path: &str) {
+        debug!("invrs(s3): uploading {host_path} to {s3_path}");
+
+        let client = Self::init_s3_client();
+
+        let exists: bool = client
+            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        if !exists {
+            client
+                .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+                .await
+                .unwrap();
+        }
+
+        let content = ObjectContent::from(host_path.to_string());
+
+        client
+            .put_object_content(&bucket_name, &s3_path, content)
+            .send()
+            .await
+            .unwrap();
+    }
 }

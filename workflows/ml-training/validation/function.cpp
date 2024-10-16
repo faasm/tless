@@ -154,5 +154,24 @@ int main(int argc, char** argv)
 #endif
     }
 
+    // Add result key that we can wait-on in Knative
+    auto resultsStr = "done!";
+    std::string resultKey = "ml-training/outputs/done.txt";
+    std::cout << "ml-training(validation): writting done file to "
+              << resultKey
+              << std::endl;
+#ifdef __faasm
+    // Overwrite the results key
+    int ret =
+      __faasm_s3_add_key_bytes(bucketName.c_str(),
+                               resultKey.c_str(),
+                               (void*) resultsStr.c_str(),
+                               resultsStr.size(),
+                               true);
+#else
+    s3cli.addKeyStr(bucketName, resultKey, resultsStr);
+    s3::shutdownS3Wrapper();
+#endif
+
     return 0;
 }
