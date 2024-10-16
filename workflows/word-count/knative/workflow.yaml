@@ -78,6 +78,8 @@ spec:
       completions: 1
       parallelism: 1
       backoffLimit: 4
+      # Clean-up jobs once they are finished
+      ttlSecondsAfterFinished: 30
       template:
         spec:
           runtimeClassName: ${RUNTIME_CLASS_NAME}
@@ -89,7 +91,7 @@ spec:
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:ee14968c863045c932d9c08d3786466b95ee09c3e25c1e8ec6c782fc007215be
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:f95db9eb9554d043a175e4643ba87cb3d9bcf7dbf8e5da20aa85238ad32e586f
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/word-count/knative

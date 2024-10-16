@@ -1,6 +1,7 @@
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
+use crate::tasks::workflows::AvailableWorkflow;
 use clap::{Parser, Subcommand};
 use env_logger;
 
@@ -99,6 +100,9 @@ enum S3Command {
         /// Name of the bucket
         #[arg(long)]
         bucket_name: String,
+        /// Prefix
+        #[arg(long)]
+        prefix: Option<String>,
     },
     /// Upload a directory to S3
     UploadDir {
@@ -111,6 +115,18 @@ enum S3Command {
         /// Path in the S3 server to store files to
         #[arg(long)]
         s3_path: String,
+    },
+    /// Upload the state required for a workflow
+    UploadWorkflow {
+        /// Name of the bucket to store files in
+        #[arg(long)]
+        bucket_name: String,
+        /*
+        #[arg(long,optional, default_value=Workflows::AvailableWorkflow::WordCount)]
+        workflow: &AvailableWorkflow,
+        #[arg(long,optional)]
+        all: bool,
+        */
     },
 }
 
@@ -175,8 +191,8 @@ async fn main() {
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;
             }
-            S3Command::ListKeys { bucket_name } => {
-                S3::list_keys(bucket_name.to_string()).await;
+            S3Command::ListKeys { bucket_name, prefix } => {
+                S3::list_keys(bucket_name.to_string(), prefix).await;
             }
             S3Command::UploadDir {
                 bucket_name,
@@ -189,7 +205,12 @@ async fn main() {
                     s3_path.to_string(),
                 )
                 .await;
-            }
+            },
+            S3Command::UploadWorkflow {
+                bucket_name: _
+            } => {
+                println!("hullo:");
+            },
         },
     }
 }

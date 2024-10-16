@@ -74,7 +74,12 @@ pub fn process_event(mut event: Event) -> Event {
             let s3_file = json_file
                 .get("input-file")
                 .and_then(Value::as_str)
-                .expect("foo");
+                .expect("tless(driver): error getting 'input-file' from CE");
+
+            let mapper_id = json_file
+                .get("mapper-id")
+                .and_then(Value::as_str)
+                .expect("tless(driver): error getting 'mapper-id' from CE");
 
             // Simulate actual function execution by a sleep
             Command::new(format!("{}/word-count_mapper", BINARY_DIR))
@@ -85,7 +90,8 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
-                .env("TLESS_S3_FILE", s3_file)
+                .arg(mapper_id)
+                .arg(s3_file)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
@@ -99,7 +105,7 @@ pub fn process_event(mut event: Event) -> Event {
             let fan_out_scale: i64 = get_json_from_event(&event)
                 .get("scale-factor")
                 .and_then(Value::as_i64)
-                .expect("foo");
+                .expect("tless(driver): error: cannot find 'scale-factor' in CE");
 
             // Increment an atomic counter, and only execute the reducer
             // function when all fan-in functions have executed
@@ -120,10 +126,7 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", "minio123")
                     .env("S3_PORT", "9000")
                     .env("S3_USER", "minio")
-                    .env(
-                        "TLESS_S3_RESULTS_DIR",
-                        "word-count/few-files/mapper-results",
-                    )
+                    .arg("word-count/outputs/mapper-")
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .output()
@@ -181,7 +184,7 @@ pub fn process_event(mut event: Event) -> Event {
                 scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
-                    json!({"scale-factor": lines.len(), "input-file": lines[i]}),
+                    json!({"scale-factor": lines.len(), "input-file": lines[i], "mapper-id": i}),
                 );
 
                 println!(
