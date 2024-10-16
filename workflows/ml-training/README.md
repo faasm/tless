@@ -6,9 +6,6 @@ Workflow based on the ML training presented in [Orion](https://www.usenix.org/co
 
 In this workflow we train a random forest model using the MNIST 10k dataset.
 
-> [WARNING!] There is currently a strange bug in SGX's malloc that is giving
-> an overflow with the 10k dataset, so we use a subset (2k dataset).
-
 ## Run the Workflow (Faasm)
 
 First, upload the images:
@@ -39,8 +36,12 @@ with 2 PCA functions, and 8 random forest trees.
 faasmctl invoke ml-training driver --cmdline "ml-training/mnist-images-2k 2 8"
 ```
 
-> [!WARNING]
-> To use with Faasm, you must make sure that we have STDOUT_CAPTURE disabled
+Training the full 10k images inside SGX takes up to (almost) 30'. It can be
+done with the following command:
+
+```bash
+faasmctl invoke ml-training driver --cmdline "ml-training/mnist-images-10k 4 8"
+```
 
 ## Run the Workflow (Knative)
 
