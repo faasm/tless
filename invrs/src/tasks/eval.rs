@@ -8,6 +8,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, error};
 use plotters::prelude::*;
 use serde::Deserialize;
+use shell_words;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
@@ -320,6 +321,15 @@ impl Eval {
 
         // Specific per-workflow wait command
         match workflow {
+            AvailableWorkflow::Finra => {
+                panic!("invrs(eval): FINRA workload not implemented for KNative");
+            }
+            AvailableWorkflow::MlTraining => {
+                panic!("invrs(eval): FINRA workload not implemented for KNative");
+            }
+            AvailableWorkflow::MlInference => {
+                panic!("invrs(eval): FINRA workload not implemented for KNative");
+            }
             AvailableWorkflow::WordCount => {
                 Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
                 Self::wait_for_pod("tless", "tless.workflows/name=word-count-reducer");
@@ -405,27 +415,57 @@ impl Eval {
 
         // Specific per-workflow completion detection
         match workflow {
-            AvailableWorkflow::WordCount => {
+            AvailableWorkflow::Finra => {
                 match S3::wait_for_key(
                     EVAL_BUCKET_NAME,
-                    format!("{workflow}/few-files/mapper-results/aggregated-results.txt").as_str(),
+                    format!("{workflow}/outputs/merge/results.txt").as_str(),
                 )
                 .await
                 {
                     Some(time) => exp_result.end_time = time,
-                    None => error!("invrs(s3): timed-out"),
+                    None => error!("invrs(eval): timed-out waiting for FINRA workload to finish"),
                 }
             }
-        }
-
-        // Specific per-workflow clean-up
-        match workflow {
-            AvailableWorkflow::WordCount => {
-                S3::clear_dir(
-                    EVAL_BUCKET_NAME.to_string(),
-                    format!("{workflow}/few-files/mapper-results/"),
+            AvailableWorkflow::MlTraining => {
+                match S3::wait_for_key(
+                    EVAL_BUCKET_NAME,
+                    format!("{workflow}/outputs/done.txt").as_str(),
                 )
-                .await;
+                .await
+                {
+                    Some(time) => exp_result.end_time = time,
+                    None => {
+                        error!("invrs(eval): timed-out waiting for ML training workload to finish")
+                    }
+                }
+            }
+            AvailableWorkflow::MlInference => {
+                // TODO: ML inference finishes off in a scale-out so it will
+                // have to be the driver who writes the file
+                match S3::wait_for_key(
+                    EVAL_BUCKET_NAME,
+                    format!("{workflow}/outputs/done.txt").as_str(),
+                )
+                .await
+                {
+                    Some(time) => exp_result.end_time = time,
+                    None => {
+                        error!("invrs(eval): timed-out waiting for ML training workload to finish")
+                    }
+                }
+            }
+            AvailableWorkflow::WordCount => {
+                match S3::wait_for_key(
+                    EVAL_BUCKET_NAME,
+                    format!("{workflow}/outputs/aggregated-results.txt").as_str(),
+                )
+                .await
+                {
+                    Some(time) => exp_result.end_time = time,
+                    None => {
+                        error!("invrs(eval): timed-out waiting for Word Count workload to finish")
+                    }
+                }
             }
         }
 
@@ -501,7 +541,10 @@ impl Eval {
     // ------------------------------------------------------------------------
 
     fn run_faasmctl_cmd(cmd: &str) -> String {
-        let args: Vec<&str> = cmd.split_whitespace().collect();
+        debug!("invrs(eval): executing faasmctl command: {cmd}");
+        // let args: Vec<&str> = cmd.split_whitespace().collect();
+        // Need to use shell_words to properly preserve double quotes
+        let args = shell_words::split(cmd).unwrap();
 
         let output = Command::new("faasmctl")
             .args(&args[0..])
@@ -563,10 +606,14 @@ impl Eval {
         }
 
         // Upload the state for all workflows
-        Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+        // TODO: uncomment me in a real deployment
+        // TODO: add progress bar
+        // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
 
         // Upload the WASM files for all workflows
-        Self::upload_wasm();
+        // TODO: uncomment me in a real deployment
+        // TODO: add progress bar
+        // Self::upload_wasm();
 
         // Invoke each workflow
         for workflow in AvailableWorkflow::iter_variants() {
@@ -579,7 +626,7 @@ impl Eval {
             let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
 
             let faasmctl_cmd = format!(
-                "invoke {workflow} driver --cmdline {faasm_cmdline} --output-format start-end-ts"
+                "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
             );
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {

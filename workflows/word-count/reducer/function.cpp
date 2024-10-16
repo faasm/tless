@@ -83,20 +83,18 @@ int main(int argc, char** argv)
     // structured objects (i.e. vectors) through the WASM calling interface,
     // and (ii) we have not implmented prefix listing, so we need to filter
     // out entries manually
-    int numKeys = __faasm_s3_get_num_keys(bucketName.c_str());
+    int numKeys = __faasm_s3_get_num_keys_with_prefix(
+      bucketName.c_str(), s3dir.c_str());
 
-    char* keysBuffer[numKeys];
-    int keysBufferLens[numKeys];
-    __faasm_s3_list_keys(bucketName.c_str(), keysBuffer, keysBufferLens);
+    char** keysBuffer = (char**) malloc(numKeys * sizeof(char*));
+    int* keysBufferLens = (int*) malloc(numKeys * sizeof(int32_t));
+    __faasm_s3_list_keys_with_prefix(
+      bucketName.c_str(), s3dir.c_str(), keysBuffer, keysBufferLens);
 
     for (int i = 0; i < numKeys; i++) {
         std::string tmpString;
         tmpString.assign(keysBuffer[i], keysBuffer[i] + keysBufferLens[i]);
-
-        // Filter by prefix
-        if (tmpString.rfind(s3dir, 0) == 0) {
-            s3files.push_back(tmpString);
-        }
+        s3files.push_back(tmpString);
     }
 #else
     auto rawS3Keys = s3cli.listKeys(bucketName);
@@ -123,7 +121,7 @@ int main(int argc, char** argv)
         int ret =
           __faasm_s3_get_key_bytes(bucketName.c_str(), outFile.c_str(), &keyBytes, &keyBytesLen);
         if (ret != 0) {
-            printf("error: error getting bytes from key: %s (bucket: %s)\n",
+            printf("word-count(reducer): error: error getting bytes from key: %s (bucket: %s)\n",
                    outFile.c_str(),
                    bucketName.c_str());
         }
@@ -141,14 +139,16 @@ int main(int argc, char** argv)
     }
 
     auto resultsStr = serialiseWordCount(results);
-    std::string resultKey = s3dir + "/aggregated-results.txt";
-    printf("word-count(mapper): writting results to %s: %s\n", resultKey.c_str(), resultsStr.c_str());
+    std::string resultKey = "word-count/outputs/aggregated-results.txt";
+    printf("word-count(reducer): writting results to %s: %s\n", resultKey.c_str(), resultsStr.c_str());
 #ifdef __faasm
+    // Overwrite the results key
     int ret =
       __faasm_s3_add_key_bytes(bucketName.c_str(),
                                resultKey.c_str(),
                                (void*) resultsStr.c_str(),
-                               resultsStr.size());
+                               resultsStr.size(),
+                               true);
 #else
     s3cli.addKeyStr(bucketName, resultKey, resultsStr);
     s3::shutdownS3Wrapper();
