@@ -12,7 +12,7 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 428a11c80263b82ea8a83157205c4ef0eceab979 \
+    && git checkout 268a78df08955ceaf6307ba9b0a82bd2703b4ec7 \
     && git submodule update --init -f cpp \
     && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
