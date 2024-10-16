@@ -51,7 +51,7 @@ spec:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative
@@ -88,8 +88,8 @@ spec:
               # in a tag's digest. So, while we are heavily developing, we
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
-              # image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:0f1b8417c7d62cd41f2cee2875da16614797208c03b04fb1ba6da5b32e761dd5
+              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:ee14968c863045c932d9c08d3786466b95ee09c3e25c1e8ec6c782fc007215be
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/word-count/knative
@@ -117,7 +117,7 @@ spec:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /code/faasm-examples/workflows/word-count/knative

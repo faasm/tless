@@ -1,3 +1,4 @@
+use crate::env::Env;
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
@@ -294,7 +295,9 @@ impl Eval {
                     EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
                     _ => panic!("woops"),
                 },
-            )]),
+                ),
+                ("TLESS_VERSION", &Env::get_version().unwrap()),
+            ]),
         );
 
         let mut kubectl = Command::new(Self::get_kubectl_cmd())

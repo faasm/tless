@@ -97,14 +97,7 @@ int main(int argc, char** argv)
         s3files.push_back(tmpString);
     }
 #else
-    auto rawS3Keys = s3cli.listKeys(bucketName);
-    for (const auto& key : rawS3Keys) {
-
-        // Filter by prefix
-        if (key.rfind(s3dir, 0) == 0) {
-            s3files.push_back(key);
-        }
-    }
+    s3files = s3cli.listKeys(bucketName, s3dir);
 #endif
 
     // For each output file, de-serialise results and aggreagate
