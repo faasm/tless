@@ -1,4 +1,4 @@
-use crate::tasks::docker::Docker;
+use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
 use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -562,8 +562,8 @@ impl Eval {
     }
 
     fn upload_wasm() {
-        // Upload state for different workflows
-        let docker_tag = Docker::get_docker_tag("tless-experiments".to_string());
+        // Upload state for different workflows from the experiments container
+        let docker_tag = Docker::get_docker_tag(&DockerContainer::Experiments);
 
         for workflow in AvailableWorkflow::iter_variants() {
             let ctr_path = format!("/usr/local/faasm/wasm/{workflow}");
@@ -608,12 +608,12 @@ impl Eval {
         // Upload the state for all workflows
         // TODO: uncomment me in a real deployment
         // TODO: add progress bar
+        // TODO: consider sharing if we have multiple baselines/workflows
         // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
 
         // Upload the WASM files for all workflows
-        // TODO: uncomment me in a real deployment
         // TODO: add progress bar
-        // Self::upload_wasm();
+        Self::upload_wasm();
 
         // Invoke each workflow
         for workflow in AvailableWorkflow::iter_variants() {
