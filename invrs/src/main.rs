@@ -1,7 +1,6 @@
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
-use crate::tasks::workflows::AvailableWorkflow;
 use clap::{Parser, Subcommand};
 use env_logger;
 
@@ -116,18 +115,6 @@ enum S3Command {
         #[arg(long)]
         s3_path: String,
     },
-    /// Upload the state required for a workflow
-    UploadWorkflow {
-        /// Name of the bucket to store files in
-        #[arg(long)]
-        bucket_name: String,
-        /*
-        #[arg(long,optional, default_value=Workflows::AvailableWorkflow::WordCount)]
-        workflow: &AvailableWorkflow,
-        #[arg(long,optional)]
-        all: bool,
-        */
-    },
 }
 
 #[tokio::main]
@@ -205,11 +192,6 @@ async fn main() {
                     s3_path.to_string(),
                 )
                 .await;
-            },
-            S3Command::UploadWorkflow {
-                bucket_name: _
-            } => {
-                println!("hullo:");
             },
         },
     }

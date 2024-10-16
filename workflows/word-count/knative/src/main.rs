@@ -76,9 +76,9 @@ pub fn process_event(mut event: Event) -> Event {
                 .and_then(Value::as_str)
                 .expect("tless(driver): error getting 'input-file' from CE");
 
-            let mapper_id = json_file
+            let mapper_id: i64 = get_json_from_event(&event)
                 .get("mapper-id")
-                .and_then(Value::as_str)
+                .and_then(Value::as_i64)
                 .expect("tless(driver): error getting 'mapper-id' from CE");
 
             // Simulate actual function execution by a sleep
@@ -90,7 +90,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
-                .arg(mapper_id)
+                .arg(mapper_id.to_string())
                 .arg(s3_file)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())

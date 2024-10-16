@@ -501,7 +501,8 @@ impl Eval {
         // Upload the state for all workflows
         // TODO: add progress bar
         // TODO: consider re-using between baselines
-        // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+        // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
+        Workflows::upload_workflow_state(&AvailableWorkflow::WordCount, EVAL_BUCKET_NAME, true).await;
 
         // Execute each workload individually
         for workflow in vec![&AvailableWorkflow::WordCount] { // AvailableWorkflow::iter_variants() {
