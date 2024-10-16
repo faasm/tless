@@ -155,7 +155,7 @@ int main(int argc, char** argv)
     }
 
     // Add result key that we can wait-on in Knative
-    auto resultsStr = "done!";
+    std::string resultsStr = "done!";
     std::string resultKey = "ml-training/outputs/done.txt";
     std::cout << "ml-training(validation): writting done file to "
               << resultKey
