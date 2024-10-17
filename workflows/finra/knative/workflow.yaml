@@ -57,7 +57,8 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/finra/knative
+          # workingDir: /code/faasm-examples/workflows/finra/knative
+          workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
@@ -80,7 +81,8 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/finra/knative
+          # workingDir: /code/faasm-examples/workflows/finra/knative
+          workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
@@ -111,10 +113,11 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:c51aea6c0efa102876ba4fb51717ce8fbd9eb15aa7c9459e6a2b1529c1af39d9
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:a9ad88246d0d5ecf591c25b9d5b1c5d05c0bb24c654bcc01eac441679ba7e4df
               ports:
                 - containerPort: 8080
-              workingDir: /code/faasm-examples/workflows/finra/knative
+              # workingDir: /code/faasm-examples/workflows/finra/knative
+              workingDir: /workflows/finra/knative
               command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
@@ -140,7 +143,8 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/finra/knative
+          # workingDir: /code/faasm-examples/workflows/finra/knative
+          workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
