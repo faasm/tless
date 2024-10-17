@@ -6,9 +6,9 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=tru
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli" \
-   -H "ce-type: http://parition-to-pca-kn-channel.tless.svc.cluster.local" \
+   -H "ce-type: http://partition-to-pca-kn-channel.tless.svc.cluster.local" \
    -H "ce-id: 1" \
-   -d '{"data-dir": "ml-training/mnist-images-10k", "num-pca-funcs": 2, "num-train-funcs": 8, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
+   -d '{"data-dir": "ml-training/mnist-images-2k", "num-pca-funcs": 2, "num-train-funcs": 8, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
    http://ingress-to-partition-kn-channel.tless.svc.cluster.local
 
 # curl -X POST -v \

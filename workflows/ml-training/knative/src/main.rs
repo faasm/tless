@@ -124,17 +124,17 @@ pub fn process_event(mut event: Event) -> Event {
             let data_dir = json
                 .get("data-dir")
                 .and_then(Value::as_str)
-                .expect("finra(driver): error: cannot find 'data-dir' in CE");
+                .expect("ml-training(driver): error: cannot find 'data-dir' in CE");
 
             let num_pca_funcs: i64 = get_json_from_event(&event)
                 .get("num-pca-funcs")
                 .and_then(Value::as_i64)
-                .expect("finra(driver): error: cannot find 'num-pca-funcs' in CE");
+                .expect("ml-training(driver): error: cannot find 'num-pca-funcs' in CE");
 
             let num_train_funcs: i64 = get_json_from_event(&event)
                 .get("num-train-funcs")
                 .and_then(Value::as_i64)
-                .expect("finra(driver): error: cannot find 'num-train-funcs' in CE");
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
 
             match Command::new(format!("{}/ml-training_{func_name}", BINARY_DIR))
                 .current_dir(BINARY_DIR)
@@ -399,15 +399,15 @@ pub fn process_event(mut event: Event) -> Event {
             // This is the channel where RF will post the CE to (given that
             // PCA is a JobSink)
             let mut scaled_event = event.clone();
-            scaled_event.set_type("http://rf-to-validation-kn-channel.tless.svc.cluster.local");
 
             // Each PCA function chains to num_train_funcs / num_pca_funcs
             // functions to avoid a fan-in/fan-out pattern
             let this_func_scale: i64 = num_train_funcs / num_pca_funcs;
             println!("{WORKFLOW_NAME}: scaling to {this_func_scale} RF functions");
 
+            let this_magic = run_magic + num_train_funcs * pca_id;
             for i in 1..this_func_scale {
-                scaled_event.set_id((run_magic + i).to_string());
+                scaled_event.set_id((this_magic + i).to_string());
                 scaled_event.set_data(
                     "aplication/json",
                     json!({"pca-id": pca_id, "rf-id": i, "num-train-funcs": num_train_funcs}),
@@ -422,7 +422,7 @@ pub fn process_event(mut event: Event) -> Event {
 
             // Update the event for the zero-th id (the one we return as part
             // of the method)
-            scaled_event.set_id((run_magic + 0).to_string());
+            scaled_event.set_id((this_magic + 0).to_string());
             scaled_event.set_data(
                 "aplication/json",
                 json!({"pca-id": pca_id, "rf-id": 0, "num-train-funcs": num_train_funcs}),
@@ -433,10 +433,11 @@ pub fn process_event(mut event: Event) -> Event {
         // Process the output of the 'rf' function and chain to 'validation'
         "rf" => {
             // The event already contains the number of traiing functions,
-            // which is the fan-in that we need to wait-on, so we do nothing
+            // which is the fan-in that we need to wait-on, so we do not need
+            // to modify anything else other than the rigth channel to post
+            // the event to
 
-            // Importantly, it also contains the right event type (i.e. the
-            // destination channel to message to)
+            event.set_type("http://rf-to-validation-kn-channel.tless.svc.cluster.local");
 
             event
         }
