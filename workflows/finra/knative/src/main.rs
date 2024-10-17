@@ -270,7 +270,7 @@ pub fn process_event(mut event: Event) -> Event {
             // include one magic per run, and spawn two cloud events with the
             // same magic
             let mut scaled_event = event.clone();
-            scaled_event.set_type("http://fetch-to-audit-kn-channel.tless.svc.cluster.local");
+            scaled_event.set_type("http://audit-to-merge-kn-channel.tless.svc.cluster.local");
 
             for i in 1..num_audit {
                 scaled_event.set_id((run_magic + i).to_string());
