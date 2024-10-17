@@ -52,7 +52,7 @@ export RUNTIME_CLASS_NAME=kata-qemu-sev
 export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 
 kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
-envsubst < ${PROJ_ROOT}/workflows/finra/knative/workflow.yaml | kubectl apply -f -
+envsubst < ${PROJ_ROOT}/workflows/ml-training/knative/workflow.yaml | kubectl apply -f -
 ```
 
 Second, upload the images:
@@ -67,21 +67,8 @@ invrs s3 clear-dir --prefix ml-training
 invrs upload-dir --host-path ${PROJ_ROOT}/datasets/ml-training/mnist-images-2k --s3-path ml-training/mnist-images-2k
 ```
 
-
 then you may execute the workflow by running:
 
 ```bash
 ${PROJ_ROOT}/workflows/ml-training/knative/curl_cmd.sh
 ```
-
-## Stages Explained
-
-0. Driver: orchestrates function execution (needed in Faasm, not in Knative)
-1. Partition: takes as an input an S3 path two numbers: a parallelism for the
-  PCA analysis, and a parallelism for the training (i.e. num of random forests).
-  It stores in `partition-output` one file for each PCA instance, with all the
-  file keys to consume.
-2. PCA: performs PCA of the subset of images assigned by 1, and further
-  partitions its data into different training functions.
-3. Train: train a random forest on the slice of the data given by 2.
-4. Validation: aggregate model data and upload it for the ml-inference workflow

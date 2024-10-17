@@ -16,8 +16,7 @@ use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
 use warp::Filter;
 
-// static BINARY_DIR: &str = "/workflows/build-native/ml-training";
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/ml-training"; // DELETE ME
+static BINARY_DIR: &str = "/workflows/build-native/ml-training";
 static MERGE_INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 static WORKFLOW_NAME: &str = "ml-training(driver)";
 
@@ -26,8 +25,7 @@ struct S3Data {
 }
 
 impl S3Data {
-    // const HOST: S3Data = S3Data { data: "minio" };
-    const HOST: S3Data = S3Data { data: "localhost" }; // DELETE ME - JUST TEST
+    const HOST: S3Data = S3Data { data: "minio" };
     const PORT: S3Data = S3Data { data: "9000" };
     const USER: S3Data = S3Data { data: "minio" };
     const PASSWORD: S3Data = S3Data { data: "minio123" };
@@ -152,7 +150,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .arg(num_pca_funcs.to_string())
                 .arg(num_train_funcs.to_string())
                 .output()
-                .expect("finra(driver): error: spawning executing partition command")
+                .expect("ml-training(driver): error: spawning executing partition command")
                 .status
                 .code()
             {
@@ -436,6 +434,9 @@ pub fn process_event(mut event: Event) -> Event {
         "rf" => {
             // The event already contains the number of traiing functions,
             // which is the fan-in that we need to wait-on, so we do nothing
+
+            // Importantly, it also contains the right event type (i.e. the
+            // destination channel to message to)
 
             event
         }

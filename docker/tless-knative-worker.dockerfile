@@ -14,7 +14,6 @@ COPY --from=build \
 COPY --from=build \
     /code/faasm-examples/workflows/build-native/finra/ \
     /workflows/build-native/finra
-    /workflows/build-native/ml-training
 # ML Training
 COPY --from=build \
     /code/faasm-examples/workflows/ml-training/knative/target/ \
