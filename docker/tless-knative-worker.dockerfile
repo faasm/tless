@@ -12,6 +12,12 @@ COPY --from=build \
 COPY --from=build \
     /code/faasm-examples/workflows/build-native/word-count/ \
     /code/faasm-examples/workflows/build-native/word-count
+COPY --from=build \
+    /code/faasm-examples/workflows/finra/knative/target/ \
+    /code/faasm-examples/workflows/finra/knative/target
+COPY --from=build \
+    /code/faasm-examples/workflows/build-native/finra/ \
+    /code/faasm-examples/workflows/build-native/finra
 
 # Copy libraries we need at runtime
 COPY --from=build /usr/local/lib/libaws-cpp-sdk-s3.so /usr/local/lib/
