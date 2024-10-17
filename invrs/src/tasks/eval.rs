@@ -99,7 +99,7 @@ pub struct EvalRunArgs {
     baseline: Vec<EvalBaseline>,
     #[arg(long, default_value = "3")]
     num_repeats: u32,
-    #[arg(long, default_value = "0")]
+    #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
 }
 

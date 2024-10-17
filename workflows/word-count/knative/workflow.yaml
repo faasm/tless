@@ -54,7 +54,7 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/word-count/knative
+          workingDir: /workflows/word-count/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
@@ -91,10 +91,10 @@ spec:
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:93e6cf6fd9abcec5b2d0bdf5d1003145274696f613c58850c53b8ce994823ced
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:c6e577ddc93f7338582a63fc5191d1b3e94879f4c42e5fd00c20ca393eeb0b5c
               ports:
                 - containerPort: 8080
-              workingDir: /code/faasm-examples/workflows/word-count/knative
+              workingDir: /workflows/word-count/knative
               command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
@@ -122,7 +122,7 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/word-count/knative
+          workingDir: /workflows/word-count/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
