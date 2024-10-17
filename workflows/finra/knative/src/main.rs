@@ -25,8 +25,7 @@ struct S3Data {
 }
 
 impl S3Data {
-    // const HOST: S3Data = S3Data { data: "minio" };
-    const HOST: S3Data = S3Data { data: "localhost" }; // DELETE ME: just for local testing
+    const HOST: S3Data = S3Data { data: "minio" };
     const PORT: S3Data = S3Data { data: "9000" };
     const USER: S3Data = S3Data { data: "minio" };
     const PASSWORD: S3Data = S3Data { data: "minio123" };

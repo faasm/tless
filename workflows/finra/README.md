@@ -60,7 +60,7 @@ invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
 
 # Upload all data files in the directory
 invrs s3 upload-key \
-  --host-path ${PROJ_DIR}/datasets/finra/yfinance.csv \
+  --host-path ${PROJ_ROOT}/datasets/finra/yfinance.csv \
   --s3-path finra/yfinance.csv
 ```
 
