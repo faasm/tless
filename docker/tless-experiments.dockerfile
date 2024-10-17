@@ -46,12 +46,13 @@ RUN cd /code/faasm-examples \
 ARG TMP_VER=unknown
 RUN cd /code/experiment-tless/ \
     && git pull origin workflows-knative \
+    && cp /code/experiment-tless/workflows/build.py /code/faasm-examples/workflows/build.py \
     && rm -rf /code/faasm-examples/workflows/libs \
     && rm -rf /code/faasm-examples/workflows/word-count \
-    && rm -rf /code/faasm-examples/workflows/knative \
+    && rm -rf /code/faasm-examples/workflows/finra \
     && cp -r /code/experiment-tless/workflows/libs /code/faasm-examples/workflows/libs \
-    && cp -r /code/experiment-tless/workflows/word-count /code/faasm-examples/workflows/word-count
-    && cp -r /code/experiment-tless/workflows/knative /code/faasm-examples/workflows/knative
+    && cp -r /code/experiment-tless/workflows/word-count /code/faasm-examples/workflows/word-count \
+    && cp -r /code/experiment-tless/workflows/finra /code/faasm-examples/workflows/finra
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin

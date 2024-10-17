@@ -111,7 +111,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:7d2da48cc8ffeeddc846ad7be0213e3fc40656e45f4484974f19141ef992de86
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:38adcab89c9b6a1349ef1acdaf858264bb0421a8bf547e98c057a59efe49ceef
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/finra/knative
@@ -140,7 +140,7 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/finra/finra/knative
+          workingDir: /code/faasm-examples/workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
