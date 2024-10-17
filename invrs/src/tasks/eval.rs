@@ -335,7 +335,9 @@ impl Eval {
         // Specific per-workflow wait command
         match workflow {
             AvailableWorkflow::Finra => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-private");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-public");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-merge");
             }
             AvailableWorkflow::MlTraining => {
                 panic!("invrs(eval): FINRA workload not implemented for KNative");
@@ -515,20 +517,17 @@ impl Eval {
 
         // Get the MinIO URL
         let minio_url = Self::run_kubectl_cmd("-n tless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
-
-        unsafe {
-            env::set_var("MINIO_URL", minio_url);
-        }
+        env::set_var("MINIO_URL", minio_url);
 
         // Upload the state for all workflows
         // TODO: add progress bar
         // TODO: consider re-using between baselines
         // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::WordCount, EVAL_BUCKET_NAME, true)
+        Workflows::upload_workflow_state(&AvailableWorkflow::Finra, EVAL_BUCKET_NAME, true)
             .await;
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::WordCount] {
+        for workflow in vec![&AvailableWorkflow::Finra] {
             // AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
@@ -624,18 +623,14 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
-        unsafe {
-            env::set_var("FAASM_WASM_VM", wasm_vm);
-        }
+        env::set_var("FAASM_WASM_VM", wasm_vm);
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
 
         // Second, work-out the MinIO URL
         let mut minio_url = Self::run_faasmctl_cmd("s3.get-url");
         minio_url = minio_url.strip_suffix("\n").unwrap().to_string();
-        unsafe {
-            env::set_var("MINIO_URL", minio_url);
-        }
+        env::set_var("MINIO_URL", minio_url);
 
         // Upload the state for all workflows
         // TODO: uncomment me in a real deployment

@@ -239,6 +239,10 @@ pub fn process_event(mut event: Event) -> Event {
                     Some(code) => { panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}") },
                     None => { panic!("{WORKFLOW_NAME}: '{func_name}' failed") },
                 }
+
+                // Reset counter for next (warm) execution
+                println!("${WORKFLOW_NAME}: resetting counter to 0");
+                *count = 0;
             }
 
             "done"
