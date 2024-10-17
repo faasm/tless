@@ -460,13 +460,15 @@ impl Eval {
                 }
             }
             AvailableWorkflow::WordCount => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/aggregated-results.txt").as_str(),
-                )
-                .await
-                {
-                    Some(time) => exp_result.end_time = time,
+                // First wait for the result key
+                let result_key = format!("{workflow}/outputs/aggregated-results.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                    Some(time) => {
+                        // If succesful, remove the result key
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                    },
                     None => {
                         error!("invrs(eval): timed-out waiting for Word Count workload to finish")
                     }

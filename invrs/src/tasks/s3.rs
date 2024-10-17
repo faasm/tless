@@ -130,6 +130,15 @@ impl S3 {
         }
     }
 
+    pub async fn clear_object(bucket_name: &str, path: &str) {
+        debug!("invrs(s3): clearing s3 key: {bucket_name}/{path}");
+        Self::init_s3_client()
+            .remove_object(&bucket_name, path)
+            .send()
+            .await
+            .unwrap();
+    }
+
     /// Wait for a key to be ready, and return when it was last modified
     pub async fn wait_for_key(bucket_name: &str, key_name: &str) -> Option<DateTime<Utc>> {
         let client = Self::init_s3_client();
