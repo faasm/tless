@@ -54,6 +54,15 @@ run the following:
 Notes to self:
 * `nydus` to 0.13.14 seems to be quite important
 * also being able to set the carsh loop back off to a sufficiently low value
+as we are getting a lot of errors when starting the containers:
+
+```bash
+sudo vi /var/lib/kubelet.config
+
+# add the folllowing
+containerRuntimeBackOff: "5s"
+containerRuntimeMaxBackOff: "5s"
+```
 
 ## Workflows
 
