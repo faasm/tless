@@ -8,7 +8,7 @@ WORKFLOWS_ROOT = dirname(realpath(__file__))
 
 WORKFLOWS = {
     "finra": ["driver", "fetch-public", "fetch-private", "audit", "merge"],
-    # "ml-training": ["driver", "partition", "pca", "rf", "validation"],
+    "ml-training": ["driver", "partition", "pca", "rf", "validation"],
     # "ml-inference": ["driver", "partition", "load", "predict"],
     "word-count": ["driver", "splitter", "mapper", "reducer"],
 }

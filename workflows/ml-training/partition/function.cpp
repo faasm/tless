@@ -80,21 +80,17 @@ int main(int argc, char** argv)
     numPcaFuncs = std::stoi(parts.at(1));
     numTrainFuncs = std::stoi(parts.at(2));
 #else
-    s3::initS3Wrapper();
-
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
-
-    if (s3dirChar == nullptr) {
-        std::cerr << "word-count(splitter): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 4) {
+        std::cerr << "ml-training(partition): error parsing driver input" << std::endl;
         return 1;
     }
-    s3dir.assign(s3dirChar);
+
+    s3dir = argv[1];
+    numPcaFuncs = std::stoi(argv[2]);
+    numTrainFuncs = std::stoi(argv[3]);
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
 
     // Get the list of files for each PCA function
@@ -108,7 +104,8 @@ int main(int argc, char** argv)
               << numTrainFuncs
               << " train functions)"
               << std::endl;
-    std::vector<std::string> s3files(numPcaFuncs);
+
+    std::vector<std::vector<std::string>> s3files(numPcaFuncs);
 
 #ifdef __faasm
     // In Faasm we need to do a bit of work because: (i) we can not pass
@@ -163,15 +160,18 @@ int main(int argc, char** argv)
         }
     }
 #else
-    auto rawS3files = s3cli.listKeys(bucketName);
-    for (int i = 0; i < rawS3files.size(); i++) {
-        auto key = rawS3files.at(i);
-        int funcIdx = i % numPcaFuncs;
+    auto rawS3files = s3cli.listKeys(bucketName, s3dir);
 
-        // Filter by prefix
-        if (key.rfind(s3dir, 0) == 0) {
-            s3files.push_back(key);
-        }
+    std::cout << "ml-training(partition): partitioning "
+              << rawS3files.size()
+              << " files between "
+              << numPcaFuncs
+              << " PCA functions"
+              << std::endl;
+
+    for (int i = 0; i < rawS3files.size(); i++) {
+        int pcaIdx = i % numPcaFuncs;
+        s3files.at(pcaIdx).push_back(rawS3files.at(i));
     }
 #endif
 
@@ -214,14 +214,16 @@ int main(int argc, char** argv)
         std::string pcaInput = std::to_string(i) + ":" + key + ":" + std::to_string(numTrainPerPca);
 #ifdef __faasm
         int pcaId = faasmChainNamed("pca", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-#endif
         pcaFuncsIds.push_back(std::to_string(pcaId));
+#endif
     }
 
     // Tell the driver the ids of the PCA funcs to wait on them
 #ifdef __faasm
     std::string outputStr = join(pcaFuncsIds, ",");
     faasmSetOutput(outputStr.c_str(), outputStr.size());
+#else
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

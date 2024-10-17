@@ -25,10 +25,7 @@ else ()
 
     message(STATUS "TLess: detected native build")
 
-    # TODO: Set back to 03
-    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
-
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     set(TLESS_WORKFLOW_LIBS
         TLess::s3
     )

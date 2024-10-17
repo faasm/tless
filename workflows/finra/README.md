@@ -56,7 +56,7 @@ Second, upload the trades data to the MinIO server in K8s:
 export MINIO_URL=$(kubectl -n tless get services -o jsonpath='{.items[?(@.metadata.name=="minio")].spec.clusterIP}')
 
 # Clean bucket first
-invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
+invrs s3 clear-bucket --prefix finra
 
 # Upload all data files in the directory
 invrs s3 upload-key \

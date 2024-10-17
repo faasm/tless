@@ -32,6 +32,7 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
  */
 int main(int argc, char** argv)
 {
+#ifdef __faasm
     if (argc != 4) {
         std::cout << "ml-infernce(driver): usage: <s3_path_model> <s3_image_data> <num_inf_funcs>"
                   << std::endl;
@@ -45,17 +46,13 @@ int main(int argc, char** argv)
     // different files in S3 with the images to run inference on for each
     // inference function
     std::cout << "ml-inference(driver): invoking one partition function" << std::endl;
-#ifdef __faasm
     std::string partitionInput = s3DataPrefix + ":" + std::to_string(numInfFuncs);
     int partitionId = faasmChainNamed("partition", (uint8_t*) partitionInput.c_str(), partitionInput.size());
-#endif
 
     // Invoke one instance of the model loading function
     std::cout << "ml-inference(driver): invoking one load function" << std::endl;
-#ifdef __faasm
     std::string loadInput = s3ModelPrefix;
     int loadId = faasmChainNamed("load", (uint8_t*) loadInput.c_str(), loadInput.size());
-#endif
 
     // Wait for both partition and load to finish
     int result = faasmAwaitCall(partitionId);
@@ -92,7 +89,6 @@ int main(int argc, char** argv)
     }
 
     for (auto infId : inferenceIds) {
-#ifdef __faasm
         result = faasmAwaitCall(infId);
         if (result != 0) {
             std::cerr << "ml-inference(driver): error: "
@@ -103,12 +99,10 @@ int main(int argc, char** argv)
                       << std::endl;
             return 1;
         }
-#endif
     }
 
     std::string output = "ml-inference(driver): workflow executed succesfully!";
     std::cout << output << std::endl;
-#ifdef __faasm
     faasmSetOutput(output.c_str(), output.size());
 #endif
 

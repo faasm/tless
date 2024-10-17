@@ -17,7 +17,7 @@ faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
 # Upload all data files in the directory
 faasmctl s3.upload-dir \
   --bucket ${BUCKET_NAME} \
-  --host-path ${PROJ_DIR}/datasets/ml-training/mnist-images-2k \
+  --host-path ${PROJ_ROOT}/datasets/ml-training/mnist-images-2k \
   --s3-path ml-training/mnist-images-2k
 ```
 
@@ -45,26 +45,33 @@ faasmctl invoke ml-training driver --cmdline "ml-training/mnist-images-10k 4 8"
 
 ## Run the Workflow (Knative)
 
+First, deploy the workflow to the k8s cluster with bare-metal access to SEV nodes:
 
-To run the workflow, you must first upload the wikipedia dump to S3:
+```bash
+export RUNTIME_CLASS_NAME=kata-qemu-sev
+export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
+
+kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
+envsubst < ${PROJ_ROOT}/workflows/finra/knative/workflow.yaml | kubectl apply -f -
+```
+
+Second, upload the images:
 
 ```bash
 export MINIO_URL=$(kubectl -n tless get services -o jsonpath='{.items[?(@.metadata.name=="minio")].spec.clusterIP}')
 
-# Clean bucket first
-invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
+# Clean bucket first (really?)
+invrs s3 clear-dir --prefix ml-training
 
 # Upload all data files in the directory
-invrs s3 upload-dir \
-  --bucket-name ${BUCKET_NAME} \
-  --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
-  --s3-path word-count/few-files
+invrs upload-dir --host-path ${PROJ_ROOT}/datasets/ml-training/mnist-images-2k --s3-path ml-training/mnist-images-2k
 ```
+
 
 then you may execute the workflow by running:
 
 ```bash
-${PROJ_ROOT}/workflows/word-count/knative/curl_cmd.sh
+${PROJ_ROOT}/workflows/ml-training/knative/curl_cmd.sh
 ```
 
 ## Stages Explained

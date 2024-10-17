@@ -1,3 +1,4 @@
+#ifdef __faasm
 // WARNING: this needs to preceed the OpenCV includes
 // Even when threading is completely disabled, OpenCV assumes the C++ library
 // has been built with threading support, and typedefs (no-ops) these two
@@ -16,6 +17,7 @@ namespace std {
         explicit lock_guard(T&) {}
     };
 }
+#endif
 
 #ifdef __faasm
 extern "C"
@@ -24,6 +26,8 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 
 #include <filesystem>
@@ -99,7 +103,21 @@ int main(int argc, char** argv) {
     id = std::stoi(parts.at(1));
     dataKey = parts.at(2);
     labelsKey = parts.at(3);
+#else
+    if (argc != 5) {
+        std::cerr << "ml-training(pca): error parsing driver input" << std::endl;
+        return 1;
+    }
+
+    pid = std::stoi(argv[1]);
+    id = std::stoi(argv[2]);
+    dataKey = argv[3];
+    labelsKey = argv[4];
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
+
     std::string us = "rf-" + std::to_string(pid) + "-" + std::to_string(id);
 
     std::cout << "ml-training(" << us << "): training random forest on data "
@@ -122,6 +140,8 @@ int main(int argc, char** argv) {
                bucketName.c_str());
     }
     imageData.assign(keyBytes, keyBytes + keyBytesLen);
+#else
+    imageData = s3cli.getKeyBytes(bucketName, dataKey);
 #endif
 
     std::vector<uint8_t> labelsData;
@@ -137,6 +157,8 @@ int main(int argc, char** argv) {
                bucketName.c_str());
     }
     labelsData.assign(keyBytes, keyBytes + keyBytesLen);
+#else
+    labelsData = s3cli.getKeyBytes(bucketName, labelsKey);
 #endif
 
     cv::Mat data = deserializeMat(imageData);
@@ -171,7 +193,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 #else
-    s3cli.addKeyStr(bucketName, modelDataKey, rfData);
+    s3cli.addKeyBytes(bucketName, modelDataKey, rfData);
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

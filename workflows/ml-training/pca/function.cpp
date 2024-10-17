@@ -1,3 +1,4 @@
+#ifdef __faasm
 // WARNING: this needs to preceed the OpenCV includes
 // Even when threading is completely disabled, OpenCV assumes the C++ library
 // has been built with threading support, and typedefs (no-ops) these two
@@ -16,6 +17,7 @@ namespace std {
         explicit lock_guard(T&) {}
     };
 }
+#endif
 
 #ifdef __faasm
 extern "C"
@@ -24,6 +26,8 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 
 #include <filesystem>
@@ -87,6 +91,9 @@ void loadImages(const std::string& us,
     }
 
     imageNames.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+#else
+    s3::S3Wrapper s3cli;
+    imageNames = s3cli.getKeyStr(bucketName, s3file);
 #endif
 
     std::istringstream ss(imageNames);
@@ -120,6 +127,8 @@ void loadImages(const std::string& us,
         }
 
         imageContents.assign(keyBytes, keyBytes + keyBytesLen);
+#else
+        imageContents = s3cli.getKeyBytes(bucketName, image);
 #endif
 
         // TODO: consider resizing instead of push_back
@@ -201,6 +210,17 @@ int main(int argc, char** argv) {
     id = std::stoi(parts.at(0));
     s3dir = parts.at(1);
     numTrainFuncs = std::stoi(parts.at(2));
+#else
+    if (argc != 4) {
+        std::cerr << "ml-training(pca): error parsing driver input" << std::endl;
+        return 1;
+    }
+    id = std::stoi(argv[1]);
+    s3dir = argv[2];
+    numTrainFuncs = std::stoi(argv[3]);
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
     std::string us = "pca-" + std::to_string(id);
 
@@ -217,7 +237,7 @@ int main(int argc, char** argv) {
     std::vector<cv::Mat> images;
     std::vector<int> labels;
     loadImages(us, bucketName, s3dir, images, labels);
-    std::cout << "ml-training(" << us << "): images loaded!" << std::endl;
+    std::cout << "ml-training(" << us << "): " << images.size() << " images loaded!" << std::endl;
 
     // Convert data to a single matrix
     std::cout << "ml-training(" << us << "): converting data..." << std::endl;
@@ -259,7 +279,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 #else
-        s3cli.addKeyStr(bucketName, dataKey, serializedMats.at(i));
+        s3cli.addKeyBytes(bucketName, dataKey, serializedMats.at(i));
 #endif
 
         // Upload the labels
@@ -277,7 +297,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 #else
-        s3cli.addKeyStr(bucketName, labelsKey, serializedLabels.at(i));
+        s3cli.addKeyBytes(bucketName, labelsKey, serializedLabels.at(i));
 #endif
     }
 
@@ -288,29 +308,17 @@ int main(int argc, char** argv) {
         std::string pcaInput = std::to_string(id) + ":" + std::to_string(i) + ":" + dataKey + ":" + labelsKey;
 #ifdef __faasm
         int pcaId = faasmChainNamed("rf", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-#endif
         trainFuncIds.push_back(std::to_string(pcaId));
+#endif
     }
 
     // Tell the driver the ids of the PCA funcs to wait on them
 #ifdef __faasm
     std::string outputStr = join(trainFuncIds, ",");
     faasmSetOutput(outputStr.c_str(), outputStr.size());
+#else
+    s3::shutdownS3Wrapper();
 #endif
-
-    /*
-    // Train k-NN classifier with PCA result
-    cv::Ptr<cv::ml::KNearest> knn = cv::ml::KNearest::create();
-    knn->setDefaultK(3);
-    knn->train(pcaResult, cv::ml::ROW_SAMPLE, labelsMat);
-    std::cout << "Training k-NN classifier succeeded!" << std::endl;
-
-    // Perform a prediction on the first sample as an example
-    cv::Mat sample = pcaResult.row(0);
-    cv::Mat response;
-    knn->findNearest(sample, knn->getDefaultK(), response);
-    std::cout << "Predicted label: " << response.at<float>(0, 0) << std::endl;
-    */
 
     return 0;
 }

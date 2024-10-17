@@ -69,21 +69,14 @@ int main(int argc, char** argv)
 
     s3prefix.assign(inputChar);
 #else
-    s3::initS3Wrapper();
-
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
-
-    if (s3dirChar == nullptr) {
-        std::cerr << "word-count(splitter): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 2) {
+        std::cerr << "ml-training(validation): error parsing driver input" << std::endl;
         return 1;
     }
-    s3prefix.assign(s3dirChar);
+    s3prefix = argv[1];
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
 
     // Get the list of files for each PCA function
@@ -107,10 +100,8 @@ int main(int argc, char** argv)
         tmpString.assign(keysBuffer[i], keysBuffer[i] + keysBufferLens[i]);
         s3files.push_back(tmpString);
     }
-
-
 #else
-    auto s3files = s3cli.listKeys(bucketName, s3prefix);
+    s3files = s3cli.listKeys(bucketName, s3prefix);
 #endif
 
     // NOTE: for the time being, validate only re-uploads
