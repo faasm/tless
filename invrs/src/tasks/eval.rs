@@ -421,30 +421,35 @@ impl Eval {
         // Specific per-workflow completion detection
         match workflow {
             AvailableWorkflow::Finra => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/merge/results.txt").as_str(),
-                )
-                .await
+                let result_key = format!("{workflow}/outputs/merge/results.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await
                 {
-                    Some(time) => exp_result.end_time = time,
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                    }
                     None => error!("invrs(eval): timed-out waiting for FINRA workload to finish"),
                 }
             }
             AvailableWorkflow::MlTraining => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/done.txt").as_str(),
-                )
+                let result_key = format!("{workflow}/outputs/done.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str())
                 .await
                 {
-                    Some(time) => exp_result.end_time = time,
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                    }
                     None => {
                         error!("invrs(eval): timed-out waiting for ML training workload to finish")
                     }
                 }
             }
             AvailableWorkflow::MlInference => {
+                error!("{}: error: make sure you have correctly set the end condition!", Env::SYS_NAME);
+
                 // TODO: ML inference finishes off in a scale-out so it will
                 // have to be the driver who writes the file
                 match S3::wait_for_key(
