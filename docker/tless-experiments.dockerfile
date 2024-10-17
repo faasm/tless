@@ -12,7 +12,7 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 268a78df08955ceaf6307ba9b0a82bd2703b4ec7 \
+    && git checkout eef1e60e96e5446d256cb6a12585ecdaa7617249 \
     && git submodule update --init -f cpp \
     && git clone -b workflows-knative https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
@@ -23,7 +23,6 @@ RUN cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh libfaasm --clean \
     && git submodule update --init ./third-party/zlib \
     && ./bin/inv_wrapper.sh zlib \
-    # Build specific examples (TODO: build native versions too)
     && cd /code/faasm-examples \
     && git submodule update --init ./examples/opencv \
     && ./bin/inv_wrapper.sh opencv opencv --native
