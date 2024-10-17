@@ -16,7 +16,7 @@ use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
 use warp::Filter;
 
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/finra";
+static BINARY_DIR: &str = "/workflows/build-native/finra";
 static MERGE_INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 static WORKFLOW_NAME: &str = "finra(driver)";
 
