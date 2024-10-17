@@ -62,19 +62,17 @@ int main(int argc, char** argv)
     tradesKey = parts.at(1);
     portfolioKey = parts.at(2);
 #else
-    s3::initS3Wrapper();
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DATA_FILE");
-    if (s3dirChar == nullptr) {
-        std::cerr << "finra(fetch-public): error: must populate TLESS_S3_DATA_FILE"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 4) {
+        std::cerr << "finra(audit): error parsing driver input" << std::endl;
         return 1;
     }
-    s3DataFile.assign(s3dirChar);
+
+    id = std::stoi(argv[1]);
+    tradesKey = argv[2];
+    portfolioKey = argv[3];
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
     std::string us = "audit-" + std::to_string(id);
 
@@ -98,7 +96,7 @@ int main(int argc, char** argv)
     // WARNING: can we avoid the copy
     tradeData.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
 #else
-    tradeData = s3cli.getKeyStr(bucketName, tradesKey);
+    tradeData = s3cli.getKeyBytes(bucketName, tradesKey);
 #endif
 
     std::cout << "finra(" << us << "): fetching portfolio data from "
@@ -121,14 +119,14 @@ int main(int argc, char** argv)
     // WARNING: can we avoid the copy
     portfolioData.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
 #else
-    portfolioData = s3cli.getKeyStr(bucketName, portfolioKey);
+    portfolioData = s3cli.getKeyBytes(bucketName, portfolioKey);
 #endif
 
     std::cout << "finra(" << us << "): de-serializing data" << std::endl;
     std::vector<TradeData> trades = tless::finra::deserializeTradeVector(tradeData);
     Portfolio portfolio = tless::finra::deserializePortfolio(portfolioData);
 
-    std::cout << "finra(" << us << "): running audit rule..." << std::endl;
+    std::cout << "finra(" << us << "): running audit rule on " << trades.size() << " trades ..." << std::endl;
     std::string auditResults;
     for (const auto& trade : trades) {
         bool insideTradeDetected =
@@ -158,6 +156,7 @@ int main(int argc, char** argv)
     }
 #else
     s3cli.addKeyStr(bucketName, key, auditResults);
+    s3::shutdownS3Wrapper();
 #endif
 
     return 0;

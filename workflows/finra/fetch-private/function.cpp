@@ -69,7 +69,7 @@ int main(int argc, char** argv)
         return 1;
     }
 #else
-    s3cli.addKeyStr(bucketName, key, serializedPortfolio);
+    s3cli.addKeyBytes(bucketName, key, serializedPortfolio);
     s3::shutdownS3Wrapper();
 #endif
 

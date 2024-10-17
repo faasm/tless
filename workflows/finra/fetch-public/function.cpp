@@ -108,7 +108,9 @@ int main(int argc, char** argv)
 
     // Upload structured data to S3
     std::string key = "finra/outputs/fetch-public/trades";
-    std::cout << "finra(fetch-public): uploading structured trade data to "
+    std::cout << "finra(fetch-public): uploading data from "
+              << tradeData.size()
+              << " trades to "
               << key
               << std::endl;
 #ifdef __faasm
@@ -125,7 +127,7 @@ int main(int argc, char** argv)
         return 1;
     }
 #else
-    s3cli.addKeyStr(bucketName, key, serializedTradeData);
+    s3cli.addKeyBytes(bucketName, key, serializedTradeData);
     s3::shutdownS3Wrapper();
 #endif
 

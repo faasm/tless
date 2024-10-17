@@ -24,7 +24,6 @@ extern "C"
  */
 int main(int argc, char** argv)
 {
-    // TODO: the bucket name is currently hardcoded
     std::string bucketName = "tless";
     std::string s3prefix = "finra/outputs/audit/audit-";
 
@@ -51,7 +50,7 @@ int main(int argc, char** argv)
         s3files.push_back(tmpString);
     }
 #else
-    auto s3files = s3cli.listKeys(bucketName, s3prefix);
+    s3files = s3cli.listKeys(bucketName, s3prefix);
 #endif
 
     // For the time being, merge does nothing

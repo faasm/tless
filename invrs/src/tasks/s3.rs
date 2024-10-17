@@ -1,7 +1,7 @@
 use crate::env::Env;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use minio::s3::args::*;
 use minio::s3::builders::ObjectContent;
 use minio::s3::client::{Client, ClientBuilder};
@@ -10,7 +10,7 @@ use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{S3Api, ToStream};
 use std::path::{Path, PathBuf};
-use std::{env, fs, thread, time};
+use std::{env, fs, io::Read, thread, time};
 
 #[derive(Debug)]
 pub struct S3 {}
@@ -139,6 +139,40 @@ impl S3 {
             .unwrap();
     }
 
+    pub async fn get_key(bucket_name: &str, key_name: &str) -> String {
+        let client = Self::init_s3_client();
+
+        // Return fast if the bucket does not exist
+        let exists: bool = client
+            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .await
+            .unwrap();
+
+        if !exists {
+            warn!("invrs(s3): warning: bucket does not exist: {bucket_name}");
+            return "".to_string();
+        }
+
+        // Loop until the object appears, and return its last modified date
+        let (mut object, _) = client
+            .get_object(bucket_name, key_name)
+            .send()
+            .await
+            .unwrap()
+            .content
+            .to_stream()
+            .await
+            .unwrap();
+
+        let mut content = Vec::new();
+        while let Some(chunk) = object.next().await {
+            let chunk = chunk.expect("Failed to read chunk");
+            content.extend_from_slice(&chunk);
+        }
+
+        String::from_utf8(content).expect("tlessctl(s3): error converting object to string")
+    }
+
     /// Wait for a key to be ready, and return when it was last modified
     pub async fn wait_for_key(bucket_name: &str, key_name: &str) -> Option<DateTime<Utc>> {
         let client = Self::init_s3_client();
@@ -202,7 +236,10 @@ impl S3 {
     }
 
     pub async fn list_keys(bucket_name: String, prefix: &Option<String>) {
-        debug!("{}(s3): listing keys in bucket {bucket_name}", Env::SYS_NAME);
+        debug!(
+            "{}(s3): listing keys in bucket {bucket_name}",
+            Env::SYS_NAME
+        );
 
         let mut objects = Self::init_s3_client()
             .list_objects(&bucket_name)
@@ -215,10 +252,10 @@ impl S3 {
             match result {
                 Ok(resp) => {
                     for item in resp.contents {
-                        debug!("- {:?}", item.name);
+                        info!("- {:?}", item.name);
                     }
                 }
-                Err(e) => debug!("invrs(s3): error: {:?}", e),
+                Err(e) => error!("invrs(s3): error: {:?}", e),
             }
         }
     }
@@ -276,8 +313,13 @@ impl S3 {
                 .unwrap();
         }
 
-        let content = ObjectContent::from(host_path.to_string());
+        // Load file to byte array
+        let mut file = fs::File::open(host_path).unwrap();
+        let mut file_contents = Vec::new();
+        file.read_to_end(&mut file_contents).unwrap();
 
+        // Upload it to S3
+        let content = ObjectContent::from(file_contents);
         client
             .put_object_content(&bucket_name, &s3_path, content)
             .send()

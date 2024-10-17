@@ -1,5 +1,5 @@
-use clap::ValueEnum;
 use crate::tasks::s3::S3;
+use clap::ValueEnum;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{env, fmt};

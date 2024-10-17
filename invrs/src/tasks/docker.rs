@@ -1,5 +1,5 @@
-use clap::ValueEnum;
 use crate::env::Env;
+use clap::ValueEnum;
 use rand::Rng;
 use std::fmt;
 use std::process::{Command, Stdio};
@@ -34,10 +34,8 @@ impl FromStr for DockerContainer {
 
 impl DockerContainer {
     pub fn iter_variants() -> std::slice::Iter<'static, DockerContainer> {
-        static VARIANTS: [DockerContainer; 2] = [
-            DockerContainer::Experiments,
-            DockerContainer::Worker,
-        ];
+        static VARIANTS: [DockerContainer; 2] =
+            [DockerContainer::Experiments, DockerContainer::Worker];
         VARIANTS.iter()
     }
 }
