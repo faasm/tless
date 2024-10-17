@@ -286,6 +286,14 @@ pub fn process_event(mut event: Event) -> Event {
                 post_event(event.ty().to_string(), scaled_event.clone());
             }
 
+            // Update the event for the zero-th id (the one we return as part
+            // of the method)
+            scaled_event.set_id((run_magic + 0).to_string());
+            scaled_event.set_data(
+                "aplication/json",
+                json!({"audit-id": 0, "num-audit": num_audit}),
+            );
+
             scaled_event
         }
         // Process the output of the 'audit' function and chain to 'merge'
