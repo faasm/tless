@@ -106,12 +106,12 @@ spec:
       template:
         spec:
           runtimeClassName: ${RUNTIME_CLASS_NAME}
-          restartPolicy: Never
+          restartPolicy: OnFailure
           containers:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:33932759ae0fd6483db6d67a3e75f4b644f4d4034faeb3f6c8bce47791ec431c
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:c51aea6c0efa102876ba4fb51717ce8fbd9eb15aa7c9459e6a2b1529c1af39d9
               ports:
                 - containerPort: 8080
               workingDir: /code/faasm-examples/workflows/finra/knative

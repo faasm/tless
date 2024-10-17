@@ -8,7 +8,7 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=tru
    -H "ce-source: cli-fetch-public" \
    -H "ce-type: http://fetch-to-audit-kn-channel.tless.svc.cluster.local" \
    -H "ce-id: 1" \
-   -d '{"num-audit": 2, "run-magic": '"${THIS_RUN_MAGIC}"'}' \
+   -d '{"num-audit": 20, "run-magic": '"${THIS_RUN_MAGIC}"'}' \
    http://ingress-to-fetch-public-kn-channel.tless.svc.cluster.local &
 
 sleep 1
@@ -19,7 +19,7 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-2 --image=curlimages/curl --rm=t
    -H "ce-source: cli-fetch-private" \
    -H "ce-type: http://fetch-to-audit-kn-channel.tless.svc.cluster.local" \
    -H "ce-id: 1" \
-   -d '{"num-audit": 2, "run-magic": '"${THIS_RUN_MAGIC}"'}' \
+   -d '{"num-audit": 20, "run-magic": '"${THIS_RUN_MAGIC}"'}' \
    http://ingress-to-fetch-private-kn-channel.tless.svc.cluster.local
 
 # curl -X POST -v \

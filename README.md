@@ -51,6 +51,10 @@ run the following:
 # TODO
 ```
 
+Notes to self:
+* `nydus` to 0.13.14 seems to be quite important
+* also being able to set the carsh loop back off to a sufficiently low value
+
 ## Workflows
 
 This repository implements four different workflows:
