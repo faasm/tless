@@ -1,8 +1,8 @@
 # -----
-# This YAML describes the FINRA workflow for TLess in Knative.
+# This YAML describes the ML Inference workflow for TLess in Knative.
 #
 # See here for more details on the workflow:
-# https://github.com/faasm/experiment-tless/blob/main/workflows/finra/README.md
+# https://github.com/faasm/experiment-tless/blob/main/workflows/ml-inference/README.md
 # -----
 apiVersion: messaging.knative.dev/v1
 kind: Channel
@@ -17,7 +17,7 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: partition-to-pca
+  name: ingress-to-load
   namespace: tless
 spec:
   channelTemplate:
@@ -27,21 +27,7 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: pca-to-rf
-  namespace: tless
-spec:
-  channelTemplate:
-    apiVersion: messaging.knative.dev/v1
-    kind: InMemoryChannel
-  delivery:
-    backoffDelay: PT10S
-    backoffPolicy: linear
-    retry: 10
----
-apiVersion: messaging.knative.dev/v1
-kind: Channel
-metadata:
-  name: rf-to-validation
+  name: pre-inf-to-predict
   namespace: tless
 spec:
   channelTemplate:
@@ -51,7 +37,7 @@ spec:
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: ml-training-partition
+  name: ml-inference-partition
   namespace: tless
 spec:
   template:
@@ -61,11 +47,34 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /workflows/ml-training/knative
+          workingDir: /workflows/ml-inference/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
-        tless.workflows/name: ml-training-partition
+        tless.workflows/name: ml-inference-partition
+      annotations:
+        # NOTE: we may have to enable this annotation in Kata's config file
+        # under hypervisor.qemu.enable_annotations (add 'default_memory')
+        io.katacontainers.config.hypervisor.default_memory: "6144"
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ml-inference-load
+  namespace: tless
+spec:
+  template:
+    spec:
+      runtimeClassName: ${RUNTIME_CLASS_NAME}
+      containers:
+        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+          ports:
+            - containerPort: 8080
+          workingDir: /workflows/ml-inference/knative
+          command: [ "./target/release/tless-cloudevent-handler" ]
+    metadata:
+      labels:
+        tless.workflows/name: ml-inference-load
       annotations:
         # NOTE: we may have to enable this annotation in Kata's config file
         # under hypervisor.qemu.enable_annotations (add 'default_memory')
@@ -74,7 +83,7 @@ spec:
 apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
 metadata:
-  name: ml-training-pca
+  name: ml-inference-predict
   namespace: tless
 spec:
   job:
@@ -92,84 +101,21 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:7fb6121394a8389ae8c6492334af8ac0fc285d469c83affc45549cfaac9a9f94
               ports:
                 - containerPort: 8080
-              workingDir: /workflows/ml-training/knative
+              workingDir: /workflows/ml-inference/knative
               command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
         metadata:
           labels:
-            tless.workflows/name: ml-training-pca
+            tless.workflows/name: ml-inference-predict
           annotations:
             # NOTE: we may have to enable this annotation in Kata's config file
             # under hypervisor.qemu.enable_annotations (add 'default_memory')
             io.katacontainers.config.hypervisor.default_memory: "6144"
----
-apiVersion: sinks.knative.dev/v1alpha1
-kind: JobSink
-metadata:
-  name: ml-training-rf
-  namespace: tless
-spec:
-  job:
-    spec:
-      completions: 1
-      parallelism: 1
-      backoffLimit: 4
-      # Clean-up jobs once they are finished
-      ttlSecondsAfterFinished: 30
-      template:
-        spec:
-          runtimeClassName: ${RUNTIME_CLASS_NAME}
-          restartPolicy: OnFailure
-          containers:
-            - name: main
-              # TODO: pin to version
-              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
-              ports:
-                - containerPort: 8080
-              workingDir: /workflows/ml-training/knative
-              command: [ "./target/release/tless-cloudevent-handler" ]
-              env:
-                - name: CE_FROM_FILE
-                  value: "on"
-        metadata:
-          labels:
-            tless.workflows/name: ml-training-rf
-          annotations:
-            # NOTE: we may have to enable this annotation in Kata's config file
-            # under hypervisor.qemu.enable_annotations (add 'default_memory')
-            io.katacontainers.config.hypervisor.default_memory: "6144"
----
-apiVersion: serving.knative.dev/v1
-kind: Service
-metadata:
-  name: ml-training-validation
-  namespace: tless
-spec:
-  template:
-    spec:
-      runtimeClassName: ${RUNTIME_CLASS_NAME}
-      containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-          ports:
-            - containerPort: 8080
-          workingDir: /workflows/ml-training/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
-    metadata:
-      labels:
-        tless.workflows/name: ml-training-validation
-      annotations:
-        # High grace-period to guarantee the same instance processes requests
-        # for all jobs in the JobSink (i.e. instances of the audit function)
-        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -185,12 +131,12 @@ spec:
     ref:
       apiVersion: messaging.knative.dev/v1
       kind: InMemoryChannel
-      name: partition-to-pca
+      name: pre-inf-to-predict
   subscriber:
     ref:
       apiVersion: serving.knative.dev/v1
       kind: Service
-      name: ml-training-partition
+      name: ml-inference-partition
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -201,12 +147,17 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: partition-to-pca
+    name: ingress-to-load
+  reply:
+    ref:
+      apiVersion: messaging.knative.dev/v1
+      kind: InMemoryChannel
+      name: pre-inf-to-predict
   subscriber:
     ref:
-      apiVersion: sinks.knative.dev/v1alpha1
-      kind: JobSink
-      name: ml-training-pca
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: ml-inference-load
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -217,26 +168,10 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: pca-to-rf
+    name: pre-inf-to-predict
   subscriber:
     ref:
       apiVersion: sinks.knative.dev/v1alpha1
       kind: JobSink
-      name: ml-training-rf
----
-apiVersion: messaging.knative.dev/v1
-kind: Subscription
-metadata:
-  name: edge-four-subscription
-  namespace: tless
-spec:
-  channel:
-    apiVersion: messaging.knative.dev/v1
-    kind: Channel
-    name: rf-to-validation
-  subscriber:
-    ref:
-      apiVersion: serving.knative.dev/v1
-      kind: Service
-      name: ml-training-validation
+      name: ml-inference-predict
 ---

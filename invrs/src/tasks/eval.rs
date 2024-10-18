@@ -344,7 +344,8 @@ impl Eval {
                 Self::wait_for_pod("tless", "tless.workflows/name=ml-training-validation");
             }
             AvailableWorkflow::MlInference => {
-                panic!("invrs(eval): ML inference workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-load");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-partition");
             }
             AvailableWorkflow::WordCount => {
                 Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
