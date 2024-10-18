@@ -33,6 +33,7 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
  */
 int main(int argc, char** argv)
 {
+#ifdef __faasm
     if (argc != 4) {
         printf("ml-training(driver): usage: <s3_path_mnist> <num_pca> <num_rf>\n");
         return 1;
@@ -44,21 +45,17 @@ int main(int argc, char** argv)
     //
     // The return value of the partition function is ...
     printf("ml-training(driver): invoking one partition function\n");
-#ifdef __faasm
     // Call splitter
     std::string splitterInput = s3prefix + ":" + argv[2] + ":" + argv[3];
     int partitionId = faasmChainNamed("partition", (uint8_t*) splitterInput.c_str(), splitterInput.size());
-#endif
 
     char* partitionOutput;
     int partitionOutputLen;
-#ifdef __faasm
     int result = faasmAwaitCallOutput(partitionId, &partitionOutput, &partitionOutputLen);
     if (result != 0) {
         printf("ml-training(driver): error: partition execution failed with rc %i\n", result);
         return 1;
     }
-#endif
 
     // Get all message ids from output
     std::vector<std::string>  pcaIds = splitByDelimiter(partitionOutput, ",");
@@ -68,7 +65,6 @@ int main(int argc, char** argv)
     std::vector<int> trainIds;
     for (auto pcaIdStr : pcaIds) {
         int pcaId = std::stoi(pcaIdStr);
-#ifdef __faasm
         char* trainOutput;
         int trainOutputLen;
         // TODO: will have to get the output, and wait for all training functions
@@ -82,7 +78,6 @@ int main(int argc, char** argv)
         for (const auto tid : thisTrainIds) {
             trainIds.push_back(std::stoi(tid));
         }
-#endif
     }
 
     // Wait for all train functions to have finished
@@ -97,10 +92,8 @@ int main(int argc, char** argv)
 
     // Finally, invoke one validation function
     printf("ml-training(driver): invoking one validation function\n");
-#ifdef __faasm
     std::string validationInput = "ml-training/outputs/rf-";
     int validationId = faasmChainNamed("validation", (uint8_t*) validationInput.c_str(), validationInput.size());
-#endif
     result = faasmAwaitCall(validationId);
     if (result != 0) {
         printf("ml-training(driver): error: validation execution (id: %i) failed with rc %i\n",
@@ -111,7 +104,6 @@ int main(int argc, char** argv)
 
     std::string output = "ml-training(driver): workflow executed succesfully!";
     std::cout << output << std::endl;
-#ifdef __faasm
     faasmSetOutput(output.c_str(), output.size());
 #endif
 

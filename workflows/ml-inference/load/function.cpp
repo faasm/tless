@@ -63,19 +63,15 @@ int main(int argc, char** argv)
 
     s3prefix.assign(inputChar);
 #else
-    s3::initS3Wrapper();
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
-    if (s3dirChar == nullptr) {
-        std::cerr << "word-count(splitter): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 2) {
+        std::cerr << "ml-inference(load): error parsing driver input" << std::endl;
         return 1;
     }
-    s3prefix.assign(s3dirChar);
+
+    s3prefix = argv[1];
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
 
     // Get the list of files for each PCA function
@@ -101,7 +97,7 @@ int main(int argc, char** argv)
     }
 
 #else
-    auto s3files = s3cli.listKeys(bucketName, s3prefix);
+    s3files = s3cli.listKeys(bucketName, s3prefix);
 #endif
 
     // NOTE: for the time being, loading only re-uploads
@@ -145,6 +141,12 @@ int main(int argc, char** argv)
         s3cli.addKeyStr(bucketName, key, fileContents);
 #endif
     }
+
+#ifndef __faasm
+    // Add a file to let know we are done loading
+    s3cli.addKeyStr(bucketName, "ml-inference/outputs/load/done.txt", "done");
+    s3::shutdownS3Wrapper();
+#endif
 
     return 0;
 }

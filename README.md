@@ -8,8 +8,7 @@ two points in the design space for confidential serverless:
 - [Faasm + SGX](https://github.com/faasm/faasm/tree/main/src/enclave): a port
   of the [Faasm](https://github.com/faasm/faasm) to run WASM sandboxes inside SGX.
 - [CC-Knative](https:github.com/coco-serverless/coco-serverless): a port of the
-  [Knative](https://knative.dev) runtime to run Knative services as container
-  functions inside confidential VMs (AMD SEV).
+  [Knative](https://knative.dev) runtime to run Knative services as container functions inside confidential VMs (AMD SEV).
 
 To execute any code snippet in this repository, we will assume that you have
 activated your virtual environment:
@@ -32,24 +31,12 @@ sudo apt install -y \
 
 ## Baselines
 
-### Faasm Baselines
+TLess currently supports being deployed on top of two serverless runtimes,
+[Faasm](https://github.com/faasm/faasm) and [Knative](https://knative.dev).
 
-To deploy the Faasm-based baselines - Faasm, Sgx-Faasm, and TLess-Faasm -
-just run the following:
-
-```bash
-# TODO: move to k8s when it works
-faasmctl deploy.compose --workers=4
-```
-
-### Knative Baselines
-
-To deploy the Knative-based baselines - Knative, CC-Knative, and TLess-Knative -
-run the following:
-
-```bash
-# TODO
-```
+For instructions to deploy each one of them, see:
+- [Deploying on top of Faasm](./docs/tless_on_faasm.md)
+- [Deploying on top of Knative](./docs/tless_on_knative.md)
 
 ## Workflows
 
@@ -63,9 +50,9 @@ This repository implements four different workflows:
 
 | Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
 |---|---|---|---|---|---|---|
-| FINRA | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: | :x: |
-| ML Training | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: | :x: |
-| ML Inference | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: | :x: |
+| FINRA | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
+| ML Training | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
+| ML Inference | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
 | Word Count | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
 
 ## Experiments

@@ -9,13 +9,14 @@ pushd ${PROJ_ROOT}>>/dev/null
 # Environment vars
 # ----------------------------
 
-export VERSION=$(cat ${PROJ_ROOT}/VERSION)
+VERSION=$(cat ${PROJ_ROOT}/VERSION)
 
 docker run \
     --rm -it \
     --name tless-build \
-    -v ${PROJ_ROOT}/workflows:/code/examples/workflows \
-    -w /code/examples \
+    --net host \
+    -v ${PROJ_ROOT}/workflows:/code/faasm-examples/workflows \
+    -w /code/faasm-examples \
     ghcr.io/coco-serverless/tless-experiments:0.4.0 \
     bash
 

@@ -10,6 +10,7 @@
  */
 int main(int argc, char** argv)
 {
+#ifdef __faasm
     if (argc != 3) {
         std::cout << "finra(driver): usage: <s3_public_data_path> <num_audit_funcs>"
                   << std::endl;
@@ -19,14 +20,10 @@ int main(int argc, char** argv)
     int numAuditFuncs = std::stoi(argv[2]);
 
     std::cout << "finra(driver): invoking one fetch-public function" << std::endl;
-#ifdef __faasm
     int fetchPublicId = faasmChainNamed("fetch-public", (uint8_t*) s3DataFile.c_str(), s3DataFile.size());
-#endif
 
     std::cout << "finra(driver): invoking one fetch-private function" << std::endl;
-#ifdef __faasm
     int fetchPrivateId = faasmChainNamed("fetch-private", nullptr, 0);
-#endif
 
     // Wait for both functions to finish
     int result = faasmAwaitCall(fetchPublicId);
@@ -53,15 +50,12 @@ int main(int argc, char** argv)
         std::string auditInput = std::to_string(i);
         auditInput += ":finra/outputs/fetch-public/trades";
         auditInput += ":finra/outputs/fetch-private/portfolio";
-#ifdef __faasm
         int auditId = faasmChainNamed("audit", (uint8_t*) auditInput.c_str(), auditInput.size());
         auditFuncIds.push_back(auditId);
-#endif
     }
 
     // Wait for all audit functions
     for (const auto auditId : auditFuncIds) {
-#ifdef __faasm
         result = faasmAwaitCall(auditId);
         if (result != 0) {
             std::cerr << "finra(driver): error: "
@@ -72,11 +66,9 @@ int main(int argc, char** argv)
                       << std::endl;
             return 1;
         }
-#endif
     }
 
     std::cout << "finra(driver): invoking one merge function" << std::endl;
-#ifdef __faasm
     int mergeId = faasmChainNamed("merge", nullptr, 0);
     result = faasmAwaitCall(mergeId);
     if (result != 0) {
@@ -85,11 +77,9 @@ int main(int argc, char** argv)
                   << std::endl;
         return 1;
     }
-#endif
 
     std::string output = "finra(driver): workflow executed succesfully!";
     std::cout << output << std::endl;
-#ifdef __faasm
     faasmSetOutput(output.c_str(), output.size());
 #endif
 

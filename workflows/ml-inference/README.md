@@ -41,38 +41,33 @@ faasmctl invoke ml-inference driver --cmdline "ml-inference/model ml-inference/i
 
 ## Run the Workflow (Knative)
 
-> [!WARNING]
-> Unfinished
+First, deploy the workflow to the k8s cluster with bare-metal access to SEV nodes:
 
-To run the workflow, you must first upload the wikipedia dump to S3:
+```bash
+export RUNTIME_CLASS_NAME=kata-qemu-sev
+export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
+
+kubectl apply -f ${PROJ_ROOT}/workflows/k8s_common.yaml
+envsubst < ${PROJ_ROOT}/workflows/ml-training/knative/workflow.yaml | kubectl apply -f -
+```
+
+Second, upload the required data:
 
 ```bash
 export MINIO_URL=$(kubectl -n tless get services -o jsonpath='{.items[?(@.metadata.name=="minio")].spec.clusterIP}')
 
 # Clean bucket first
-invrs s3 clear-bucket --bucket-name ${BUCKET_NAME}
+invrs s3 clear-dir --prefix ml-inference
 
-# Upload all data files in the directory
-invrs s3 upload-dir \
-  --bucket-name ${BUCKET_NAME} \
-  --host-path ${PROJ_DIR}/datasets/word-count/few-files/ \
-  --s3-path word-count/few-files
+# Upload model data
+invrs s3 upload-dir --host-path ${PROJ_ROOT}/datasets/ml-inference/model --s3-path ml-inference/model
+
+# Upload image data to perform inference on
+invrs s3 upload-dir --host-path ${PROJ_ROOT}/datasets/ml-inference/images-inference-1k --s3-path ml-inference/images-inference-1k
 ```
 
 then you may execute the workflow by running:
 
 ```bash
-${PROJ_ROOT}/workflows/word-count/knative/curl_cmd.sh
+${PROJ_ROOT}/workflows/ml-inference/knative/curl_cmd.sh
 ```
-
-## Stages Explained
-
-0. Driver: orchestrates function execution (needed in Faasm, not in Knative)
-1. Partition: takes as an input an S3 path two numbers: a parallelism for the
-  PCA analysis, and a parallelism for the training (i.e. num of random forests).
-  It stores in `partition-output` one file for each PCA instance, with all the
-  file keys to consume.
-2. PCA: performs PCA of the subset of images assigned by 1, and further
-  partitions its data into different training functions.
-3. Train: train a random forest on the slice of the data given by 2.
-4. Validation: aggregate model data and upload it for the ml-inference workflow

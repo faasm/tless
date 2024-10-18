@@ -6,6 +6,8 @@
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
+#include <aws/s3/model/ListObjectsV2Result.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
 using namespace Aws::S3::Model;
@@ -220,12 +222,45 @@ std::vector<std::string> S3Wrapper::listBuckets()
     return bucketNames;
 }
 
-std::vector<std::string> S3Wrapper::listKeys(const std::string& bucketName)
+std::vector<std::string> S3Wrapper::listKeys(const std::string& bucketName, const std::string& prefix)
 {
-    auto request = reqFactory<ListObjectsRequest>(bucketName);
-    auto response = client.ListObjects(request);
+    Aws::S3::Model::ListObjectsV2Request request;
+    request.WithBucket(bucketName).WithPrefix(prefix);
 
+    bool moreObjects = true;
+    Aws::String continuationToken;
+
+    // Use API v2 to support receiving more than 1000 keys
     std::vector<std::string> keys;
+    while (moreObjects) {
+        if (!continuationToken.empty()) {
+            request.SetContinuationToken(continuationToken);
+        }
+
+        auto response = client.ListObjectsV2(request);
+        if (!response.IsSuccess()) {
+            const auto& err = response.GetError();
+            auto errType = err.GetErrorType();
+
+            if (errType == Aws::S3::S3Errors::NO_SUCH_BUCKET) {
+                return keys;
+            }
+
+            CHECK_ERRORS(response, bucketName, "");
+        }
+
+        const auto& result = response.GetResult();
+        for (const auto& object : result.GetContents()) {
+            keys.push_back(object.GetKey());
+        }
+
+        moreObjects = result.GetIsTruncated();
+        if (moreObjects) {
+            continuationToken = result.GetNextContinuationToken();
+        }
+    }
+
+    /*
     if (!response.IsSuccess()) {
         const auto& err = response.GetError();
         auto errType = err.GetErrorType();
@@ -246,6 +281,7 @@ std::vector<std::string> S3Wrapper::listKeys(const std::string& bucketName)
         const Aws::String& awsStr = keyObject.GetKey();
         keys.emplace_back(awsStr.c_str());
     }
+    */
 
     return keys;
 }

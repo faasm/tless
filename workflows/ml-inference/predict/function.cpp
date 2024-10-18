@@ -1,3 +1,4 @@
+#ifdef __faasm
 // WARNING: this needs to preceed the OpenCV includes
 // Even when threading is completely disabled, OpenCV assumes the C++ library
 // has been built with threading support, and typedefs (no-ops) these two
@@ -16,6 +17,7 @@ namespace std {
         explicit lock_guard(T&) {}
     };
 }
+#endif
 
 #ifdef __faasm
 extern "C"
@@ -24,6 +26,8 @@ extern "C"
 }
 
 #include <faasm/faasm.h>
+#else
+#include "libs/s3/S3Wrapper.hpp"
 #endif
 
 #include <filesystem>
@@ -79,6 +83,9 @@ void loadImages(const std::string& us,
                   << std::endl;
     }
     imageNames.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+#else
+    s3::S3Wrapper s3cli;
+    imageNames = s3cli.getKeyStr(bucketName, s3file);
 #endif
 
     std::istringstream ss(imageNames);
@@ -111,6 +118,8 @@ void loadImages(const std::string& us,
         }
 
         imageContents.assign(keyBytes, keyBytes + keyBytesLen);
+#else
+        imageContents = s3cli.getKeyBytes(bucketName, image);
 #endif
 
         cv::Mat img = cv::imdecode(imageContents, cv::IMREAD_GRAYSCALE);
@@ -147,7 +156,8 @@ void loadModelParts(const std::string& us,
     }
 
 #else
-    auto s3files = s3cli.listKeys(bucketName, s3prefix);
+    s3::S3Wrapper s3cli;
+    s3files = s3cli.listKeys(bucketName, modelDir);
 #endif
 
     // Download each file, and parse into a RF
@@ -166,7 +176,7 @@ void loadModelParts(const std::string& us,
         }
         rfData = std::vector<uint8_t>(keyBytes, keyBytes + keyBytesLen);
 #else
-        rfData = s3cli.getKeyStr(bucketName, file);
+        rfData = s3cli.getKeyBytes(bucketName, file);
 #endif
 
         auto forest = deserializeForest(rfData);
@@ -237,9 +247,21 @@ int main(int argc, char** argv) {
     id = std::stoi(parts.at(0));
     modelDir = parts.at(1);
     dataKey = parts.at(2);
-#endif
-    std::string us = "predict-" + std::to_string(id);
+#else
+    if (argc != 4) {
+        std::cerr << "ml-inference(predict): error parsing driver input" << std::endl;
+        return 1;
+    }
 
+    id = std::stoi(argv[1]);
+    modelDir = argv[2];
+    dataKey = argv[3];
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
+#endif
+
+    std::string us = "predict-" + std::to_string(id);
     std::cout << "ml-inference(" << us << "): predicting for images in "
               << dataKey
               << std::endl
@@ -253,7 +275,7 @@ int main(int argc, char** argv) {
     std::vector<int> labels;
     loadImages(us, bucketName, dataKey, images, labels);
     int numImages = images.size();
-    std::cout << "ml-inference(" << us << "): images loaded!" << std::endl;
+    std::cout << "ml-inference(" << us << "): " << images.size() << " images loaded!" << std::endl;
 
     // Convert data to a single matrix
     std::cout << "ml-inference(" << us << "): converting data..." << std::endl;

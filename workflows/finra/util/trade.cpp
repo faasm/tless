@@ -1,5 +1,9 @@
 #include "trade.h"
 
+#ifndef __faasm
+#include <cmath>
+#endif
+
 #include <iostream>
 #include <fstream>
 #include <sstream>

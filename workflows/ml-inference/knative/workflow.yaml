@@ -1,17 +1,13 @@
 # -----
-# This YAML describes the word-count workflow for TLess in Knative.
+# This YAML describes the ML Inference workflow for TLess in Knative.
 #
-# This workflow describes a fan-out, fan-in, pattern. The driver service
-# fans-out, instantiatating many mapper functions. Then the reducer function
-# waits for all mapper functions to finish, and aggreagates the results.
+# See here for more details on the workflow:
+# https://github.com/faasm/experiment-tless/blob/main/workflows/ml-inference/README.md
 # -----
-# We need to have as many channels as edges in our workflow DAG. Alternatively,
-# we could enforce edges by using a Broker/Trigger pattern and filtering on
-# CloudEvent properties
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: ingress-to-splitter
+  name: ingress-to-partition
   namespace: tless
 spec:
   channelTemplate:
@@ -21,7 +17,7 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: splitter-to-mapper
+  name: ingress-to-load
   namespace: tless
 spec:
   channelTemplate:
@@ -31,46 +27,63 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: mapper-to-reducer
+  name: pre-inf-to-predict
   namespace: tless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
     kind: InMemoryChannel
 ---
-# We can re-use the same image for all our steps in the chain. Depending on
-# the CloudEvent metadata the image will do one thing or another. In
-# addition, the channel and subscription structure enforces the right routing
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: word-count-splitter
+  name: ml-inference-partition
   namespace: tless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
+        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/word-count/knative
+          workingDir: /workflows/ml-inference/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
-        tless.workflows/name: word-count-splitter
+        tless.workflows/name: ml-inference-partition
       annotations:
         # NOTE: we may have to enable this annotation in Kata's config file
         # under hypervisor.qemu.enable_annotations (add 'default_memory')
         io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
-# JobSink guarantees one Job per CloudEvent, satisfying our dynamic scale-up
-# requirements. However, JobSink's propagate CloudEvents through a volume
-# mount, rather than an HTTP request.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ml-inference-load
+  namespace: tless
+spec:
+  template:
+    spec:
+      runtimeClassName: ${RUNTIME_CLASS_NAME}
+      containers:
+        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+          ports:
+            - containerPort: 8080
+          workingDir: /workflows/ml-inference/knative
+          command: [ "./target/release/tless-cloudevent-handler" ]
+    metadata:
+      labels:
+        tless.workflows/name: ml-inference-load
+      annotations:
+        # NOTE: we may have to enable this annotation in Kata's config file
+        # under hypervisor.qemu.enable_annotations (add 'default_memory')
+        io.katacontainers.config.hypervisor.default_memory: "6144"
+---
 apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
 metadata:
-  name: word-count-mapper
+  name: ml-inference-predict
   namespace: tless
 spec:
   job:
@@ -78,58 +91,32 @@ spec:
       completions: 1
       parallelism: 1
       backoffLimit: 4
+      # Clean-up jobs once they are finished
+      ttlSecondsAfterFinished: 30
       template:
         spec:
           runtimeClassName: ${RUNTIME_CLASS_NAME}
+            # restartPolicy: OnFailure
           restartPolicy: Never
           containers:
             - name: main
-              # WARNING: JobSink seems to, unlike Services, not pick up changes
-              # in a tag's digest. So, while we are heavily developing, we
-              # should stick to specifying the image via tag digest. Eventually,
-              # we can move to a pinned tag
-              # image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:0f1b8417c7d62cd41f2cee2875da16614797208c03b04fb1ba6da5b32e761dd5
+              # TODO: pin to version
+              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:a605e90ce496702a5996f32502cf3a5c5b87cd38e4940925708fef5587fe3c0e
               ports:
                 - containerPort: 8080
-              workingDir: /code/faasm-examples/workflows/word-count/knative
+              workingDir: /workflows/ml-inference/knative
               command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
         metadata:
           labels:
-            tless.workflows/name: word-count-mapper
+            tless.workflows/name: ml-inference-predict
           annotations:
             # NOTE: we may have to enable this annotation in Kata's config file
             # under hypervisor.qemu.enable_annotations (add 'default_memory')
             io.katacontainers.config.hypervisor.default_memory: "6144"
----
-# For this last service, we want to give it a high-grace period to make sure
-# that the same instance processes all of the events
-apiVersion: serving.knative.dev/v1
-kind: Service
-metadata:
-  name: word-count-reducer
-  namespace: tless
-spec:
-  template:
-    spec:
-      runtimeClassName: ${RUNTIME_CLASS_NAME}
-      containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:0.3.0
-          ports:
-            - containerPort: 8080
-          workingDir: /code/faasm-examples/workflows/word-count/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
-    metadata:
-      labels:
-        tless.workflows/name: word-count-reducer
-      annotations:
-        autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -140,17 +127,17 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: ingress-to-splitter
+    name: ingress-to-partition
   reply:
     ref:
       apiVersion: messaging.knative.dev/v1
       kind: InMemoryChannel
-      name: splitter-to-mapper
+      name: pre-inf-to-predict
   subscriber:
     ref:
       apiVersion: serving.knative.dev/v1
       kind: Service
-      name: word-count-splitter
+      name: ml-inference-partition
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -161,12 +148,17 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: splitter-to-mapper
+    name: ingress-to-load
+  reply:
+    ref:
+      apiVersion: messaging.knative.dev/v1
+      kind: InMemoryChannel
+      name: pre-inf-to-predict
   subscriber:
     ref:
-      apiVersion: sinks.knative.dev/v1alpha1
-      kind: JobSink
-      name: word-count-mapper
+      apiVersion: serving.knative.dev/v1
+      kind: Service
+      name: ml-inference-load
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -177,10 +169,10 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: mapper-to-reducer
+    name: pre-inf-to-predict
   subscriber:
     ref:
-      apiVersion: serving.knative.dev/v1
-      kind: Service
-      name: word-count-reducer
+      apiVersion: sinks.knative.dev/v1alpha1
+      kind: JobSink
+      name: ml-inference-predict
 ---

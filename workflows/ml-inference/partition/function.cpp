@@ -72,19 +72,16 @@ int main(int argc, char** argv)
     s3dir = parts.at(0);
     numInfFuncs = std::stoi(parts.at(1));
 #else
-    s3::initS3Wrapper();
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
-    if (s3dirChar == nullptr) {
-        std::cerr << "ml-inference(partition): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 3) {
+        std::cerr << "ml-inference(partition): error parsing driver input" << std::endl;
         return 1;
     }
-    s3dir.assign(s3dirChar);
+
+    s3dir = argv[1];
+    numInfFuncs = std::stoi(argv[2]);
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
 
     // Get the list of files for each PCA function
@@ -94,7 +91,8 @@ int main(int argc, char** argv)
               << numInfFuncs
               << " inference functions"
               << std::endl;
-    std::vector<std::string> s3files(numInfFuncs);
+
+    std::vector<std::vector<std::string>> s3files(numInfFuncs);
 
 #ifdef __faasm
     int numKeys = __faasm_s3_get_num_keys_with_prefix(
@@ -145,15 +143,13 @@ int main(int argc, char** argv)
         }
     }
 #else
-    auto rawS3files = s3cli.listKeys(bucketName);
+    auto rawS3files = s3cli.listKeys(bucketName, s3dir);
+    std::cout << "ml-inference(partition): partitioning " << rawS3files.size() << " files..." << std::endl;
     for (int i = 0; i < rawS3files.size(); i++) {
         auto key = rawS3files.at(i);
         int funcIdx = i % numInfFuncs;
 
-        // Filter by prefix
-        if (key.rfind(s3dir, 0) == 0) {
-            s3files.push_back(key);
-        }
+        s3files.at(funcIdx).push_back(key);
     }
 #endif
 
@@ -177,6 +173,12 @@ int main(int argc, char** argv)
         s3cli.addKeyStr(bucketName, key, fileNames);
 #endif
     }
+
+#ifndef __faasm
+    // Add a file to let know we are done partitioning
+    s3cli.addKeyStr(bucketName, "ml-inference/outputs/partition/done.txt", "done");
+    s3::shutdownS3Wrapper();
+#endif
 
     return 0;
 }

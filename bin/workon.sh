@@ -10,7 +10,8 @@ pushd ${PROJ_ROOT}>>/dev/null
 # Environment vars
 # ----------------------------
 
-export VERSION=$(cat ${PROJ_ROOT}/VERSION)
+export PROJ_ROOT=${PROJ_ROOT}
+export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(exp-tless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
@@ -32,7 +33,7 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 
 export FAASM_INI_FILE=${PROJ_ROOT}/faasm.ini
 # TODO: update me
-export FAASM_VERSION=0.27.0
+export FAASM_VERSION=0.28.0
 
 # ----------------------------
 # Python deps
@@ -55,7 +56,8 @@ source ${VENV_PATH}/bin/activate
 echo ""
 echo "----------------------------------"
 echo "TLess Experiments CLI"
-echo "Version: ${VERSION}"
+echo "Version: ${TLESS_VERSION}"
+echo "Project root: ${PROJ_ROOT}"
 echo "----------------------------------"
 echo ""
 

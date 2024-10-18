@@ -12,8 +12,8 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=tru
 # curl -X POST -v \
 #    -H "content-type: application/json"  \
 #    -H "ce-specversion: 1.0" \
-#    -H "ce-source: cli" \
+#    -H "ce-source: splitter" \
 #    -H "ce-type: http://splitter-to-mapper.tless.svc.cluster.local" \
 #    -H "ce-id: 1" \
-#    -d '{"foo":"bar"}' \
+#    -d '{"foo":"bar", "input-file": "foo-bar", "mapper-id": 4}' \
 #    http://localhost:8080

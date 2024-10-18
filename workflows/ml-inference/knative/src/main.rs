@@ -1,17 +1,136 @@
 use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
-use once_cell::sync::Lazy;
+use futures_util::StreamExt;
+use minio::s3::args::*;
+use minio::s3::client::ClientBuilder;
+use minio::s3::creds::StaticProvider;
+use minio::s3::error::Error;
+use minio::s3::http::BaseUrl;
+use minio::s3::types::ToStream;
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::{env, fs, io::BufRead, io::BufReader};
+use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
-use uuid::Uuid;
 use warp::Filter;
 
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
-static INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
+static BINARY_DIR: &str = "/workflows/build-native/ml-inference";
+static WORKFLOW_NAME: &str = "ml-inference(driver)";
+
+struct S3Data {
+    data: &'static str,
+}
+
+impl S3Data {
+    const HOST: S3Data = S3Data { data: "minio" };
+    const PORT: S3Data = S3Data { data: "9000" };
+    const USER: S3Data = S3Data { data: "minio" };
+    const PASSWORD: S3Data = S3Data { data: "minio123" };
+    const BUCKET: S3Data = S3Data { data: "tless" };
+}
+
+pub async fn get_num_keys(prefix: &str) -> i64 {
+    let base_url = format!("http://{}:{}", S3Data::HOST.data, S3Data::PORT.data)
+        .parse::<BaseUrl>()
+        .unwrap();
+
+    let static_provider = StaticProvider::new(S3Data::USER.data, S3Data::PASSWORD.data, None);
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .build()
+        .unwrap();
+
+    let mut objects = client
+        .list_objects(&S3Data::BUCKET.data)
+        .recursive(true)
+        .prefix(Some(prefix.to_string()))
+        .to_stream()
+        .await;
+
+    let mut num_keys = 0;
+    while let Some(result) = objects.next().await {
+        match result {
+            Ok(resp) => {
+                for _ in resp.contents {
+                    num_keys += 1;
+                }
+            }
+            Err(e) => panic!(
+                "ml-inference(driver): error listing keys with prefix: {prefix}: {}",
+                e
+            ),
+        }
+    }
+
+    num_keys
+}
+
+pub async fn add_key_str(key: &str, content: &str) {
+    let base_url = format!("http://{}:{}", S3Data::HOST.data, S3Data::PORT.data)
+        .parse::<BaseUrl>()
+        .unwrap();
+
+    let static_provider = StaticProvider::new(S3Data::USER.data, S3Data::PASSWORD.data, None);
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .build()
+        .unwrap();
+
+    client
+        .put_object_content(&S3Data::BUCKET.data, key, content.to_string())
+        .send()
+        .await
+        .unwrap();
+}
+
+pub async fn wait_for_key(key_name: &str) {
+    let base_url = format!("http://{}:{}", S3Data::HOST.data, S3Data::PORT.data)
+        .parse::<BaseUrl>()
+        .unwrap();
+
+    let static_provider = StaticProvider::new(S3Data::USER.data, S3Data::PASSWORD.data, None);
+    let client = ClientBuilder::new(base_url.clone())
+        .provider(Some(Box::new(static_provider)))
+        .build()
+        .unwrap();
+
+    // Return fast if the bucket does not exist
+    let exists: bool = client
+        .bucket_exists(&BucketExistsArgs::new(&S3Data::BUCKET.data).unwrap())
+        .await
+        .unwrap();
+
+    if !exists {
+        panic!(
+            "{WORKFLOW_NAME}: waiting for key ({key_name}) in non-existant bucket: {}",
+            S3Data::BUCKET.data
+        );
+    }
+
+    // Loop until the object appears
+    loop {
+        let mut objects = client
+            .list_objects(&S3Data::BUCKET.data)
+            .recursive(true)
+            .prefix(Some(key_name.to_string()))
+            .to_stream()
+            .await;
+
+        while let Some(result) = objects.next().await {
+            match result {
+                Ok(_) => return,
+                Err(e) => match e {
+                    Error::S3Error(s3_error) => match s3_error.code.as_str() {
+                        _ => panic!("{WORKFLOW_NAME}: error: {}", s3_error.message),
+                    },
+                    _ => panic!("{WORKFLOW_NAME}: error: {}", e),
+                },
+            }
+        }
+
+        thread::sleep(time::Duration::from_secs(2));
+    }
+}
 
 // We must wait for the POST event to go through before we can return, as
 // otherwise the chain may not make progress
@@ -48,96 +167,134 @@ pub fn process_event(mut event: Event) -> Event {
     // -----
 
     event.set_source(match event.source().as_str() {
-        "cli" => {
-            println!("cloudevent: executing 'splitter' from cli: {event}");
+        "cli-partition" => {
+            let func_name = "partition";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from cli: {event}");
 
-            Command::new(format!("{}/word-count_splitter", BINARY_DIR))
-                .current_dir(BINARY_DIR)
-                .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "minio")
-                .env("S3_PASSWORD", "minio123")
-                .env("S3_PORT", "9000")
-                .env("S3_USER", "minio")
-                .env("TLESS_S3_DIR", "word-count/few-files")
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .output()
-                .expect("tless(driver): failed executing command");
-
-            "splitter"
-        }
-        "splitter" => {
-            println!("tless(driver): executing 'mapper' from 'splitter': {event}");
-
-            let json_file = get_json_from_event(&event);
-            let s3_file = json_file
-                .get("input-file")
+            let json = get_json_from_event(&event);
+            let data_dir = json
+                .get("data-dir")
                 .and_then(Value::as_str)
-                .expect("foo");
+                .expect("ml-inference(driver): error: cannot find 'data-dir' in CE");
 
-            // Simulate actual function execution by a sleep
-            Command::new(format!("{}/word-count_mapper", BINARY_DIR))
+            let num_inf_funcs: i64 = get_json_from_event(&event)
+                .get("num-inf-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-inference(driver): error: cannot find 'num-inf-funcs' in CE");
+
+            match Command::new(format!("{}/ml-inference_{func_name}", BINARY_DIR))
                 .current_dir(BINARY_DIR)
                 .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "minio")
-                .env("S3_PASSWORD", "minio123")
-                .env("S3_PORT", "9000")
-                .env("S3_USER", "minio")
-                .env("TLESS_S3_FILE", s3_file)
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
+                .arg(data_dir)
+                .arg(num_inf_funcs.to_string())
                 .output()
-                .expect("tless(driver): failed executing command");
-
-            "mapper"
-        }
-        "mapper" => {
-            println!("tless(driver): executing 'reducer' from 'mapper': {event}");
-
-            let fan_out_scale: i64 = get_json_from_event(&event)
-                .get("scale-factor")
-                .and_then(Value::as_i64)
-                .expect("foo");
-
-            // Increment an atomic counter, and only execute the reducer
-            // function when all fan-in functions have executed
-            let mut count = INVOCATION_COUNTER.lock().unwrap();
-            *count += 1;
-            println!("tless(driver): counted {}/{}", *count, fan_out_scale);
-
-            if *count == fan_out_scale {
-                println!("tless(driver): done!");
-
-                // Execute the function only after enough POST requests have
-                // been received
-                Command::new(format!("{}/word-count_reducer", BINARY_DIR))
-                    .current_dir(BINARY_DIR)
-                    .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                    .env("S3_BUCKET", "tless")
-                    .env("S3_HOST", "minio")
-                    .env("S3_PASSWORD", "minio123")
-                    .env("S3_PORT", "9000")
-                    .env("S3_USER", "minio")
-                    .env(
-                        "TLESS_S3_RESULTS_DIR",
-                        "word-count/few-files/mapper-results",
-                    )
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
-                    .output()
-                    .expect("tless(reducer): failed executing command");
-
-                // Reset counter for next (warm) execution
-                println!("tless(reducer): resetting counter to 0");
-                *count = 0;
+                .expect("ml-training(driver): error: spawning partition command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
             }
 
-            "reducer"
+            "pre-inf"
+        }
+        "cli-load" => {
+            let func_name = "load";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from partition: {event}");
+
+            let json = get_json_from_event(&event);
+            let model_dir = json
+                .get("model-dir")
+                .and_then(Value::as_str)
+                .expect("ml-inference(driver): error: cannot find 'model-dir' in CE");
+
+            match Command::new(format!("{}/ml-inference_{func_name}", BINARY_DIR))
+                .current_dir(BINARY_DIR)
+                .env("LD_LIBRARY_PATH", "/usr/local/lib")
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
+                .arg(model_dir)
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()
+                .expect("ml-inference(driver): failed spawning 'load' command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
+            }
+
+            "pre-inf"
+        }
+        "pre-inf" => {
+            let func_name = "predict";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from 'pca': {event}");
+
+            let inf_id: i64 = get_json_from_event(&event)
+                .get("inf-id")
+                .and_then(Value::as_i64)
+                .expect("ml-inference(driver): error: cannot find 'inf-id' in CE");
+
+            // Execute the function only after enough POST requests have
+            // been received
+            match Command::new(format!("{}/ml-inference_{func_name}", BINARY_DIR))
+                .current_dir(BINARY_DIR)
+                .env("LD_LIBRARY_PATH", "/usr/local/lib")
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
+                .arg(inf_id.to_string())
+                .arg("ml-inference/outputs/load/rf-")
+                .arg(format!("ml-inference/outputs/partition/inf-{inf_id}"))
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()
+                .expect("ml-inference(driver): failed executing 'predict' command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
+            }
+
+            "predict"
         }
         _ => panic!(
-            "cloudevent: error: unrecognised source: {:}",
+            "{WORKFLOW_NAME}: error: unrecognised source: {:}",
             event.source()
         ),
     });
@@ -147,74 +304,83 @@ pub fn process_event(mut event: Event) -> Event {
     // -----
 
     match event.source().as_str() {
-        // Process the output of the 'splitter' function and chain to 'mapper'
-        "splitter" => {
-            // Read the output file to work-out the scale-out pattern and the
-            // files to chain-to
-            let mut lines: Vec<String> = Vec::new();
-            let file = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(format!("{}/{}", BINARY_DIR, "output_splitter.txt"))
-                .unwrap();
-            let reader = BufReader::new(file);
+        // Process the output of the 'partition' or 'load' functions and chain to 'predict'
+        "pre-inf" => {
+            // It is important that both partition and load use the same magic
+            // to trigger the same job
+            let run_magic: i64 = get_json_from_event(&event)
+                .get("run-magic")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'run-magic' in CE");
 
-            for line in reader.lines() {
-                lines.push(line.unwrap());
-            }
+            let num_inf_funcs: i64 = get_json_from_event(&event)
+                .get("num-inf-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num_inf_funcs' in CE");
 
-            // Store the destinattion channel
-            let dst = event.ty();
+            let json = get_json_from_event(&event);
+            let model_dir = json
+                .get("model-dir")
+                .and_then(Value::as_str)
+                .expect("ml-inference(driver): error: cannot find 'model-dir' in CE");
 
+            let json_2 = get_json_from_event(&event);
+            let data_dir = json_2
+                .get("data-dir")
+                .and_then(Value::as_str)
+                .expect("ml-inference(driver): error: cannot find 'data-dir' in CE");
+
+            // Predict messages willl go to void
             let mut scaled_event = event.clone();
+            scaled_event.set_type("http://predict-to-void-kn-channel.tless.svc.cluster.local");
 
-            // Write the new destination channel for the 'mapper' function
-            scaled_event.set_type("http://mapper-to-reducer-kn-channel.tless.svc.cluster.local");
-
-            println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
-
-            // JobSink executes one event per different CloudEvent id. So,
-            // to make sure we can re-run the whole workflow without
-            // re-deploying it, we generate random event ids
-            for i in 1..lines.len() {
-                scaled_event.set_id(Uuid::new_v4().to_string());
+            for i in 1..num_inf_funcs {
+                scaled_event.set_id((run_magic + i).to_string());
                 scaled_event.set_data(
                     "aplication/json",
-                    json!({"scale-factor": lines.len(), "input-file": lines[i]}),
+                    json!({
+                        "inf-id": i,
+                        "num-inf-funcs": num_inf_funcs,
+                        "run-magic": run_magic,
+                        "model-dir": model_dir,
+                        "data-dir": data_dir,
+                    }),
                 );
 
                 println!(
-                    "cloudevent(s1): posting to {dst} event {i}/{}: {scaled_event}",
-                    lines.len()
+                    "{WORKFLOW_NAME}: posting to {} event {i}/{num_inf_funcs}: {scaled_event}",
+                    event.ty(),
                 );
-                post_event(dst.to_string(), scaled_event.clone());
+                post_event(event.ty().to_string(), scaled_event.clone());
+
+                // Be gentle when scaling-up, as otherwise SEV will take too
+                // long
+                println!("{WORKFLOW_NAME}: sleeping for a bit...");
+                thread::sleep(time::Duration::from_secs(3));
             }
 
-            // Return the last event through the HTTP respnse
-            scaled_event.set_id(Uuid::new_v4().to_string());
+            // Update the event for the zero-th id (the one we return as part
+            // of the method)
+            scaled_event.set_id((run_magic + 0).to_string());
             scaled_event.set_data(
                 "aplication/json",
-                json!({"scale-factor": lines.len(), "input-file": lines[0]}),
+                json!({
+                    "inf-id": 0,
+                    "num-inf-funcs": num_inf_funcs,
+                    "run-magic": run_magic,
+                    "model-dir": model_dir,
+                    "data-dir": data_dir,
+                }),
             );
+
             scaled_event
         }
-        // Process the output of the 'mapper' function and chain to 'reducer'
-        "mapper" => {
-            // We still need to POST the event manually but we need to do
-            // it outside this method to be able to await on it (this method,
-            // itself, is being await-ed on when called in a server loop)
-
-            event
-        }
-        // Process the output of the 'redcuer' function
-        "reducer" => {
-            // Nothing to do after "reducer" as it is the last step in the chain
-
+        "predict" => {
+            // Predict is the last function so we don't need to do anything
             event
         }
         _ => panic!(
-            "cloudevent: error: unrecognised destination: {:}",
+            "{WORKFLOW_NAME}: error: unrecognised destination: {:}",
             event.source()
         ),
     }
@@ -232,19 +398,40 @@ async fn main() {
             let json_value = serde_json::from_str(&file_contents).unwrap();
             let event: Event = serde_json::from_value(json_value).unwrap();
 
-            let processed_event = process_event(event);
+            // Each inference job will be triggered by both partition and load
+            // with the same (source, id) pair (triggering one job) which means
+            // that the other one may not have finished yet. To this extent,
+            // we wait here for both to finish before executing
+            let keys_to_wait = vec![
+                "ml-training/outputs/partition/done.txt",
+                "ml-training/outputs/load/done.txt",
+            ];
+            for key_to_wait in keys_to_wait {
+                println!("{WORKFLOW_NAME}: audit: waiting for key {key_to_wait}");
+                wait_for_key(key_to_wait).await;
+            }
 
-            // After executing step-two, we just need to post a clone of the
-            // event to the type (i.e. destination) provided in it. Given that
-            // step-two runs in a JobSink, the pod will terminate on exit, so
-            // we need to make sure that the POST is sent before we move on
+            process_event(event.clone());
+
+            let num_inf_funcs: i64 = get_json_from_event(&event)
+                .get("num-inf-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-inference(driver): error: cannot find 'num-inf-funcs' in CE");
+
+            // After executing the predict function (only JobSink in this
+            // workflow) we are done so we need to check if all other jobs have
+            // finished, and if so, right to a key letting know we are done
+            let num_keys = get_num_keys("ml-inference/outputs/predict-").await;
+
             println!(
-                "cloudevent(s2): posting to {} event: {processed_event}",
-                processed_event.ty()
+                "{WORKFLOW_NAME}: queried number of keys (got: {num_keys} - want: {num_inf_funcs})"
             );
-            post_event(processed_event.ty().to_string(), processed_event.clone())
-                .await
-                .unwrap();
+            if num_keys == num_inf_funcs {
+                println!("{WORKFLOW_NAME}: done!");
+                add_key_str("ml-inference/outputs/predict/done.txt", "done!").await;
+            }
+
+            // We are also done, so we do not need to process the event
         }
         Err(env::VarError::NotPresent) => {
             let routes = warp::any()

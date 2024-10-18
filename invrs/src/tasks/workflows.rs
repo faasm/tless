@@ -1,9 +1,10 @@
 use crate::tasks::s3::S3;
+use clap::ValueEnum;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{env, fmt};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ValueEnum)]
 pub enum AvailableWorkflow {
     Finra,
     MlTraining,
@@ -63,8 +64,13 @@ impl Workflows {
         bucket_name: &str,
         clean: bool,
     ) {
+        // Note that cleaning here means cleaning the outputs of previous runs
         if clean {
-            S3::clear_dir(bucket_name.to_string(), format!("{workflow}").to_string()).await;
+            S3::clear_dir(
+                bucket_name.to_string(),
+                format!("{workflow}/outputs").to_string(),
+            )
+            .await;
         }
 
         match workflow {
@@ -90,15 +96,17 @@ impl Workflows {
                 }
             }
             AvailableWorkflow::MlInference => {
-                let mut host_path = S3::get_datasets_root();
-                host_path.push(format!("{workflow}"));
-                host_path.push("images-inference-1k");
-                S3::upload_dir(
-                    bucket_name.to_string(),
-                    host_path.display().to_string(),
-                    format!("{workflow}/images-inference-1k"),
-                )
-                .await;
+                for dataset in vec!["images-inference-1k", "model"] {
+                    let mut host_path = S3::get_datasets_root();
+                    host_path.push(format!("{workflow}"));
+                    host_path.push(format!("{dataset}"));
+                    S3::upload_dir(
+                        bucket_name.to_string(),
+                        host_path.display().to_string(),
+                        format!("{workflow}/{dataset}"),
+                    )
+                    .await;
+                }
             }
             AvailableWorkflow::WordCount => {
                 let mut host_path = S3::get_datasets_root();

@@ -1,4 +1,5 @@
-use crate::tasks::docker::Docker;
+use crate::env::Env;
+use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
 use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -98,7 +99,7 @@ pub struct EvalRunArgs {
     baseline: Vec<EvalBaseline>,
     #[arg(long, default_value = "3")]
     num_repeats: u32,
-    #[arg(long, default_value = "0")]
+    #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
 }
 
@@ -214,6 +215,7 @@ impl Eval {
     }
 
     fn run_kubectl_cmd(cmd: &str) -> String {
+        debug!("{}(eval): running kubectl command: {cmd}", Env::SYS_NAME);
         let args: Vec<&str> = cmd.split_whitespace().collect();
 
         let output = Command::new(Self::get_kubectl_cmd())
@@ -232,13 +234,21 @@ impl Eval {
             let output = Self::run_kubectl_cmd(&format!("-n {namespace} get pods -l {label} -o jsonpath='{{..status.conditions[?(@.type==\"Ready\")].status}}'"));
             let values: Vec<&str> = output.split_whitespace().collect();
 
+            debug!(
+                "{}(eval): waiting for {num_expected} pods (label: {label}) to be ready...",
+                Env::SYS_NAME
+            );
             if values.len() != num_expected {
-                debug!("invrs(eval): waiting for pods to be ready...");
+                debug!(
+                    "{}(eval): not enough pods: {} != {num_expected}",
+                    Env::SYS_NAME,
+                    values.len()
+                );
                 continue;
             }
 
             if !values.iter().all(|&item| item == "'True'") {
-                debug!("invrs(eval): waiting for pods to be ready...");
+                debug!("{}(eval): not enough pods in 'Ready' state", Env::SYS_NAME);
                 continue;
             }
 
@@ -287,14 +297,17 @@ impl Eval {
         workflow_yaml.push("workflow.yaml");
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
-            BTreeMap::from([(
-                "RUNTIME_CLASS_NAME",
-                match baseline {
-                    EvalBaseline::Knative => "kata-qemu",
-                    EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
-                    _ => panic!("woops"),
-                },
-            )]),
+            BTreeMap::from([
+                (
+                    "RUNTIME_CLASS_NAME",
+                    match baseline {
+                        EvalBaseline::Knative => "kata-qemu",
+                        EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
+                        _ => panic!("woops"),
+                    },
+                ),
+                ("TLESS_VERSION", &Env::get_version().unwrap()),
+            ]),
         );
 
         let mut kubectl = Command::new(Self::get_kubectl_cmd())
@@ -322,13 +335,17 @@ impl Eval {
         // Specific per-workflow wait command
         match workflow {
             AvailableWorkflow::Finra => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-private");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-public");
+                Self::wait_for_pod("tless", "tless.workflows/name=finra-merge");
             }
             AvailableWorkflow::MlTraining => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-partition");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-validation");
             }
             AvailableWorkflow::MlInference => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-load");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-partition");
             }
             AvailableWorkflow::WordCount => {
                 Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
@@ -416,52 +433,70 @@ impl Eval {
         // Specific per-workflow completion detection
         match workflow {
             AvailableWorkflow::Finra => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/merge/results.txt").as_str(),
-                )
-                .await
-                {
-                    Some(time) => exp_result.end_time = time,
+                let result_key = format!("{workflow}/outputs/merge/results.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+
+                        // For FINRA we also need to delete two other files
+                        // that we await on throughout workflow execution
+                        S3::clear_object(EVAL_BUCKET_NAME, "finra/outputs/fetch-public/trades")
+                            .await;
+                        S3::clear_object(EVAL_BUCKET_NAME, "finra/outputs/fetch-private/portfolio")
+                            .await;
+                    }
                     None => error!("invrs(eval): timed-out waiting for FINRA workload to finish"),
                 }
             }
             AvailableWorkflow::MlTraining => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/done.txt").as_str(),
-                )
-                .await
-                {
-                    Some(time) => exp_result.end_time = time,
+                let result_key = format!("{workflow}/outputs/done.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                    }
                     None => {
                         error!("invrs(eval): timed-out waiting for ML training workload to finish")
                     }
                 }
             }
             AvailableWorkflow::MlInference => {
-                // TODO: ML inference finishes off in a scale-out so it will
-                // have to be the driver who writes the file
+                // ML Inference finishes off in a scale-out, so we need to
+                // wait for as many functions as we have invoked
+
                 match S3::wait_for_key(
                     EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/done.txt").as_str(),
+                    format!("{workflow}/outputs/predict/done.txt").as_str(),
                 )
                 .await
                 {
-                    Some(time) => exp_result.end_time = time,
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        // Remove all the outputs directory
+                        S3::clear_dir(
+                            EVAL_BUCKET_NAME.to_string(),
+                            "ml-inference/outputs".to_string(),
+                        )
+                        .await;
+                    }
                     None => {
                         error!("invrs(eval): timed-out waiting for ML training workload to finish")
                     }
                 }
             }
             AvailableWorkflow::WordCount => {
-                match S3::wait_for_key(
-                    EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/aggregated-results.txt").as_str(),
-                )
-                .await
-                {
-                    Some(time) => exp_result.end_time = time,
+                // First wait for the result key
+                let result_key = format!("{workflow}/outputs/aggregated-results.txt");
+
+                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                    Some(time) => {
+                        // If succesful, remove the result key
+                        exp_result.end_time = time;
+                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                    }
                     None => {
                         error!("invrs(eval): timed-out waiting for Word Count workload to finish")
                     }
@@ -488,16 +523,18 @@ impl Eval {
 
         // Get the MinIO URL
         let minio_url = Self::run_kubectl_cmd("-n tless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
-
-        unsafe {
-            env::set_var("MINIO_URL", minio_url);
-        }
+        env::set_var("MINIO_URL", minio_url);
 
         // Upload the state for all workflows
-        Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+        // TODO: add progress bar
+        // TODO: consider re-using between baselines
+        // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
+        Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true)
+            .await;
 
         // Execute each workload individually
-        for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in vec![&AvailableWorkflow::MlInference] {
+            // AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
 
@@ -562,8 +599,8 @@ impl Eval {
     }
 
     fn upload_wasm() {
-        // Upload state for different workflows
-        let docker_tag = Docker::get_docker_tag("tless-experiments".to_string());
+        // Upload state for different workflows from the experiments container
+        let docker_tag = Docker::get_docker_tag(&DockerContainer::Experiments);
 
         for workflow in AvailableWorkflow::iter_variants() {
             let ctr_path = format!("/usr/local/faasm/wasm/{workflow}");
@@ -592,28 +629,24 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
-        unsafe {
-            env::set_var("FAASM_WASM_VM", wasm_vm);
-        }
+        env::set_var("FAASM_WASM_VM", wasm_vm);
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
 
         // Second, work-out the MinIO URL
         let mut minio_url = Self::run_faasmctl_cmd("s3.get-url");
         minio_url = minio_url.strip_suffix("\n").unwrap().to_string();
-        unsafe {
-            env::set_var("MINIO_URL", minio_url);
-        }
+        env::set_var("MINIO_URL", minio_url);
 
         // Upload the state for all workflows
         // TODO: uncomment me in a real deployment
         // TODO: add progress bar
+        // TODO: consider sharing if we have multiple baselines/workflows
         // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
 
         // Upload the WASM files for all workflows
-        // TODO: uncomment me in a real deployment
         // TODO: add progress bar
-        // Self::upload_wasm();
+        Self::upload_wasm();
 
         // Invoke each workflow
         for workflow in AvailableWorkflow::iter_variants() {

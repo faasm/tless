@@ -1,17 +1,37 @@
 use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
+use futures_util::StreamExt;
+use minio::s3::args::*;
+use minio::s3::client::ClientBuilder;
+use minio::s3::creds::StaticProvider;
+use minio::s3::error::Error;
+use minio::s3::http::BaseUrl;
+use minio::s3::types::ToStream;
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::{env, fs, io::BufRead, io::BufReader};
+use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use warp::Filter;
 
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
-static INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
+static BINARY_DIR: &str = "/workflows/build-native/ml-training";
+static MERGE_INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
+static WORKFLOW_NAME: &str = "ml-training(driver)";
+
+struct S3Data {
+    data: &'static str,
+}
+
+impl S3Data {
+    const HOST: S3Data = S3Data { data: "minio" };
+    const PORT: S3Data = S3Data { data: "9000" };
+    const USER: S3Data = S3Data { data: "minio" };
+    const PASSWORD: S3Data = S3Data { data: "minio123" };
+    const BUCKET: S3Data = S3Data { data: "tless" };
+}
 
 // We must wait for the POST event to go through before we can return, as
 // otherwise the chain may not make progress
@@ -49,95 +69,208 @@ pub fn process_event(mut event: Event) -> Event {
 
     event.set_source(match event.source().as_str() {
         "cli" => {
-            println!("cloudevent: executing 'splitter' from cli: {event}");
+            let func_name = "partition";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from cli: {event}");
 
-            Command::new(format!("{}/word-count_splitter", BINARY_DIR))
-                .current_dir(BINARY_DIR)
-                .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "minio")
-                .env("S3_PASSWORD", "minio123")
-                .env("S3_PORT", "9000")
-                .env("S3_USER", "minio")
-                .env("TLESS_S3_DIR", "word-count/few-files")
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .output()
-                .expect("tless(driver): failed executing command");
-
-            "splitter"
-        }
-        "splitter" => {
-            println!("tless(driver): executing 'mapper' from 'splitter': {event}");
-
-            let json_file = get_json_from_event(&event);
-            let s3_file = json_file
-                .get("input-file")
+            let json = get_json_from_event(&event);
+            let data_dir = json
+                .get("data-dir")
                 .and_then(Value::as_str)
-                .expect("foo");
+                .expect("ml-training(driver): error: cannot find 'data-dir' in CE");
 
-            // Simulate actual function execution by a sleep
-            Command::new(format!("{}/word-count_mapper", BINARY_DIR))
+            let num_pca_funcs: i64 = get_json_from_event(&event)
+                .get("num-pca-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-pca-funcs' in CE");
+
+            let num_train_funcs: i64 = get_json_from_event(&event)
+                .get("num-train-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
+
+            match Command::new(format!("{}/ml-training_{func_name}", BINARY_DIR))
                 .current_dir(BINARY_DIR)
                 .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                .env("S3_BUCKET", "tless")
-                .env("S3_HOST", "minio")
-                .env("S3_PASSWORD", "minio123")
-                .env("S3_PORT", "9000")
-                .env("S3_USER", "minio")
-                .env("TLESS_S3_FILE", s3_file)
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .arg(data_dir)
+                .arg(num_pca_funcs.to_string())
+                .arg(num_train_funcs.to_string())
+                .output()
+                .expect("ml-training(driver): error: spawning executing partition command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
+            }
+
+            "partition"
+        }
+        "partition" => {
+            let func_name = "pca";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from partition: {event}");
+
+            let pca_id: i64 = get_json_from_event(&event)
+                .get("pca-id")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'pca-id' in CE");
+
+            let num_pca_funcs: i64 = get_json_from_event(&event)
+                .get("num-pca-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
+
+            let num_train_funcs: i64 = get_json_from_event(&event)
+                .get("num-train-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
+
+            match Command::new(format!("{}/ml-training_{func_name}", BINARY_DIR))
+                .current_dir(BINARY_DIR)
+                .env("LD_LIBRARY_PATH", "/usr/local/lib")
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
+                .arg(pca_id.to_string())
+                .arg(format!("ml-training/outputs/partition/pca-{pca_id}"))
+                .arg(((num_train_funcs / num_pca_funcs) as i64).to_string())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
-                .expect("tless(driver): failed executing command");
+                .expect("ml-training(driver): failed executing command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
+            }
 
-            "mapper"
+            "pca"
         }
-        "mapper" => {
-            println!("tless(driver): executing 'reducer' from 'mapper': {event}");
+        "pca" => {
+            let func_name = "rf";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from 'pca': {event}");
 
-            let fan_out_scale: i64 = get_json_from_event(&event)
-                .get("scale-factor")
+            let pca_id: i64 = get_json_from_event(&event)
+                .get("pca-id")
                 .and_then(Value::as_i64)
-                .expect("foo");
+                .expect("ml-training(driver): error: cannot find 'pca-id' in CE");
 
-            // Increment an atomic counter, and only execute the reducer
-            // function when all fan-in functions have executed
-            let mut count = INVOCATION_COUNTER.lock().unwrap();
+            let rf_id: i64 = get_json_from_event(&event)
+                .get("rf-id")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'rf-id' in CE");
+
+            // Execute the function only after enough POST requests have
+            // been received
+            match Command::new(format!("{}/ml-training_{func_name}", BINARY_DIR))
+                .current_dir(BINARY_DIR)
+                .env("LD_LIBRARY_PATH", "/usr/local/lib")
+                .env("S3_BUCKET", S3Data::BUCKET.data)
+                .env("S3_HOST", S3Data::HOST.data)
+                .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                .env("S3_PORT", S3Data::PORT.data)
+                .env("S3_USER", S3Data::USER.data)
+                .arg(pca_id.to_string())
+                .arg(rf_id.to_string())
+                .arg(format!("ml-training/outputs/pca-{pca_id}/rf-{rf_id}-data"))
+                .arg(format!(
+                    "ml-training/outputs/pca-{pca_id}/rf-{rf_id}-labels"
+                ))
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .output()
+                .expect("ml-training(driver): failed executing 'rf' command")
+                .status
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
+            }
+
+            "rf"
+        }
+        "rf" => {
+            let func_name = "validation";
+            println!("{WORKFLOW_NAME}: executing '{func_name}' from 'rf': {event}");
+
+            let num_train_funcs: i64 = get_json_from_event(&event)
+                .get("num-train-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-audit' in CE");
+
+            let mut count = MERGE_INVOCATION_COUNTER.lock().unwrap();
             *count += 1;
-            println!("tless(driver): counted {}/{}", *count, fan_out_scale);
+            println!("${WORKFLOW_NAME}: counted {}/{}", *count, num_train_funcs);
 
-            if *count == fan_out_scale {
-                println!("tless(driver): done!");
+            if *count == num_train_funcs {
+                println!("${WORKFLOW_NAME}: done!");
 
-                // Execute the function only after enough POST requests have
-                // been received
-                Command::new(format!("{}/word-count_reducer", BINARY_DIR))
+                match Command::new(format!("{}/ml-training_{func_name}", BINARY_DIR))
                     .current_dir(BINARY_DIR)
                     .env("LD_LIBRARY_PATH", "/usr/local/lib")
-                    .env("S3_BUCKET", "tless")
-                    .env("S3_HOST", "minio")
-                    .env("S3_PASSWORD", "minio123")
-                    .env("S3_PORT", "9000")
-                    .env("S3_USER", "minio")
-                    .env(
-                        "TLESS_S3_RESULTS_DIR",
-                        "word-count/few-files/mapper-results",
-                    )
+                    .env("S3_BUCKET", S3Data::BUCKET.data)
+                    .env("S3_HOST", S3Data::HOST.data)
+                    .env("S3_PASSWORD", S3Data::PASSWORD.data)
+                    .env("S3_PORT", S3Data::PORT.data)
+                    .env("S3_USER", S3Data::USER.data)
+                    .arg("ml-training/outputs/rf-")
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .output()
-                    .expect("tless(reducer): failed executing command");
+                    .expect("ml-training(driver): failed executing 'validation' command")
+                    .status
+                    .code()
+                {
+                    Some(0) => {
+                        println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                    }
+                    Some(code) => {
+                        panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                    }
+                    None => {
+                        panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                    }
+                }
 
                 // Reset counter for next (warm) execution
-                println!("tless(reducer): resetting counter to 0");
+                println!("${WORKFLOW_NAME}: resetting counter to 0");
                 *count = 0;
             }
 
-            "reducer"
+            "validation"
         }
         _ => panic!(
-            "cloudevent: error: unrecognised source: {:}",
+            "{WORKFLOW_NAME}: error: unrecognised source: {:}",
             event.source()
         ),
     });
@@ -147,74 +280,133 @@ pub fn process_event(mut event: Event) -> Event {
     // -----
 
     match event.source().as_str() {
-        // Process the output of the 'splitter' function and chain to 'mapper'
-        "splitter" => {
-            // Read the output file to work-out the scale-out pattern and the
-            // files to chain-to
-            let mut lines: Vec<String> = Vec::new();
-            let file = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(format!("{}/{}", BINARY_DIR, "output_splitter.txt"))
-                .unwrap();
-            let reader = BufReader::new(file);
+        // Process the output of the 'partition' and chain to 'pca'
+        "partition" => {
+            let run_magic: i64 = get_json_from_event(&event)
+                .get("run-magic")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'run-magic' in CE");
 
-            for line in reader.lines() {
-                lines.push(line.unwrap());
-            }
+            let num_pca_funcs: i64 = get_json_from_event(&event)
+                .get("num-pca-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-pca-funcs' in CE");
 
-            // Store the destinattion channel
-            let dst = event.ty();
+            let num_train_funcs: i64 = get_json_from_event(&event)
+                .get("num-train-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
 
+            // This is the channel where PCA will post the CE too (given that
+            // PCA is a JobSink)
             let mut scaled_event = event.clone();
+            scaled_event.set_type("http://pca-to-rf-kn-channel.tless.svc.cluster.local");
 
-            // Write the new destination channel for the 'mapper' function
-            scaled_event.set_type("http://mapper-to-reducer-kn-channel.tless.svc.cluster.local");
-
-            println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
-
-            // JobSink executes one event per different CloudEvent id. So,
-            // to make sure we can re-run the whole workflow without
-            // re-deploying it, we generate random event ids
-            for i in 1..lines.len() {
+            for i in 1..num_pca_funcs {
+                // scaled_event.set_id((run_magic + i).to_string());
                 scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
-                    json!({"scale-factor": lines.len(), "input-file": lines[i]}),
+                    json!({"pca-id": i, "num-train-funcs": num_train_funcs, "run-magic": run_magic, "num-pca-funcs": num_pca_funcs}),
                 );
 
                 println!(
-                    "cloudevent(s1): posting to {dst} event {i}/{}: {scaled_event}",
-                    lines.len()
+                    "{WORKFLOW_NAME}: posting to {} event {i}/{num_pca_funcs}: {scaled_event}",
+                    event.ty(),
                 );
-                post_event(dst.to_string(), scaled_event.clone());
+                post_event(event.ty().to_string(), scaled_event.clone());
             }
 
-            // Return the last event through the HTTP respnse
+            // Update the event for the zero-th id (the one we return as part
+            // of the method)
+            // scaled_event.set_id((run_magic + 0).to_string());
             scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
-                json!({"scale-factor": lines.len(), "input-file": lines[0]}),
+                json!({"pca-id": 0, "num-train-funcs": num_train_funcs, "run-magic": run_magic, "num-pca-funcs": num_pca_funcs}),
             );
+
             scaled_event
         }
-        // Process the output of the 'mapper' function and chain to 'reducer'
-        "mapper" => {
-            // We still need to POST the event manually but we need to do
-            // it outside this method to be able to await on it (this method,
-            // itself, is being await-ed on when called in a server loop)
+        // Process the output of the 'pca' function and chain to 'rf'
+        "pca" => {
+            let pca_id: i64 = get_json_from_event(&event)
+                .get("pca-id")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'pca-id' in CE");
+
+            let run_magic: i64 = get_json_from_event(&event)
+                .get("run-magic")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'run-magic' in CE");
+
+            let num_train_funcs: i64 = get_json_from_event(&event)
+                .get("num-train-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-train-funcs' in CE");
+
+            let num_pca_funcs: i64 = get_json_from_event(&event)
+                .get("num-pca-funcs")
+                .and_then(Value::as_i64)
+                .expect("ml-training(driver): error: cannot find 'num-pca-funcs' in CE");
+
+            // This is the channel where RF will post the CE to (given that
+            // PCA is a JobSink)
+            let mut scaled_event = event.clone();
+
+            // Each PCA function chains to num_train_funcs / num_pca_funcs
+            // functions to avoid a fan-in/fan-out pattern
+            let this_func_scale: i64 = num_train_funcs / num_pca_funcs;
+            println!("{WORKFLOW_NAME}: scaling to {this_func_scale} RF functions");
+
+            let this_magic = run_magic + num_train_funcs * pca_id;
+            for i in 1..this_func_scale {
+                // scaled_event.set_id((this_magic + i).to_string());
+                scaled_event.set_id(Uuid::new_v4().to_string());
+                scaled_event.set_data(
+                    "aplication/json",
+                    json!({"pca-id": pca_id, "rf-id": i, "num-train-funcs": num_train_funcs}),
+                );
+
+                println!(
+                    "{WORKFLOW_NAME}: posting to {} event {i}/{this_func_scale}: {scaled_event}",
+                    event.ty(),
+                );
+                post_event(event.ty().to_string(), scaled_event.clone());
+
+                println!("${WORKFLOW_NAME}: sleeping for a bit...");
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+
+            // Update the event for the zero-th id (the one we return as part
+            // of the method)
+            // scaled_event.set_id((this_magic + 0).to_string());
+            scaled_event.set_id(Uuid::new_v4().to_string());
+            scaled_event.set_data(
+                "aplication/json",
+                json!({"pca-id": pca_id, "rf-id": 0, "num-train-funcs": num_train_funcs}),
+            );
+
+            scaled_event
+        }
+        // Process the output of the 'rf' function and chain to 'validation'
+        "rf" => {
+            // The event already contains the number of traiing functions,
+            // which is the fan-in that we need to wait-on, so we do not need
+            // to modify anything else other than the rigth channel to post
+            // the event to
+
+            event.set_type("http://rf-to-validation-kn-channel.tless.svc.cluster.local");
 
             event
         }
-        // Process the output of the 'redcuer' function
-        "reducer" => {
-            // Nothing to do after "reducer" as it is the last step in the chain
-
+        // Process the output of the 'validation' function
+        "validation" => {
+            // Nothing to do after "validation" as it is the last step in the chain
             event
         }
         _ => panic!(
-            "cloudevent: error: unrecognised destination: {:}",
+            "{WORKFLOW_NAME}: error: unrecognised destination: {:}",
             event.source()
         ),
     }
@@ -239,7 +431,7 @@ async fn main() {
             // step-two runs in a JobSink, the pod will terminate on exit, so
             // we need to make sure that the POST is sent before we move on
             println!(
-                "cloudevent(s2): posting to {} event: {processed_event}",
+                "{WORKFLOW_NAME}: posting to {} event: {processed_event}",
                 processed_event.ty()
             );
             post_event(processed_event.ty().to_string(), processed_event.clone())

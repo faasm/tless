@@ -3,7 +3,8 @@
 FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0
 
 # Install rust
-RUN curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y
+RUN rm -rf /root/.rustup \
+    && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y
 
 # Prepare repository structure
 RUN rm -rf /code \
@@ -12,7 +13,7 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 268a78df08955ceaf6307ba9b0a82bd2703b4ec7 \
+    && git checkout eef1e60e96e5446d256cb6a12585ecdaa7617249 \
     && git submodule update --init -f cpp \
     && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
@@ -23,10 +24,9 @@ RUN cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh libfaasm --clean \
     && git submodule update --init ./third-party/zlib \
     && ./bin/inv_wrapper.sh zlib \
-    # Build specific examples (TODO: build native versions too)
     && cd /code/faasm-examples \
     && git submodule update --init ./examples/opencv \
-    && ./bin/inv_wrapper.sh opencv
+    && ./bin/inv_wrapper.sh opencv opencv --native
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
@@ -34,5 +34,4 @@ RUN cd /code/faasm-examples \
     # Install faasmtools
     && ./bin/create_venv.sh \
     && source ./venv/bin/activate \
-    # TODO: for the moment this does not build all workflows for Knative
     && python3 ./workflows/build.py
