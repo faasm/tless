@@ -96,12 +96,13 @@ spec:
       template:
         spec:
           runtimeClassName: ${RUNTIME_CLASS_NAME}
-          restartPolicy: OnFailure
+            # restartPolicy: OnFailure
+          restartPolicy: Never
           containers:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:7fb6121394a8389ae8c6492334af8ac0fc285d469c83affc45549cfaac9a9f94
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:a605e90ce496702a5996f32502cf3a5c5b87cd38e4940925708fef5587fe3c0e
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-inference/knative
