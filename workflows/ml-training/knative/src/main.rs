@@ -14,6 +14,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 use warp::Filter;
 
 static BINARY_DIR: &str = "/workflows/build-native/ml-training";
@@ -351,7 +352,8 @@ pub fn process_event(mut event: Event) -> Event {
             scaled_event.set_type("http://pca-to-rf-kn-channel.tless.svc.cluster.local");
 
             for i in 1..num_pca_funcs {
-                scaled_event.set_id((run_magic + i).to_string());
+                // scaled_event.set_id((run_magic + i).to_string());
+                scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
                     json!({"pca-id": i, "num-train-funcs": num_train_funcs, "run-magic": run_magic, "num-pca-funcs": num_pca_funcs}),
@@ -366,7 +368,8 @@ pub fn process_event(mut event: Event) -> Event {
 
             // Update the event for the zero-th id (the one we return as part
             // of the method)
-            scaled_event.set_id((run_magic + 0).to_string());
+            // scaled_event.set_id((run_magic + 0).to_string());
+            scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
                 json!({"pca-id": 0, "num-train-funcs": num_train_funcs, "run-magic": run_magic, "num-pca-funcs": num_pca_funcs}),
@@ -407,7 +410,8 @@ pub fn process_event(mut event: Event) -> Event {
 
             let this_magic = run_magic + num_train_funcs * pca_id;
             for i in 1..this_func_scale {
-                scaled_event.set_id((this_magic + i).to_string());
+                // scaled_event.set_id((this_magic + i).to_string());
+                scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
                     json!({"pca-id": pca_id, "rf-id": i, "num-train-funcs": num_train_funcs}),
@@ -422,7 +426,8 @@ pub fn process_event(mut event: Event) -> Event {
 
             // Update the event for the zero-th id (the one we return as part
             // of the method)
-            scaled_event.set_id((this_magic + 0).to_string());
+            // scaled_event.set_id((this_magic + 0).to_string());
+            scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
                 json!({"pca-id": pca_id, "rf-id": 0, "num-train-funcs": num_train_funcs}),

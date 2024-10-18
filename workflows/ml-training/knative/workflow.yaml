@@ -88,7 +88,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:a2c932b4d2e82a91ef10788ed7c8c57567b9ad642fc7c8f5d07aa70f572712bd
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:5601b94797f2ab683fead4841d8a35bd27e286e81db1f29936a85984615acfc0
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
@@ -125,7 +125,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:a2c932b4d2e82a91ef10788ed7c8c57567b9ad642fc7c8f5d07aa70f572712bd
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:5601b94797f2ab683fead4841d8a35bd27e286e81db1f29936a85984615acfc0
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
