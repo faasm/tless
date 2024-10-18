@@ -33,6 +33,10 @@ spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
     kind: InMemoryChannel
+  delivery:
+    backoffDelay: PT10S
+    backoffPolicy: linear
+    retry: 10
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Channel
@@ -88,7 +92,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:5601b94797f2ab683fead4841d8a35bd27e286e81db1f29936a85984615acfc0
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
@@ -125,7 +129,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:5601b94797f2ab683fead4841d8a35bd27e286e81db1f29936a85984615acfc0
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
