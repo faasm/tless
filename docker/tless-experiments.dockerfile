@@ -15,7 +15,7 @@ RUN rm -rf /code \
     && cd /code/faasm-examples \
     && git checkout eef1e60e96e5446d256cb6a12585ecdaa7617249 \
     && git submodule update --init -f cpp \
-    && git clone -b workflows-knative https://github.com/faasm/experiment-tless /code/experiment-tless \
+    && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
 
 # Build specific libraries we need
