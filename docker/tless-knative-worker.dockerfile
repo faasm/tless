@@ -21,6 +21,13 @@ COPY --from=build \
 COPY --from=build \
     /code/faasm-examples/workflows/build-native/ml-training/ \
     /workflows/build-native/ml-training
+# ML Infenrence
+COPY --from=build \
+    /code/faasm-examples/workflows/ml-inference/knative/target/ \
+    /workflows/ml-inference/knative/target
+COPY --from=build \
+    /code/faasm-examples/workflows/build-native/ml-inference/ \
+    /workflows/build-native/ml-inference
 # Word Cont
 COPY --from=build \
     /code/faasm-examples/workflows/word-count/knative/target/ \

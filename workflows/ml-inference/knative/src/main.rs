@@ -14,8 +14,7 @@ use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;
 use warp::Filter;
 
-// static BINARY_DIR: &str = "/workflows/build-native/ml-inference";
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/ml-inference"; // DELETE ME
+static BINARY_DIR: &str = "/workflows/build-native/ml-inference";
 static WORKFLOW_NAME: &str = "ml-inference(driver)";
 
 struct S3Data {
@@ -23,8 +22,7 @@ struct S3Data {
 }
 
 impl S3Data {
-    // const HOST: S3Data = S3Data { data: "minio" };
-    const HOST: S3Data = S3Data { data: "localhost" }; // DELETE ME
+    const HOST: S3Data = S3Data { data: "minio" };
     const PORT: S3Data = S3Data { data: "9000" };
     const USER: S3Data = S3Data { data: "minio" };
     const PASSWORD: S3Data = S3Data { data: "minio123" };

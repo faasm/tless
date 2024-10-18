@@ -50,10 +50,12 @@ RUN cd /code/experiment-tless/ \
     && rm -rf /code/faasm-examples/workflows/libs \
     && rm -rf /code/faasm-examples/workflows/finra \
     && rm -rf /code/faasm-examples/workflows/ml-training \
+    && rm -rf /code/faasm-examples/workflows/ml-inference \
     && rm -rf /code/faasm-examples/workflows/word-count \
     && cp -r /code/experiment-tless/workflows/libs /code/faasm-examples/workflows/libs \
     && cp -r /code/experiment-tless/workflows/finra /code/faasm-examples/workflows/finra \
     && cp -r /code/experiment-tless/workflows/ml-training /code/faasm-examples/workflows/ml-training \
+    && cp -r /code/experiment-tless/workflows/ml-inference /code/faasm-examples/workflows/ml-inference \
     && cp -r /code/experiment-tless/workflows/word-count /code/faasm-examples/workflows/word-count
 
 # Build workflow code (WASM for Faasm + Native for Knative)
