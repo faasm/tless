@@ -3,7 +3,8 @@
 FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0
 
 # Install rust
-RUN curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y
+RUN rm -rf /root/.rustup \
+    && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y
 
 # Prepare repository structure
 RUN rm -rf /code \

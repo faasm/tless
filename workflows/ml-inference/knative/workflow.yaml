@@ -7,7 +7,7 @@
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: ingress-to-fetch-public
+  name: ingress-to-partition
   namespace: tless
 spec:
   channelTemplate:
@@ -17,7 +17,7 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: ingress-to-fetch-private
+  name: partition-to-pca
   namespace: tless
 spec:
   channelTemplate:
@@ -27,17 +27,21 @@ spec:
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: fetch-to-audit
+  name: pca-to-rf
   namespace: tless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
     kind: InMemoryChannel
+  delivery:
+    backoffDelay: PT10S
+    backoffPolicy: linear
+    retry: 10
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
-  name: audit-to-merge
+  name: rf-to-validation
   namespace: tless
 spec:
   channelTemplate:
@@ -47,7 +51,7 @@ spec:
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: finra-fetch-public
+  name: ml-training-partition
   namespace: tless
 spec:
   template:
@@ -57,34 +61,11 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /workflows/finra/knative
+          workingDir: /workflows/ml-training/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
-        tless.workflows/name: finra-fetch-public
-      annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
----
-apiVersion: serving.knative.dev/v1
-kind: Service
-metadata:
-  name: finra-fetch-private
-  namespace: tless
-spec:
-  template:
-    spec:
-      runtimeClassName: ${RUNTIME_CLASS_NAME}
-      containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-          ports:
-            - containerPort: 8080
-          workingDir: /workflows/finra/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
-    metadata:
-      labels:
-        tless.workflows/name: finra-fetch-private
+        tless.workflows/name: ml-training-partition
       annotations:
         # NOTE: we may have to enable this annotation in Kata's config file
         # under hypervisor.qemu.enable_annotations (add 'default_memory')
@@ -93,7 +74,7 @@ spec:
 apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
 metadata:
-  name: finra-audit
+  name: ml-training-pca
   namespace: tless
 spec:
   job:
@@ -111,17 +92,54 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:c6e577ddc93f7338582a63fc5191d1b3e94879f4c42e5fd00c20ca393eeb0b5c
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
               ports:
                 - containerPort: 8080
-              workingDir: /workflows/finra/knative
+              workingDir: /workflows/ml-training/knative
               command: [ "./target/release/tless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
         metadata:
           labels:
-            tless.workflows/name: finra-audit
+            tless.workflows/name: ml-training-pca
+          annotations:
+            # NOTE: we may have to enable this annotation in Kata's config file
+            # under hypervisor.qemu.enable_annotations (add 'default_memory')
+            io.katacontainers.config.hypervisor.default_memory: "6144"
+---
+apiVersion: sinks.knative.dev/v1alpha1
+kind: JobSink
+metadata:
+  name: ml-training-rf
+  namespace: tless
+spec:
+  job:
+    spec:
+      completions: 1
+      parallelism: 1
+      backoffLimit: 4
+      # Clean-up jobs once they are finished
+      ttlSecondsAfterFinished: 30
+      template:
+        spec:
+          runtimeClassName: ${RUNTIME_CLASS_NAME}
+          restartPolicy: OnFailure
+          containers:
+            - name: main
+              # TODO: pin to version
+              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:4ec4c03503cb12bad81a1ccbb18ecc82df8416ed58390ff00219958aeec97995
+              ports:
+                - containerPort: 8080
+              workingDir: /workflows/ml-training/knative
+              command: [ "./target/release/tless-cloudevent-handler" ]
+              env:
+                - name: CE_FROM_FILE
+                  value: "on"
+        metadata:
+          labels:
+            tless.workflows/name: ml-training-rf
           annotations:
             # NOTE: we may have to enable this annotation in Kata's config file
             # under hypervisor.qemu.enable_annotations (add 'default_memory')
@@ -130,7 +148,7 @@ spec:
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: finra-merge
+  name: ml-training-validation
   namespace: tless
 spec:
   template:
@@ -140,11 +158,11 @@ spec:
         - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
-          workingDir: /workflows/finra/knative
+          workingDir: /workflows/ml-training/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
     metadata:
       labels:
-        tless.workflows/name: finra-merge
+        tless.workflows/name: ml-training-validation
       annotations:
         # High grace-period to guarantee the same instance processes requests
         # for all jobs in the JobSink (i.e. instances of the audit function)
@@ -162,17 +180,17 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: ingress-to-fetch-public
+    name: ingress-to-partition
   reply:
     ref:
       apiVersion: messaging.knative.dev/v1
       kind: InMemoryChannel
-      name: fetch-to-audit
+      name: partition-to-pca
   subscriber:
     ref:
       apiVersion: serving.knative.dev/v1
       kind: Service
-      name: finra-fetch-public
+      name: ml-training-partition
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -183,17 +201,12 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: ingress-to-fetch-private
-  reply:
-    ref:
-      apiVersion: messaging.knative.dev/v1
-      kind: InMemoryChannel
-      name: fetch-to-audit
+    name: partition-to-pca
   subscriber:
     ref:
-      apiVersion: serving.knative.dev/v1
-      kind: Service
-      name: finra-fetch-private
+      apiVersion: sinks.knative.dev/v1alpha1
+      kind: JobSink
+      name: ml-training-pca
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -204,12 +217,12 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: fetch-to-audit
+    name: pca-to-rf
   subscriber:
     ref:
       apiVersion: sinks.knative.dev/v1alpha1
       kind: JobSink
-      name: finra-audit
+      name: ml-training-rf
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
@@ -220,10 +233,10 @@ spec:
   channel:
     apiVersion: messaging.knative.dev/v1
     kind: Channel
-    name: audit-to-merge
+    name: rf-to-validation
   subscriber:
     ref:
       apiVersion: serving.knative.dev/v1
       kind: Service
-      name: finra-merge
+      name: ml-training-validation
 ---

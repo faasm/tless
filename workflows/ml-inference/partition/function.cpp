@@ -72,19 +72,16 @@ int main(int argc, char** argv)
     s3dir = parts.at(0);
     numInfFuncs = std::stoi(parts.at(1));
 #else
-    s3::initS3Wrapper();
-    s3::S3Wrapper s3cli;
-
-    // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
-    if (s3dirChar == nullptr) {
-        std::cerr << "ml-inference(partition): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
-
+    if (argc != 3) {
+        std::cerr << "ml-inference(partition): error parsing driver input" << std::endl;
         return 1;
     }
-    s3dir.assign(s3dirChar);
+
+    s3dir = argv[1];
+    numInfFuncs = std::stoi(argv[2]);
+
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
 #endif
 
     // Get the list of files for each PCA function
@@ -94,7 +91,8 @@ int main(int argc, char** argv)
               << numInfFuncs
               << " inference functions"
               << std::endl;
-    std::vector<std::string> s3files(numInfFuncs);
+
+    std::vector<std::vector<std::string>> s3files(numInfFuncs);
 
 #ifdef __faasm
     int numKeys = __faasm_s3_get_num_keys_with_prefix(
