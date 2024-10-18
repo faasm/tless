@@ -33,55 +33,6 @@ impl S3Data {
     const BUCKET: S3Data = S3Data { data: "tless" };
 }
 
-pub async fn wait_for_key(key_name: &str) {
-    let base_url = format!("http://{}:{}", S3Data::HOST.data, S3Data::PORT.data)
-        .parse::<BaseUrl>()
-        .unwrap();
-
-    let static_provider = StaticProvider::new(S3Data::USER.data, S3Data::PASSWORD.data, None);
-    let client = ClientBuilder::new(base_url.clone())
-        .provider(Some(Box::new(static_provider)))
-        .build()
-        .unwrap();
-
-    // Return fast if the bucket does not exist
-    let exists: bool = client
-        .bucket_exists(&BucketExistsArgs::new(&S3Data::BUCKET.data).unwrap())
-        .await
-        .unwrap();
-
-    if !exists {
-        panic!(
-            "{WORKFLOW_NAME}: waiting for key ({key_name}) in non-existant bucket: {}",
-            S3Data::BUCKET.data
-        );
-    }
-
-    // Loop until the object appears
-    loop {
-        let mut objects = client
-            .list_objects(&S3Data::BUCKET.data)
-            .recursive(true)
-            .prefix(Some(key_name.to_string()))
-            .to_stream()
-            .await;
-
-        while let Some(result) = objects.next().await {
-            match result {
-                Ok(_) => return,
-                Err(e) => match e {
-                    Error::S3Error(s3_error) => match s3_error.code.as_str() {
-                        _ => panic!("{WORKFLOW_NAME}: error: {}", s3_error.message),
-                    },
-                    _ => panic!("{WORKFLOW_NAME}: error: {}", e),
-                },
-            }
-        }
-
-        thread::sleep(time::Duration::from_secs(2));
-    }
-}
-
 // We must wait for the POST event to go through before we can return, as
 // otherwise the chain may not make progress
 pub fn post_event(dest: String, event: Event) -> JoinHandle<()> {
@@ -469,23 +420,6 @@ async fn main() {
             let file_contents = fs::read_to_string("/etc/jobsink-event/event").unwrap();
             let json_value = serde_json::from_str(&file_contents).unwrap();
             let event: Event = serde_json::from_value(json_value).unwrap();
-
-            // The 'audit' function needs both the 'fetch-public' and
-            // 'fetch-private' functions to execute before it can start. At
-            // the same time, it is a JobSink, so it is invoked only once,
-            // and not as a long-running HTTP server. As a consequence, we
-            // cannot use our trick with the static shared counter. Instead,
-            // we make sure both 'fetch-public' and 'fetch-private' only
-            // trigger one job (using the same id), and here we wait for
-            // both of them to finish
-            let keys_to_wait = vec![
-                "finra/outputs/fetch-public/trades",
-                "finra/outputs/fetch-private/portfolio",
-            ];
-            for key_to_wait in keys_to_wait {
-                println!("{WORKFLOW_NAME}: audit: waiting for key {key_to_wait}");
-                wait_for_key(key_to_wait).await;
-            }
 
             let processed_event = process_event(event);
 

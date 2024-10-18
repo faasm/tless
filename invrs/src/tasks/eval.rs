@@ -340,10 +340,11 @@ impl Eval {
                 Self::wait_for_pod("tless", "tless.workflows/name=finra-merge");
             }
             AvailableWorkflow::MlTraining => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-partition");
+                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-validation");
             }
             AvailableWorkflow::MlInference => {
-                panic!("invrs(eval): FINRA workload not implemented for KNative");
+                panic!("invrs(eval): ML inference workload not implemented for KNative");
             }
             AvailableWorkflow::WordCount => {
                 Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
@@ -523,11 +524,11 @@ impl Eval {
         // TODO: add progress bar
         // TODO: consider re-using between baselines
         // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::Finra, EVAL_BUCKET_NAME, true)
+        Workflows::upload_workflow_state(&AvailableWorkflow::MlTraining, EVAL_BUCKET_NAME, true)
             .await;
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::Finra] {
+        for workflow in vec![&AvailableWorkflow::MlTraining] {
             // AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
