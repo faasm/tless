@@ -96,15 +96,17 @@ impl Workflows {
                 }
             }
             AvailableWorkflow::MlInference => {
-                let mut host_path = S3::get_datasets_root();
-                host_path.push(format!("{workflow}"));
-                host_path.push("images-inference-1k");
-                S3::upload_dir(
-                    bucket_name.to_string(),
-                    host_path.display().to_string(),
-                    format!("{workflow}/images-inference-1k"),
-                )
-                .await;
+                for dataset in vec!["images-inference-1k", "model"] {
+                    let mut host_path = S3::get_datasets_root();
+                    host_path.push(format!("{workflow}"));
+                    host_path.push(format!("{dataset}"));
+                    S3::upload_dir(
+                        bucket_name.to_string(),
+                        host_path.display().to_string(),
+                        format!("{workflow}/{dataset}"),
+                    )
+                    .await;
+                }
             }
             AvailableWorkflow::WordCount => {
                 let mut host_path = S3::get_datasets_root();

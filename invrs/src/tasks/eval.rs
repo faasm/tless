@@ -464,17 +464,12 @@ impl Eval {
                 }
             }
             AvailableWorkflow::MlInference => {
-                error!(
-                    "{}: error: make sure you have correctly set the end condition!",
-                    Env::SYS_NAME
-                );
-
                 // ML Inference finishes off in a scale-out, so we need to
                 // wait for as many functions as we have invoked
 
                 match S3::wait_for_key(
                     EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/inference/done.txt").as_str(),
+                    format!("{workflow}/outputs/predict/done.txt").as_str(),
                 )
                 .await
                 {
@@ -534,11 +529,11 @@ impl Eval {
         // TODO: add progress bar
         // TODO: consider re-using between baselines
         // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::MlTraining, EVAL_BUCKET_NAME, true)
+        Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true)
             .await;
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::MlTraining] {
+        for workflow in vec![&AvailableWorkflow::MlInference] {
             // AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);

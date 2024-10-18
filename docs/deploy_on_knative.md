@@ -7,6 +7,20 @@ run the following:
 # TODO
 ```
 
+### Notes on Knative
+
+We need to edit the InMemoryChannel dispatcher
+
+```
+kubectl edit configmap config-imc-event-dispatcher -n knative-eventing
+
+deliveryTimeout: "30s"
+dispatcherConcurrency: 10
+```
+
+or alternatively try not to send many messages at once to the same InMemoryChannel.
+In the future we should move to Kafka.
+
 ### CoCo Troubleshooting
 
 #### Error Canonicalizing
