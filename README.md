@@ -8,8 +8,7 @@ two points in the design space for confidential serverless:
 - [Faasm + SGX](https://github.com/faasm/faasm/tree/main/src/enclave): a port
   of the [Faasm](https://github.com/faasm/faasm) to run WASM sandboxes inside SGX.
 - [CC-Knative](https:github.com/coco-serverless/coco-serverless): a port of the
-  [Knative](https://knative.dev) runtime to run Knative services as container
-  functions inside confidential VMs (AMD SEV).
+  [Knative](https://knative.dev) runtime to run Knative services as container functions inside confidential VMs (AMD SEV).
 
 To execute any code snippet in this repository, we will assume that you have
 activated your virtual environment:

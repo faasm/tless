@@ -35,32 +35,3 @@ RUN cd /code/faasm-examples \
     && ./bin/create_venv.sh \
     && source ./venv/bin/activate \
     && python3 ./workflows/build.py
-
-##########
-# DELETE ALL THE REST
-#########
-
-# Temporary workaround to, increasingly, patch workloads. We must manually
-# select the directories to overwrite, to minimize build times (which are,
-# alas, often)
-ARG TMP_VER=unknown
-RUN cd /code/experiment-tless/ \
-    && git pull origin workflows-knative \
-    && cp /code/experiment-tless/workflows/build.py /code/faasm-examples/workflows/build.py \
-    && rm -rf /code/faasm-examples/workflows/libs \
-    && rm -rf /code/faasm-examples/workflows/finra \
-    && rm -rf /code/faasm-examples/workflows/ml-training \
-    && rm -rf /code/faasm-examples/workflows/ml-inference \
-    && rm -rf /code/faasm-examples/workflows/word-count \
-    && cp -r /code/experiment-tless/workflows/libs /code/faasm-examples/workflows/libs \
-    && cp -r /code/experiment-tless/workflows/finra /code/faasm-examples/workflows/finra \
-    && cp -r /code/experiment-tless/workflows/ml-training /code/faasm-examples/workflows/ml-training \
-    && cp -r /code/experiment-tless/workflows/ml-inference /code/faasm-examples/workflows/ml-inference \
-    && cp -r /code/experiment-tless/workflows/word-count /code/faasm-examples/workflows/word-count
-
-# Build workflow code (WASM for Faasm + Native for Knative)
-ENV PATH=${PATH}:/root/.cargo/bin
-RUN cd /code/faasm-examples \
-    && source ./bin/workon.sh \
-    && source ./venv/bin/activate \
-    && python3 ./workflows/build.py
