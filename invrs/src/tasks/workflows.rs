@@ -64,8 +64,13 @@ impl Workflows {
         bucket_name: &str,
         clean: bool,
     ) {
+        // Note that cleaning here means cleaning the outputs of previous runs
         if clean {
-            S3::clear_dir(bucket_name.to_string(), format!("{workflow}").to_string()).await;
+            S3::clear_dir(
+                bucket_name.to_string(),
+                format!("{workflow}/outputs").to_string(),
+            )
+            .await;
         }
 
         match workflow {

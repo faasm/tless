@@ -143,15 +143,13 @@ int main(int argc, char** argv)
         }
     }
 #else
-    auto rawS3files = s3cli.listKeys(bucketName);
+    auto rawS3files = s3cli.listKeys(bucketName, s3dir);
+    std::cout << "ml-inference(partition): partitioning " << rawS3files.size() << " files..." << std::endl;
     for (int i = 0; i < rawS3files.size(); i++) {
         auto key = rawS3files.at(i);
         int funcIdx = i % numInfFuncs;
 
-        // Filter by prefix
-        if (key.rfind(s3dir, 0) == 0) {
-            s3files.push_back(key);
-        }
+        s3files.at(funcIdx).push_back(key);
     }
 #endif
 
@@ -175,6 +173,12 @@ int main(int argc, char** argv)
         s3cli.addKeyStr(bucketName, key, fileNames);
 #endif
     }
+
+#ifndef __faasm
+    // Add a file to let know we are done partitioning
+    s3cli.addKeyStr(bucketName, "ml-inference/outputs/partition/done.txt", "done");
+    s3::shutdownS3Wrapper();
+#endif
 
     return 0;
 }

@@ -26,4 +26,3 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
     target_link_directories(ml-training_pca PRIVATE /usr/local/lib/opencv2)
     target_link_directories(ml-training_rf PRIVATE /usr/local/lib/opencv2)
 endif ()
-

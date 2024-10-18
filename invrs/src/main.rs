@@ -85,6 +85,15 @@ enum S3Command {
         #[arg(long)]
         prefix: String,
     },
+    /// Download a directory from S3 to the host
+    GetDir {
+        #[arg(long, default_value = "tless")]
+        bucket_name: String,
+        #[arg(long)]
+        s3_path: String,
+        #[arg(long)]
+        host_path: String,
+    },
     /// Clear a sub-tree in an S3 bucket indicated by a prefix
     GetKey {
         #[arg(long, default_value = "tless")]
@@ -182,6 +191,13 @@ async fn main() {
                 prefix,
             } => {
                 S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
+            }
+            S3Command::GetDir {
+                bucket_name,
+                s3_path,
+                host_path,
+            } => {
+                S3::get_dir(bucket_name, s3_path, host_path).await;
             }
             S3Command::GetKey { bucket_name, key } => {
                 let key_contents = S3::get_key(bucket_name, key).await;

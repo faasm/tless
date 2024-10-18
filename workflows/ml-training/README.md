@@ -11,7 +11,6 @@ In this workflow we train a random forest model using the MNIST 10k dataset.
 First, upload the images:
 
 ```bash
-# Clean bucket first (really?)
 faasmctl s3.clear-bucket --bucket ${BUCKET_NAME}
 
 # Upload all data files in the directory
@@ -60,7 +59,7 @@ Second, upload the images:
 ```bash
 export MINIO_URL=$(kubectl -n tless get services -o jsonpath='{.items[?(@.metadata.name=="minio")].spec.clusterIP}')
 
-# Clean bucket first (really?)
+# Clean dir
 invrs s3 clear-dir --prefix ml-training
 
 # Upload all data files in the directory

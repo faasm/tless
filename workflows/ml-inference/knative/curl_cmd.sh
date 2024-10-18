@@ -16,13 +16,8 @@ curl -X POST -v \
    -H "ce-specversion: 1.0" \
    -H "ce-type: http://all-to-inference-kn-channel.tless.svc.cluster.local" \
    -H "ce-id: 1" \
-   -H "ce-source: cli-partition" \
-   -d '{"model-dir": "ml-inference/model", "num-inf-funcs": 12, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
+   -H "ce-source: pre-inf" \
+   -d '{"inf-id": 0, "model-dir": "ml-inference/model", "data-dir": "ml-inference/images-inference-1k", "num-inf-funcs": 12, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
    http://localhost:8080
 
 # Change this to test partition
-# -H "ce-source: cli" \
-# -d '{"data-dir": "ml-training/mnist-images-10k", "num-pca-funcs": 2, "num-train-funcs": 8, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
-
-# Change this for mnist-images-10k
-# -d '{"data-dir": "ml-training/mnist-images-10k", "num-pca-funcs": 2, "num-train-funcs": 8, "run-magic": '"${THIS_RUN_MAGIC}}"'' \

@@ -468,15 +468,24 @@ impl Eval {
                     Env::SYS_NAME
                 );
 
-                // TODO: ML inference finishes off in a scale-out so it will
-                // have to be the driver who writes the file
+                // ML Inference finishes off in a scale-out, so we need to
+                // wait for as many functions as we have invoked
+
                 match S3::wait_for_key(
                     EVAL_BUCKET_NAME,
-                    format!("{workflow}/outputs/done.txt").as_str(),
+                    format!("{workflow}/outputs/inference/done.txt").as_str(),
                 )
                 .await
                 {
-                    Some(time) => exp_result.end_time = time,
+                    Some(time) => {
+                        exp_result.end_time = time;
+                        // Remove all the outputs directory
+                        S3::clear_dir(
+                            EVAL_BUCKET_NAME.to_string(),
+                            "ml-inference/outputs".to_string(),
+                        )
+                        .await;
+                    }
                     None => {
                         error!("invrs(eval): timed-out waiting for ML training workload to finish")
                     }
