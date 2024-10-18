@@ -52,8 +52,8 @@ This repository implements four different workflows:
 | Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
 |---|---|---|---|---|---|---|
 | FINRA | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
-| ML Training | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: | :x: |
-| ML Inference | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: | :x: |
+| ML Training | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
+| ML Inference | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
 | Word Count | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
 
 ## Experiments
