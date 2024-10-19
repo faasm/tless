@@ -18,14 +18,18 @@ endif ()
 # Build TLess C++ library
 add_subdirectory(libs/tless)
 
+# Un-comment to enable U-Bench
+# target_compile_definitions(tless PUBLIC TLESS_UBENCH)
+
 # Prepare variables for workflow compilation
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     set(TLESS_WORKFLOW_HEADERS ${CMAKE_CURRENT_LIST_DIR}/libs/tless)
     set(TLESS_WORKFLOW_LIBS faasm tless)
 
     # Test executable for debugging purposes
-    # TODO: delete me
+    # TODO: rename to ubench
     add_executable(tless_test test.cpp)
+    target_compile_definitions(tless_test PUBLIC TLESS_UBENCH)
     target_link_libraries(tless_test ${TLESS_WORKFLOW_LIBS})
     target_include_directories(tless_test PUBLIC ${TLESS_WORKFLOW_HEADERS})
 else ()
@@ -43,7 +47,7 @@ else ()
     )
 
     # Test executable for debugging purposes
-    # TODO: delete me
+    # TODO: re-purpose as ubench
     add_executable(tless_test_native test.cpp)
     target_link_libraries(tless_test_native ${TLESS_WORKFLOW_LIBS})
     target_include_directories(tless_test_native PUBLIC ${TLESS_WORKFLOW_HEADERS})

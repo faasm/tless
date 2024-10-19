@@ -53,7 +53,6 @@ def compile(wasm=False, native=False, debug=False):
 
         run(cmake_cmd, shell=True, check=True, cwd=build_dir)
         run("ninja tless_test_native", shell=True, check=True, cwd=build_dir)
-    return
 
     for wflow in WORKFLOWS:
         for function in WORKFLOWS[wflow]:
@@ -109,4 +108,4 @@ if __name__ == "__main__":
     compile(native=True, debug=debug)
 
     # Second, build the driver function for Knative
-    # compile_driver(debug=debug)
+    compile_driver(debug=debug)

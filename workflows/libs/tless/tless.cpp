@@ -17,11 +17,50 @@
 #endif
 
 #include <iostream>
+#ifdef TLESS_UBENCH
+#include <chrono>
+#endif
 #include <string>
 #include <vector>
 #include <utility>
 
 #define AES256CM_NONCE_SIZE 12
+
+#ifdef TLESS_UBENCH
+typedef std::chrono::time_point<std::chrono::high_resolution_clock> TimePoint;
+std::vector<std::pair<std::string, TimePoint>> timePoints;
+
+#define NOW std::chrono::high_resolution_clock::now()
+
+void prettyPrintTimePoints()
+{
+    TimePoint prevTimePoint;
+    std::string prevLabel;
+
+    std::cout << "###################### TLess Timing #####################" << std::endl;
+    for (const auto& [label, tp] : timePoints) {
+        if (!prevLabel.empty()) {
+            std::chrono::duration<double, std::milli> duration = tp - prevTimePoint;
+            std::cout << prevLabel
+                      << " to "
+                      << label
+                      << ": "
+                      << duration.count()
+                      << " ms"
+                      << std::endl;
+        }
+
+        prevLabel = label;
+        prevTimePoint = tp;
+    }
+
+    std::chrono::duration<double, std::milli> total =
+      timePoints.at(timePoints.size() -1).second - timePoints.at(0).second;
+    std::cout << "Total: " << total.count() << " ms" << std::endl;
+    std::cout << "#########################################################" << std::endl;
+}
+
+#endif
 
 // FIXME(tless-prod): this symmetric key is shared by all TEEs, and would be
 // provided by the MAA upon succesful attestation
@@ -48,10 +87,17 @@ static bool validHardwareAttestation()
 {
 #ifdef __faasm
     // Get SGX quote and send it to MAA, get JWT in return
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("get-hw-att-begin", NOW));
+#endif
     char* jwt;
     int32_t jwtSize;
     __tless_get_attestation_jwt(&jwt, &jwtSize);
     std::string jwtStr(jwt);
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("get-hw-att-end", NOW));
+#endif
 
     // Verify JWT signature
     bool valid = tless::jwt::verify(jwtStr);
@@ -62,7 +108,7 @@ static bool validHardwareAttestation()
     // Check signed JWT comes from the expected attestation service and has
     // the same MRENCLAVE we do
     if (!tless::jwt::checkProperty(jwt, "jku", ATT_PROVIDER_JKU)) {
-        std::cout << "Failed to validate JWT JKU" << std::endl;
+        std::cout << "tless: error: failed to validate JWT JKU" << std::endl;
         return false;
     }
 
@@ -72,7 +118,7 @@ static bool validHardwareAttestation()
     __tless_get_mrenclave(mrEnclave.data(), mrEnclave.size());
     std::string mrEnclaveHex = tless::utils::byteArrayToHexString(mrEnclave.data(), mrEnclave.size());
     if (!tless::jwt::checkProperty(jwt, "sgx-mrenclave", mrEnclaveHex)) {
-        std::cout << "Failed to validate MrEnclave" << std::endl;
+        std::cout << "tless: error: failed to validate MrEnclave" << std::endl;
         return false;
     }
 
@@ -82,6 +128,10 @@ static bool validHardwareAttestation()
     // We still do not have implemented this functionality in the MAA
 #else
     // For SNP we could just use snpguest crate from here
+#endif
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("hw-att-validate-end", NOW));
 #endif
 
     return true;
@@ -101,6 +151,10 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     if (!on()) {
         return true;
     }
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("begin", NOW));
+#endif
 
 #ifndef __faasm
     s3::initS3Wrapper();
@@ -126,6 +180,10 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     std::vector<uint8_t> hashedDag = tless::sha256::hash(serializedDag);
     std::string dagHexDigest = tless::utils::byteArrayToHexString(hashedDag.data(), hashedDag.size());
 
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end-fetch-exec", NOW));
+#endif
+
     // -----------------------------------------------------------------------
     // 1. Get TEE certificate
     // 1.1. Generate quote w/ public key for MAA
@@ -149,6 +207,10 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     //      step
     // -----------------------------------------------------------------------
 
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("begin-fetch-dec-cpabe", NOW));
+#endif
+
     // Fetch the (encrypted) CP-ABE context from S3
     std::vector<uint8_t> ctCtx;
     // This key is hard-coded in tlessctl/src/tasks/dag.rs
@@ -164,17 +226,13 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     std::vector<uint8_t> ctCtxTrimmed(ctCtx.begin() + AES256CM_NONCE_SIZE, ctCtx.end());
     auto ptCtx = tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceCtx, ctCtxTrimmed);
 
-    // Initialize CP-ABE context
-    auto& ctx = tless::abe::CpAbeContextWrapper::get(tless::abe::ContextFetchMode::FromBytes, ptCtx);
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end-fetch-dec-cpabe", NOW));
+#endif
 
-    // Generate our set of attributes from the place we occupy in the dag
-    std::vector<std::string> attributes = {teeIdentity, dagHexDigest};
-    // TODO: this does not work well for functions with more than one parent!
-    auto expectedChain = tless::dag::getCallChain(dag, function);
-
-    for (int i = 0; i < expectedChain.size() - 1; i++) {
-        attributes.push_back(expectedChain.at(i));
-    }
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("begin-fetch-dec-cert-chain", NOW));
+#endif
 
     // Fetch the certificate chain for us. The certificate chain is wrapped
     // around an AES-encrypted bundle, and then CP-ABE encrypted
@@ -191,12 +249,36 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     std::vector<uint8_t> ctCertChain(ctAesCertChain.begin() + AES256CM_NONCE_SIZE, ctAesCertChain.end());
     auto ptAesCertChain = tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceCertChain, ctCertChain);
 
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end-fetch-dec-cert-chain", NOW));
+#endif
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("begin-gen-ecf-id", NOW));
+#endif
+
+    // Initialize CP-ABE context
+    auto& ctx = tless::abe::CpAbeContextWrapper::get(tless::abe::ContextFetchMode::FromBytes, ptCtx);
+
+    // Generate our set of attributes from the place we occupy in the dag
+    std::vector<std::string> attributes = {teeIdentity, dagHexDigest};
+    // TODO: this does not work well for functions with more than one parent!
+    auto expectedChain = tless::dag::getCallChain(dag, function);
+
+    for (int i = 0; i < expectedChain.size() - 1; i++) {
+        attributes.push_back(expectedChain.at(i));
+    }
+
     // Now use our attributes to decrypt the actual contents of the cert chain
     auto certChain = ctx.cpAbeDecrypt(attributes, ptAesCertChain);
     if (certChain.empty()) {
         std::cerr << "tless: error decrypting certificate chain" << std::endl;
         return false;
     }
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end-gen-ecf-id", NOW));
+#endif
 
     // Note that, succesful validation, implies that the function is called
     // in the right order. That being said, we double-check it here too
@@ -239,10 +321,21 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     // 3.2. Decrypt function code
     // -----------------------------------------------------------------------
 
-    std::cout << "still VERY VERY strong!" << std::endl;
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("begin-fetch-exec-token", NOW));
+#endif
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end-fetch-exec-token", NOW));
+#endif
 
 #ifndef __faasm
     s3::shutdownS3Wrapper();
+#endif
+
+#ifdef TLESS_UBENCH
+    timePoints.push_back(std::make_pair("end", NOW));
+    prettyPrintTimePoints();
 #endif
 
     return true;
