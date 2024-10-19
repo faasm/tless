@@ -523,7 +523,9 @@ impl Eval {
 
         // Get the MinIO URL
         let minio_url = Self::run_kubectl_cmd("-n tless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
-        env::set_var("MINIO_URL", minio_url);
+        unsafe {
+            env::set_var("MINIO_URL", minio_url);
+        }
 
         // Upload the state for all workflows
         // TODO: add progress bar
@@ -629,14 +631,18 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
-        env::set_var("FAASM_WASM_VM", wasm_vm);
+        unsafe {
+            env::set_var("FAASM_WASM_VM", wasm_vm);
+        }
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
 
         // Second, work-out the MinIO URL
         let mut minio_url = Self::run_faasmctl_cmd("s3.get-url");
         minio_url = minio_url.strip_suffix("\n").unwrap().to_string();
-        env::set_var("MINIO_URL", minio_url);
+        unsafe {
+            env::set_var("MINIO_URL", minio_url);
+        }
 
         // Upload the state for all workflows
         // TODO: uncomment me in a real deployment
@@ -704,6 +710,13 @@ impl Eval {
     // ------------------------------------------------------------------------
     // Plotting Functions
     // ------------------------------------------------------------------------
+
+    fn is_faasm_baseline(baseline: &EvalBaseline) -> bool {
+        match baseline {
+            EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => false,
+            EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => true,
+        }
+    }
 
     fn plot_e2e_latency(data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]
@@ -775,36 +788,57 @@ impl Eval {
         plot_path.push("e2e_latency.svg");
 
         // Plot data
-        let root = SVGBackend::new(&plot_path, (800, 600)).into_drawing_area();
+        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
-            .build_cartesian_2d(0..x_max, 0i64..y_max as i64)
+            .margin_top(40)
+            .build_cartesian_2d(0..x_max, 0f64..5f64)
             .unwrap();
 
         chart
             .configure_mesh()
-            .y_desc("Execution latency [ms]")
+            // .y_desc("Slowdown vs Non-Confidential")
+            .y_label_style(("sans-serif", 20).into_font()) // Set y-axis label font and size
             .x_desc("")
+            // .x_labels(0)
+            .x_label_formatter(&|_| format!(""))
             .y_labels(10)
             .disable_x_mesh()
+            .disable_x_axis()
             .y_label_formatter(&|y| format!("{:.0}", y))
+            /*
             .light_line_style(ShapeStyle {
                 color: RGBColor(200, 200, 200).to_rgba().mix(0.5),
                 filled: true,
                 stroke_width: 1,
             })
+            */
             .draw()
             .unwrap();
 
+        // Manually draw the y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Slowdown (vs non-confidential)",
+            (5, 260),
+            ("sans-serif", 20)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+
         // Draw bars
         for (w_idx, (workflow, workflow_data)) in data.iter().enumerate() {
-            let x_orig = w_idx * num_baselines + 1;
+            let x_orig = w_idx * (num_baselines + 1);
 
-            // TODO: make the color depend on the baseline
+            // Work-out the slowest value for each set of baselines
+            let y_faasm : f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
+            let y_knative : f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
+
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (baseline, y))| {
                     // Bar style
@@ -813,18 +847,48 @@ impl Eval {
                         filled: true,
                         stroke_width: 2,
                     };
+
+                    let this_y;
+                    if Self::is_faasm_baseline(baseline) {
+                        this_y = (y / y_faasm) as f64;
+                    } else {
+                        this_y = (y / y_knative) as f64;
+                    }
+
                     let mut bar =
-                        Rectangle::new([(x_orig + x, 0), (x_orig + x + 1, *y as i64)], bar_style);
-                    bar.set_margin(0, 0, 5, 5);
+                        Rectangle::new([(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)], bar_style);
+                    bar.set_margin(0, 0, 2, 2);
                     bar
                 }))
                 .unwrap();
 
+            for (x, (baseline, y)) in (0..).zip(workflow_data.iter()) {
+                let this_y;
+                if Self::is_faasm_baseline(baseline) {
+                    this_y = (y / y_faasm) as f64;
+                } else {
+                    this_y = (y / y_knative) as f64;
+                }
+
+                // Add text
+                let y_offset = match this_y > 5.0 {
+                    true => - 0.1,
+                    false => 0.25,
+                };
+                chart.plotting_area().draw(&Text::new(
+                    format!("{:.1}", this_y),
+                    (x_orig + x, (this_y + y_offset) as f64),
+                    ("sans-serif", 15).into_font(),
+                ))
+                .unwrap();
+            }
+
+
             // Add label for the workflow
-            let x_workflow_label = x_orig + num_baselines / 2;
+            let x_workflow_label = x_orig + num_baselines / 2 - 1;
             let label_px_coordinate = chart
                 .plotting_area()
-                .map_coordinate(&(x_workflow_label, -10));
+                .map_coordinate(&(x_workflow_label, - 0.25));
             root.draw(&Text::new(
                 format!("{workflow}"),
                 label_px_coordinate,
@@ -833,28 +897,68 @@ impl Eval {
             .unwrap();
         }
 
-        // Add dummy lines to create entries in the legend
-        for baseline in EvalBaseline::iter_variants() {
-            chart
-                .draw_series(std::iter::once(PathElement::new(
-                    vec![(0, -10), (0, -10)],
-                    baseline.get_color().stroke_width(10),
-                )))
-                .unwrap()
-                .label(format!("{baseline}"))
-                .legend(move |(x, y)| {
-                    Rectangle::new([(x, y - 5), (x + 30, y + 5)], baseline.get_color().filled())
-                });
-        }
-
-        // Draw the legend
+        // Add solid frames
+        // TODO: we could add whitespaces in the horizontal lines
         chart
-            .configure_series_labels()
-            .position(SeriesLabelPosition::UpperRight)
-            .border_style(&BLACK)
-            .background_style(&WHITE.mix(0.8))
-            .draw()
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![
+                    (0, 100 as f64),
+                    (x_max, 100 as f64),
+                ],
+                &BLACK,
+            ))
             .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![
+                    (x_max, 0 as f64),
+                    (x_max, 100 as f64),
+                ],
+                &BLACK,
+            ))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![
+                    (0, 0 as f64),
+                    (x_max, 0 as f64),
+                ],
+                &BLACK,
+            ))
+            .unwrap();
+
+        // Manually draw the legend outside the grid, above the chart
+        let legend_x_start = 50;
+        let legend_y_pos = 6; // Position above the chart
+
+        for (idx, baseline) in EvalBaseline::iter_variants().enumerate() {
+            // Calculate position for each legend item
+            let x_pos = legend_x_start + idx as i32 * 120;
+            let y_pos = legend_y_pos;
+
+            // Draw the color box (Rectangle)
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                baseline.get_color().filled(),
+            ))
+            .unwrap();
+
+            let mut label = format!("{baseline}");
+            if baseline == &EvalBaseline::CcKnative {
+                label = "sev-knative".to_string();
+            }
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                label,
+                (x_pos + 30, y_pos + 5), // Adjust text position
+                ("sans-serif", 20).into_font(),
+            ))
+            .unwrap();
+        }
 
         root.present().unwrap();
     }
