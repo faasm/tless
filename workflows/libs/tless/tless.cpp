@@ -1,10 +1,12 @@
 #include "tless.h"
+// Both tless::aes256gcm and tles::sha256 are declared in this header
 #include "tless_aes.h"
 #ifdef __faasm
 // For the time being, this library is only needed in Faasm
 #include "tless_jwt.h"
 #endif
 #include "tless_abe.h"
+#include "dag.h"
 #include "utils.h"
 
 // Faasm includes
@@ -78,6 +80,8 @@ static bool validHardwareAttestation()
     // would have provided us with the TEE shared identity, wrapped in the
     // public key we provide as part of the enclave held data of the report.
     // We still do not have implemented this functionality in the MAA
+#else
+    // For SNP we could just use snpguest crate from here
 #endif
 
     return true;
@@ -98,9 +102,29 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
         return true;
     }
 
-    // 0. Get execution request (i.e. faabric::Message?)
-    // TODO somehow get these two values
-    std::string dag = "dag";
+#ifndef __faasm
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
+#endif
+
+    // -----------------------------------------------------------------------
+    // 0. Fetch DAG
+    // 0.1. Get DAG string from S3
+    // 0.2. Calculate DAG hex digest
+    // -----------------------------------------------------------------------
+
+    std::vector<uint8_t> serializedDag;
+    std::string dagKey = workflow + "/dag";
+#ifdef __faasm
+    serializedDag = tless::utils::doGetKeyBytes("tless", dagKey);
+#else
+    serializedDag = s3cli.getKeyBytes("tless", dagKey);
+#endif
+    auto dag = tless::dag::deserialize(serializedDag);
+
+    // Also calculate the hex-digest of the serialized DAG
+    std::vector<uint8_t> hashedDag = tless::sha256::hash(serializedDag);
+    std::string dagHexDigest = tless::utils::byteArrayToHexString(hashedDag.data(), hashedDag.size());
 
     // -----------------------------------------------------------------------
     // 1. Get TEE certificate
@@ -113,9 +137,10 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
         return false;
     }
 
-    // FIXME(tless-prod): this is insecure, because it could be read by
-    // inspecting the enclave binary
-    std::string teeIdentity = "G4NU1N3_TL3SS_T33";
+    // FIXME(tless-prod): this value would be returned by the MAA upon a
+    // succesful attestation, encrypted with the public key we provided as
+    // part of the original attestation bundle
+    std::string teeIdentity = "G4NU1N3TL3SST33";
 
     // -----------------------------------------------------------------------
     // 2. Bootstrap CP-ABE context
@@ -131,22 +156,8 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
 #ifdef __faasm
     ctCtx = tless::utils::doGetKeyBytes("tless", cpAbeCtxKey);
 #else
-    s3::initS3Wrapper();
-    s3::S3Wrapper s3cli;
     ctCtx = s3cli.getKeyBytes("tless", cpAbeCtxKey);
 #endif
-
-    // Smalltest DELETE ME
-#ifdef __faasm
-    auto hello = tless::utils::doGetKeyBytes("tless", workflow + "/hello");
-    std::vector<uint8_t> nonceHello(hello.begin(), hello.begin() + AES256CM_NONCE_SIZE);
-    std::vector<uint8_t> cipherTextHello(hello.begin() + AES256CM_NONCE_SIZE, hello.end());
-    auto plainTextHello = tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceHello, cipherTextHello);
-    std::string helloStr((char*) plainTextHello.data(), plainTextHello.size());
-    std::cout << "test hello: " << helloStr << std::endl;
-#endif
-
-    std::cout << "hello" << std::endl;
 
     // Decrypt the CP-ABE context
     std::vector<uint8_t> nonceCtx(ctCtx.begin(), ctCtx.begin() + AES256CM_NONCE_SIZE);
@@ -155,10 +166,15 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
 
     // Initialize CP-ABE context
     auto& ctx = tless::abe::CpAbeContextWrapper::get(tless::abe::ContextFetchMode::FromBytes, ptCtx);
-    // TODO: extend this with call-chain
-    std::vector<std::string> attributes = {dag, teeIdentity};
 
-    std::cout << "foo" << std::endl;
+    // Generate our set of attributes from the place we occupy in the dag
+    std::vector<std::string> attributes = {teeIdentity, dagHexDigest};
+    // TODO: this does not work well for functions with more than one parent!
+    auto expectedChain = tless::dag::getCallChain(dag, function);
+
+    for (int i = 0; i < expectedChain.size() - 1; i++) {
+        attributes.push_back(expectedChain.at(i));
+    }
 
     // Fetch the certificate chain for us. The certificate chain is wrapped
     // around an AES-encrypted bundle, and then CP-ABE encrypted
@@ -175,21 +191,47 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     std::vector<uint8_t> ctCertChain(ctAesCertChain.begin() + AES256CM_NONCE_SIZE, ctAesCertChain.end());
     auto ptAesCertChain = tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceCertChain, ctCertChain);
 
-    // TODO: test CP-ABE context is what we expect DELETE ME
-#ifndef __faasm
-    auto realAesCertChain = s3cli.getKeyBytes("tless", "word-count/hello-cpabe");
-    std::cout << "real: " << realAesCertChain.size() << " - pt: " << ptAesCertChain.size() << std::endl;
-    if (realAesCertChain == ptAesCertChain) {
-        std::cout << "equal!" << std::endl;
-    } else {
-        std::cout << "NOT equal!" << std::endl;
-    }
-#endif
-
     // Now use our attributes to decrypt the actual contents of the cert chain
     auto certChain = ctx.cpAbeDecrypt(attributes, ptAesCertChain);
-    std::cout << "real cert chain has size: " << certChain.size() << std::endl;
-    std::string certChainStr((char*) certChain.data(), certChain.size());
+    if (certChain.empty()) {
+        std::cerr << "tless: error decrypting certificate chain" << std::endl;
+        return false;
+    }
+
+    // Note that, succesful validation, implies that the function is called
+    // in the right order. That being said, we double-check it here too
+    std::vector<std::string> actualChain = tless::dag::getFuncChainFromCertChain(certChain);
+    if (actualChain.size() != expectedChain.size()) {
+        std::cerr << "tless: error: validating certificate chain" << std::endl;
+        return false;
+    }
+    for (int i = 0; i < actualChain.size(); i++) {
+        if (i == 0) {
+            if (actualChain.at(0) != TLESS_CHAIN_GENESIS) {
+                std::cerr << "tless: error: certificate chain has wrong beginning" << std::endl;
+                return false;
+            }
+        } else {
+            if (actualChain.at(i) != expectedChain.at(i - 1)) {
+                std::cerr << "tless: error in cert chain (got: "
+                          << actualChain.at(i)
+                          << " - expected: "
+                          << expectedChain.at(i - 1)
+                          << ")" << std::endl;
+                return false;
+            }
+        }
+    }
+    if (expectedChain.at(expectedChain.size() - 1) != function) {
+        std::cerr << "tless: error in cert chain (got: "
+                  << expectedChain.at(expectedChain.size() - 1)
+                  << " - expected: "
+                  << function
+                  << ")" << std::endl;
+        return false;
+    }
+
+    std::cout << "tless: certificate chain validated!" << std::endl;
 
     // -----------------------------------------------------------------------
     // 3. Get execution token
@@ -197,7 +239,11 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     // 3.2. Decrypt function code
     // -----------------------------------------------------------------------
 
-    std::cout << "still VERY strong!" << std::endl;
+    std::cout << "still VERY VERY strong!" << std::endl;
+
+#ifndef __faasm
+    s3::shutdownS3Wrapper();
+#endif
 
     return true;
 }

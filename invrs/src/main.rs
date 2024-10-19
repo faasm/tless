@@ -47,7 +47,8 @@ enum DagCommand {
     Upload {
         /// Name of the application to upload
         name: String,
-        // TODO: missing path to JSON
+        /// Path to the YAML file describing the workflow
+        yaml_path: String,
     },
 }
 
@@ -170,8 +171,8 @@ async fn main() {
 
     match &cli.task {
         Command::Dag { dag_command } => match dag_command {
-            DagCommand::Upload { name } => {
-                Dag::upload(name).await;
+            DagCommand::Upload { name, yaml_path } => {
+                Dag::upload(name, yaml_path).await;
             }
         },
         Command::Docker { docker_command } => match docker_command {

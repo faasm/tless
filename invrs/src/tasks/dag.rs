@@ -2,6 +2,11 @@ use crate::tasks::s3::S3;
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key};
 use rabe;
+use serde::{Deserialize, Serialize};
+use serde_yaml;
+use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::Read;
 
 // FIXME(tless-prod): symmetric key is currently hardcoded. In production it
 // would be given to the user upon registration
@@ -10,13 +15,82 @@ static DEMO_SYM_KEY: [u8; 32] = [
     0x6e, 0x56, 0xbb, 0xa5, 0xff, 0x9b, 0x11, 0x9d, 0xd6, 0xfa, 0x96, 0x39, 0x2b, 0x7c, 0x1a, 0x0d,
 ];
 
+// Struct a node in our workflow DAG
+#[derive(Debug, Serialize, Deserialize)]
+struct DagFunc {
+    name: String,
+    scale: String,
+    chains_to: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DagGraph {
+    funcs: Vec<DagFunc>,
+}
+
 #[derive(Debug)]
 pub struct Dag {}
 
 impl Dag {
-    // TODO: add path to dag
-    pub async fn upload(wflow_name: &str) {
-        // Generate encryption context to encrypt code and data
+    // Manual serialization of the DAG, where we literally add a newline
+    // after each keyword
+    fn serialize_dag(dag: &DagGraph) -> Vec<u8> {
+        let mut serialized = Vec::new();
+
+        for func in &dag.funcs {
+            serialized.extend(func.name.as_bytes());
+            serialized.push(b'\n');
+
+            serialized.extend(func.scale.as_bytes());
+            serialized.push(b'\n');
+
+            if let Some(chains_to) = &func.chains_to {
+                serialized.extend(chains_to.as_bytes());
+            }
+            serialized.push(b'\n');
+
+            serialized.push(b'\n');
+        }
+
+        serialized
+    }
+
+    // Function to read DAG from YAML path and serialize it to a byte array that
+    // we can upload
+    fn read_yaml_and_serialize(file_path: &str) -> Vec<u8> {
+        let mut file = File::open(file_path).expect("tlessctl(dag): failed to load yaml path");
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).expect("tlessctl(dag): faild to read yaml");
+
+        let dag: DagGraph = serde_yaml::from_str(&contents).expect("tlessctl(dag): failed to parse yaml");
+        Self::serialize_dag(&dag)
+    }
+
+    // Return the hex-string of the hash of the serialized dag
+    fn hash_serialized_dag(bytes: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        let result = hasher.finalize();
+
+        // Convert hash result to hex string
+        hex::encode(result)
+    }
+
+    pub async fn upload(wflow_name: &str, yaml_path: &str) {
+        // Load the given DAG to a byte array, and upload it to storage
+        let serialized_dag = Self::read_yaml_and_serialize(yaml_path);
+        S3::upload_bytes(
+            "tless",
+            &format!("{wflow_name}/dag"),
+            &serialized_dag,
+        )
+        .await;
+
+        // Calculate the hexstring of the hash of the DAG, to make it one
+        // of our attributes for CP-ABE
+        let dag_hex_digest = Self::hash_serialized_dag(&serialized_dag);
+
+        // Generate CP-ABE encryption context to encrypt code and data
         let (pk, msk) = rabe::schemes::bsw::setup();
         let ctx = rabe::ffi::bsw::CpAbeContext {
             _msk: msk.clone(),
@@ -49,16 +123,21 @@ impl Dag {
         )
         .await;
 
-        // Use the newly generated context to encrypt the certificate chain
-        // FIXME(tless-prod): in a production deployment, these two values
-        // should be kept secret
-        let plain_text_origin_cert_chain = "G3N0SY5";
-        let tee_identity_magic = "G4NU1N3_TL3SS_T33";
+        // FIXME(tless-prod): here we define a few values that are crucial in
+        // the bootstrapping of the CP-ABE context. This should be set by the
+        // user and, the tee_identity_magic, shared with the attestation service
+        // in the cloud. Of course, these values should not be version
+        // controlled
 
-        // TODO: read from path,
-        let dag_hex_digest = "dag";
+        // Genesis text for our certificate chains
+        let plain_text_origin_cert_chain = "G3N0SY5";
+
+        // Base attributes for our policy
+        let tee_identity_magic = "G4NU1N3TL3SST33";
 
         // Encrypt the certificate chain using the adequate policy
+        // WARNING: be very careful with the values in the policy. rabe does
+        // not like if attributes contain any non-alphanumeric characters
         let policy = format!("\"{}\" and \"{}\"", tee_identity_magic, dag_hex_digest);
         let ct = rabe::schemes::bsw::encrypt(
             &pk,
@@ -73,13 +152,18 @@ impl Dag {
             Err(_) => panic!("tlessctl(dag): error serializing certificate chain"),
         };
 
-        // DELETE ME - upload plain-text version of CP-ABE
-        S3::upload_bytes(
-            "tless",
-            &format!("{wflow_name}/hello-cpabe"),
-            &abe_ct_str.clone().into_bytes(),
-        )
-        .await;
+        // DLETE ME - sanity check
+        let mut attributes : Vec<&str> = Vec::new();
+        attributes.push(tee_identity_magic);
+        attributes.push(&dag_hex_digest);
+
+        match rabe::schemes::bsw::decrypt(&rabe::schemes::bsw::keygen(&pk, &msk, &attributes).unwrap(), &ct) {
+            Ok(pt_str) => {
+                println!("correct!");
+                pt_str
+            }
+            Err(e) => panic!("error: {e}"),
+        };
 
         // Encapsulate the cipher-text in a symmetric encryption payload
         let abe_ct_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
@@ -97,17 +181,10 @@ impl Dag {
         )
         .await;
 
+        // TODO: upload one entry per function
+
         // TODO(encrypted-functions): to support encrypted functions, here we
         // would have to keep generating new policies, and encrypting each
         // function body with the new policy
-
-        // DELETE ME just a test
-        let tmp_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let tmp_ct = cipher
-            .encrypt(&tmp_nonce, "Hello world!".as_bytes())
-            .unwrap();
-        let mut encrypted_tmp = tmp_nonce.to_vec();
-        encrypted_tmp.extend_from_slice(&tmp_ct);
-        S3::upload_bytes("tless", &format!("{wflow_name}/hello"), &encrypted_tmp).await;
     }
 }

@@ -4,6 +4,7 @@
 
 add_library(tless
     tless.cpp
+    dag.cpp
     utils.cpp
 )
 
