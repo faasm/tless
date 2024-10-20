@@ -40,7 +40,12 @@ bool on();
 bool checkChain(const std::string& workflow, const std::string& function, int id);
 
 // Chain a function by name, and return the function id to wait-on
-int32_t chain(const std::string& funcName, const std::string& inputData);
+int32_t chain(const std::string& workflow,
+              const std::string& parentFuncName,
+              int parentIdx,
+              const std::string& funcName,
+              int idx,
+              const std::string& inputData);
 
 #ifdef __faasm
 // Wait for a function by its id, and get its output and return code

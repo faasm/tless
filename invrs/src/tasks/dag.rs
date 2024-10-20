@@ -173,15 +173,15 @@ impl Dag {
         let mut encrypted_abe_ct = abe_ct_nonce.to_vec();
         encrypted_abe_ct.extend_from_slice(&abe_ct);
 
-        // Upload it
+        // Upload the certificate chain for the first function
+        // TODO: right now, they all ready from the same. Must update in
+        // accordance with the DAG
         S3::upload_bytes(
             "tless",
-            &format!("{wflow_name}/cert-chain/splitter"),
+            &format!("{wflow_name}/cert-chains/test"),
             &encrypted_abe_ct,
         )
         .await;
-
-        // TODO: upload one entry per function
 
         // TODO(encrypted-functions): to support encrypted functions, here we
         // would have to keep generating new policies, and encrypting each

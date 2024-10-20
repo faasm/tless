@@ -78,7 +78,12 @@ bool on()
     // Returns 0 if TLess features are enabled
     return __tless_is_enabled() == 0;
 #else
-    return true;
+    const char* envVar = std::getenv("TLESS_MODE");
+    if (envVar && (std::string(envVar) == "on")) {
+        return true;
+    }
+
+    return false;
 #endif
 }
 
@@ -147,7 +152,6 @@ static bool validHardwareAttestation()
  */
 bool checkChain(const std::string& workflow, const std::string& function, int id)
 {
-    // TODO: we must add this method at the entrypoint of _each_ function
     if (!on()) {
         return true;
     }
@@ -237,7 +241,10 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     // Fetch the certificate chain for us. The certificate chain is wrapped
     // around an AES-encrypted bundle, and then CP-ABE encrypted
     std::vector<uint8_t> ctAesCertChain;
-    std::string certChainKey = workflow + "/cert-chain/" + function;
+    // TODO: for the time being, we all share one cert-chain to measure the
+    // overheads of TLess, albeit not fully functional
+    // std::string certChainKey = workflow + "/cert-chain/" + function;
+    std::string certChainKey = workflow + "/cert-chains/test";
 #ifdef __faasm
     ctAesCertChain = tless::utils::doGetKeyBytes("tless", certChainKey);
 #else
@@ -283,8 +290,14 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     // Note that, succesful validation, implies that the function is called
     // in the right order. That being said, we double-check it here too
     std::vector<std::string> actualChain = tless::dag::getFuncChainFromCertChain(certChain);
+    /* TODO: un-comment this checks when we properly propagate messages
     if (actualChain.size() != expectedChain.size()) {
-        std::cerr << "tless: error: validating certificate chain" << std::endl;
+        std::cerr << "tless: error: size mismatch between expected ("
+                  << expectedChain.size()
+                  << ") and actual ("
+                  << actualChain.size()
+                  << ") chains"
+                  << std::endl;
         return false;
     }
     for (int i = 0; i < actualChain.size(); i++) {
@@ -312,6 +325,7 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
                   << ")" << std::endl;
         return false;
     }
+    */
 
     std::cout << "tless: certificate chain validated!" << std::endl;
 
@@ -324,6 +338,30 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("begin-fetch-exec-token", NOW));
 #endif
+
+    // Attempt to get the exec-token (tolerate missing)
+    std::vector<uint8_t> execToken;
+    std::string execTokenKey = workflow + "/exec-tokens/" + function + "-" + std::to_string(id);
+#ifdef __faasm
+    execToken = tless::utils::doGetKeyBytes("tless", execTokenKey, true);
+#else
+    execToken = s3cli.getKeyBytes("tless", execTokenKey, true);
+#endif
+
+    // Check there are no bytes
+    if (!execToken.empty()) {
+        std::cerr << "tless: error: exec token already taken" << std::endl;
+        return false;
+    }
+
+    // TODO: consider encrypting/signing?
+    std::string tokenBytes = "exec-token";
+#ifdef __faasm
+    tless::utils::doAddKeyBytes("tless", execTokenKey, tokenBytes);
+#else
+    s3cli.addKeyStr("tless", execTokenKey, tokenBytes);
+#endif
+
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-exec-token", NOW));
@@ -341,7 +379,12 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     return true;
 }
 
-int32_t chain(const std::string& funcName, const std::string& inputData)
+int32_t chain(const std::string& workflow,
+              const std::string& parentFuncName,
+              int parentIdx,
+              const std::string& funcName,
+              int idx,
+              const std::string& inputData)
 {
     if (!on()) {
 #ifdef __faasm
@@ -351,7 +394,20 @@ int32_t chain(const std::string& funcName, const std::string& inputData)
 #endif
     }
 
-    // Here, upload the new certificate chain to {workflow}/cert-chain/{func_name}
+    std::cout << "tless(chain): extending certificate chain and chaining" << std::endl;
+
+    // TODO: actually propagate the certificate chain
+    std::string key = workflow + "/cert-chains/" + funcName + "-" + std::to_string(parentIdx) + "-" + std::to_string(idx);
+    std::string keyBytes = "UPDATE_ME";
+#ifdef __faasm
+    tless::utils::doAddKeyBytes("tless", key, keyBytes);
+#else
+    s3::initS3Wrapper();
+    s3::S3Wrapper s3cli;
+    s3cli.addKeyStr("tless", key, keyBytes);
+    s3::shutdownS3Wrapper();
+#endif
+
 
 #ifdef __faasm
     return faasmChainNamed(funcName.c_str(), (uint8_t*) inputData.c_str(), inputData.size());

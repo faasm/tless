@@ -188,7 +188,7 @@ impl Eval {
         num_repeats: u64,
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
-        workflow: &AvailableWorkflow,
+        workflow: &str,
     ) -> ProgressBar {
         let pb = ProgressBar::new(num_repeats);
         pb.set_style(
@@ -504,6 +504,9 @@ impl Eval {
             }
         }
 
+        // Common-clean-up
+        S3::clear_dir(EVAL_BUCKET_NAME.to_string(), "{workflow}/exec-tokens".to_string()).await;
+
         // Cautionary sleep between runs
         thread::sleep(time::Duration::from_secs(5));
 
@@ -541,7 +544,7 @@ impl Eval {
             Self::init_data_file(workflow, &exp, &baseline);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, format!("{workflow}").as_str());
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
@@ -631,9 +634,14 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
-        unsafe {
-            env::set_var("FAASM_WASM_VM", wasm_vm);
-        }
+        let tless_enabled = match baseline {
+            EvalBaseline::Faasm | EvalBaseline::SgxFaasm => "off",
+            EvalBaseline::TlessFaasm => "on",
+            _ => panic!("invrs(eval): should not be here"),
+        };
+
+        env::set_var("FAASM_WASM_VM", wasm_vm);
+        env::set_var("TLESS_ENABLED", tless_enabled);
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
 
@@ -645,24 +653,31 @@ impl Eval {
         }
 
         // Upload the state for all workflows
-        // TODO: uncomment me in a real deployment
-        // TODO: add progress bar
-        // TODO: consider sharing if we have multiple baselines/workflows
-        // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+        // TODO: undo me
+        // let pb = Self::get_progress_bar(
+            // AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
+        // for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in vec![&AvailableWorkflow::WordCount] {
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            // pb.inc(1);
+        }
+        // pb.finish();
 
         // Upload the WASM files for all workflows
         // TODO: add progress bar
-        Self::upload_wasm();
+        // Self::upload_wasm();
 
         // Invoke each workflow
-        for workflow in AvailableWorkflow::iter_variants() {
+        // UNDO ME
+        // for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in vec![&AvailableWorkflow::WordCount] {
             let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
 
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, format!("{workflow}").as_str());
 
             let faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
@@ -670,6 +685,7 @@ impl Eval {
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_faasmctl_cmd(&faasmctl_cmd);
+                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
             }
 
             // Do actual experiment
@@ -685,6 +701,9 @@ impl Eval {
                 };
 
                 Self::write_result_to_file(workflow, &exp, &baseline, &result);
+
+                // Clean-up
+                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
 
                 pb.inc(1);
             }
