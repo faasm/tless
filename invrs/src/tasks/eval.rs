@@ -657,7 +657,7 @@ impl Eval {
         // let pb = Self::get_progress_bar(
             // AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
         // for workflow in AvailableWorkflow::iter_variants() {
-        for workflow in vec![&AvailableWorkflow::WordCount] {
+        for workflow in vec![&AvailableWorkflow::MlTraining] {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
             // pb.inc(1);
         }
@@ -670,7 +670,7 @@ impl Eval {
         // Invoke each workflow
         // UNDO ME
         // for workflow in AvailableWorkflow::iter_variants() {
-        for workflow in vec![&AvailableWorkflow::WordCount] {
+        for workflow in vec![&AvailableWorkflow::MlTraining] {
             let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
 
             // Initialise result file
