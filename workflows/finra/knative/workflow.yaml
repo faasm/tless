@@ -59,6 +59,9 @@ spec:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
+          env:
+            - name: TLESS_MODE
+              value: "${TLESS_MODE}"
     metadata:
       labels:
         tless.workflows/name: finra-fetch-public
@@ -82,6 +85,9 @@ spec:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
+          env:
+            - name: TLESS_MODE
+              value: "${TLESS_MODE}"
     metadata:
       labels:
         tless.workflows/name: finra-fetch-private
@@ -119,6 +125,8 @@ spec:
               env:
                 - name: CE_FROM_FILE
                   value: "on"
+                - name: TLESS_MODE
+                  value: "${TLESS_MODE}"
         metadata:
           labels:
             tless.workflows/name: finra-audit
@@ -142,6 +150,9 @@ spec:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
+          env:
+            - name: TLESS_MODE
+              value: "${TLESS_MODE}"
     metadata:
       labels:
         tless.workflows/name: finra-merge

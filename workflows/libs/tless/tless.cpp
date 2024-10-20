@@ -360,15 +360,12 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     tless::utils::doAddKeyBytes("tless", execTokenKey, tokenBytes);
 #else
     s3cli.addKeyStr("tless", execTokenKey, tokenBytes);
+    // NOTE: deliberately not shutdown s3 here, as it may be used after
 #endif
 
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-exec-token", NOW));
-#endif
-
-#ifndef __faasm
-    s3::shutdownS3Wrapper();
 #endif
 
 #ifdef TLESS_UBENCH
@@ -405,7 +402,6 @@ int32_t chain(const std::string& workflow,
     s3::initS3Wrapper();
     s3::S3Wrapper s3cli;
     s3cli.addKeyStr("tless", key, keyBytes);
-    s3::shutdownS3Wrapper();
 #endif
 
 
