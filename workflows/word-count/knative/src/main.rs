@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 use warp::Filter;
 
-static BINARY_DIR: &str = "/code/faasm-examples/workflows/build-native/word-count";
+static BINARY_DIR: &str = "/workflows/build-native/word-count";
 static INVOCATION_COUNTER: Lazy<Arc<Mutex<i64>>> = Lazy::new(|| Arc::new(Mutex::new(0)));
 
 // We must wait for the POST event to go through before we can return, as
