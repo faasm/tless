@@ -307,6 +307,12 @@ impl Eval {
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
+                ("TLESS_MODE",
+                match baseline {
+                    EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                    EvalBaseline::TlessKnative => "on",
+                    _ => panic!("woops"),
+                }),
             ]),
         );
 
@@ -369,7 +375,15 @@ impl Eval {
                     EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
                     _ => panic!("woops"),
                 },
-            )]),
+                ),
+                ("TLESS_VERSION", &Env::get_version().unwrap()),
+                ("TLESS_MODE",
+                match baseline {
+                    EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                    EvalBaseline::TlessKnative => "on",
+                    _ => panic!("woops"),
+                }),
+            ]),
         );
 
         let mut kubectl = Command::new(Self::get_kubectl_cmd())
@@ -426,9 +440,21 @@ impl Eval {
         trigger_cmd.push(format!("{workflow}"));
         trigger_cmd.push("knative");
         trigger_cmd.push("curl_cmd.sh");
-        Command::new(trigger_cmd)
+        match Command::new(trigger_cmd.clone())
             .output()
-            .expect("invrs(eval): failed to execute trigger command");
+            .expect("invrs(eval): failed to execute trigger command")
+            .status
+            .code() {
+                Some(0) => {
+                    debug!("{trigger_cmd:?}: executed succesfully");
+                }
+                Some(code) => {
+                    panic!("{trigger_cmd:?}: exited with error code: {code}");
+                }
+                None => {
+                    panic!("{trigger_cmd:?}: failed");
+                }
+            };
 
         // Specific per-workflow completion detection
         match workflow {
@@ -534,11 +560,11 @@ impl Eval {
         // TODO: add progress bar
         // TODO: consider re-using between baselines
         // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true)
+        Workflows::upload_workflow_state(&AvailableWorkflow::WordCount, EVAL_BUCKET_NAME, true)
             .await;
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::MlInference] {
+        for workflow in vec![&AvailableWorkflow::WordCount] {
             // AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
@@ -554,11 +580,13 @@ impl Eval {
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_workflow_once(workflow).await;
+                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
                 let mut result = Self::run_workflow_once(workflow).await;
+                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
                 result.iter = i;
                 Self::write_result_to_file(workflow, &exp, &baseline, &result);
 

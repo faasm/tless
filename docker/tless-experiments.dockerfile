@@ -17,7 +17,7 @@ RUN rm -rf /code \
     # TODO: update when #47 lands
     && git checkout d4b1b4efc3b41f6ccd870429dd9d67de8db22568 \
     && git submodule update --init -f cpp \
-    && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
+    && git clone -b tless-skeleton https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
 
 # Build specific libraries we need
@@ -33,7 +33,7 @@ RUN cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh \
         jwt \
         opencv opencv --native \
-        rabe
+        rabe rabe --native
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
