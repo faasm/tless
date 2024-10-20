@@ -40,6 +40,18 @@ pub fn get_json_from_event(event: &Event) -> Value {
     .unwrap()
 }
 
+pub fn get_tless_mode() -> String {
+    match env::var("TLESS_MODE") {
+        Ok(value) => {
+            match value.as_str() {
+                "on" => "on".to_string(),
+                _ => "off".to_string(),
+            }
+        }
+        _ => "off".to_string(),
+    }
+}
+
 // This function is a general wrapper that takes a cloud event as an input,
 // decides what function to execute, and outputs another cloud event
 pub fn process_event(mut event: Event) -> Event {
@@ -60,6 +72,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
                 .env("TLESS_S3_DIR", "word-count/few-files")
+                .env("TLESS_MODE", get_tless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
@@ -90,6 +103,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
+                .env("TLESS_MODE", get_tless_mode())
                 .arg(mapper_id.to_string())
                 .arg(s3_file)
                 .stdout(Stdio::inherit())
@@ -126,6 +140,7 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", "minio123")
                     .env("S3_PORT", "9000")
                     .env("S3_USER", "minio")
+                    .env("TLESS_MODE", get_tless_mode())
                     .arg("word-count/outputs/mapper-")
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())

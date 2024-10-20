@@ -99,6 +99,8 @@ spec:
               env:
                 - name: CE_FROM_FILE
                   value: "on"
+                - name: TLESS_MODE
+                  value: "${TLESS_MODE}"
         metadata:
           labels:
             tless.workflows/name: word-count-mapper
@@ -124,6 +126,9 @@ spec:
             - containerPort: 8080
           workingDir: /workflows/word-count/knative
           command: [ "./target/release/tless-cloudevent-handler" ]
+          env:
+            - name: TLESS_MODE
+              value: "${TLESS_MODE}"
     metadata:
       labels:
         tless.workflows/name: word-count-reducer

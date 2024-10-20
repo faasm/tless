@@ -15,7 +15,7 @@ RUN rm -rf /code \
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
     # TODO: update when #47 lands
-    && git checkout 112fa6357936ccf6d36e47e59be4589dfbf8073f \
+    && git checkout d4b1b4efc3b41f6ccd870429dd9d67de8db22568 \
     && git submodule update --init -f cpp \
     && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
