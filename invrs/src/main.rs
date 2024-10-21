@@ -85,6 +85,11 @@ enum EvalCommand {
         #[command(subcommand)]
         eval_sub_command: EvalSubCommand,
     },
+    /// Evaluate end-to-end execution latency (cold) for different workflows
+    E2eLatencyCold {
+        #[command(subcommand)]
+        eval_sub_command: EvalSubCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -199,6 +204,14 @@ async fn main() {
                 }
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatency);
+                }
+            },
+            EvalCommand::E2eLatencyCold { eval_sub_command } => match eval_sub_command {
+                EvalSubCommand::Run(run_args) => {
+                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await;
+                }
+                EvalSubCommand::Plot {} => {
+                    Eval::plot(&EvalExperiment::E2eLatencyCold);
                 }
             },
         },

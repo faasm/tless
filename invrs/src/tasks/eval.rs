@@ -83,12 +83,14 @@ impl EvalBaseline {
 
 pub enum EvalExperiment {
     E2eLatency,
+    E2eLatencyCold,
 }
 
 impl fmt::Display for EvalExperiment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvalExperiment::E2eLatency => write!(f, "e2e-latency"),
+            EvalExperiment::E2eLatencyCold => write!(f, "e2e-latency-cold"),
         }
     }
 }
@@ -140,7 +142,7 @@ impl Eval {
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency => {
+            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {
                 writeln!(file, "Run,TimeMs").expect("invrs(eval): failed to write to file");
             }
         }
@@ -160,7 +162,7 @@ impl Eval {
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency => {
+            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {
                 let duration: Duration = result.end_time - result.start_time;
                 writeln!(file, "{},{}", result.iter, duration.num_milliseconds())
                     .expect("invrs(eval): failed to write to file");
@@ -680,16 +682,29 @@ impl Eval {
             env::set_var("MINIO_URL", minio_url);
         }
 
+        async fn cleanup_single_execution(workflow: &AvailableWorkflow, exp: &EvalExperiment) {
+            S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+
+            match exp {
+                EvalExperiment::E2eLatencyCold => {
+                    debug!("Flushing Faasm workers and sleeping...");
+                    Eval::run_faasmctl_cmd("flush.workers");
+                    thread::sleep(time::Duration::from_secs(2));
+                },
+                _ => debug!("nothing to do"),
+            }
+        }
+
         // Upload the state for all workflows
         // TODO: undo me
-        // let pb = Self::get_progress_bar(
-            // AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
-        // for workflow in AvailableWorkflow::iter_variants() {
-        for workflow in vec![&AvailableWorkflow::MlTraining] {
+        let pb = Self::get_progress_bar(
+            AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
+        // for workflow in vec![&AvailableWorkflow::WordCount] {
+        for workflow in AvailableWorkflow::iter_variants() {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
-            // pb.inc(1);
+            pb.inc(1);
         }
-        // pb.finish();
+        pb.finish();
 
         // Upload the WASM files for all workflows
         // TODO: add progress bar
@@ -697,8 +712,8 @@ impl Eval {
 
         // Invoke each workflow
         // UNDO ME
-        // for workflow in AvailableWorkflow::iter_variants() {
-        for workflow in vec![&AvailableWorkflow::MlTraining] {
+        // for workflow in vec![&AvailableWorkflow::WordCount] {
+        for workflow in AvailableWorkflow::iter_variants() {
             let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
 
             // Initialise result file
@@ -713,7 +728,7 @@ impl Eval {
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_faasmctl_cmd(&faasmctl_cmd);
-                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+                cleanup_single_execution(workflow, exp).await;
             }
 
             // Do actual experiment
@@ -731,7 +746,7 @@ impl Eval {
                 Self::write_result_to_file(workflow, &exp, &baseline, &result);
 
                 // Clean-up
-                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+                cleanup_single_execution(workflow, exp).await;
 
                 pb.inc(1);
             }
@@ -765,7 +780,7 @@ impl Eval {
         }
     }
 
-    fn plot_e2e_latency(data_files: &Vec<PathBuf>) {
+    fn plot_e2e_latency(exp: &EvalExperiment, data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -830,7 +845,7 @@ impl Eval {
 
         let mut plot_path = env::current_dir().expect("invrs: failed to get current directory");
         plot_path.push("eval");
-        plot_path.push(format!("{}", EvalExperiment::E2eLatency));
+        plot_path.push(format!("{exp}"));
         plot_path.push("plots");
         plot_path.push("e2e_latency.svg");
 
@@ -1016,7 +1031,10 @@ impl Eval {
 
         match exp {
             EvalExperiment::E2eLatency => {
-                Self::plot_e2e_latency(&data_files);
+                Self::plot_e2e_latency(&exp, &data_files);
+            }
+            EvalExperiment::E2eLatencyCold => {
+                Self::plot_e2e_latency(&exp, &data_files);
             }
         }
     }
