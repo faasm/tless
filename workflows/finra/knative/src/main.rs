@@ -304,6 +304,11 @@ pub fn process_event(mut event: Event) -> Event {
                     event.ty(),
                 );
                 post_event(event.ty().to_string(), scaled_event.clone());
+
+                // Be gentle when scaling-up, as otherwise SEV will take too
+                // long
+                println!("{WORKFLOW_NAME}: sleeping for a bit...");
+                thread::sleep(time::Duration::from_secs(3));
             }
 
             // Update the event for the zero-th id (the one we return as part
