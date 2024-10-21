@@ -2,6 +2,7 @@ use crate::tasks::dag::Dag;
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
+use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
 use env_logger;
 
@@ -34,6 +35,11 @@ enum Command {
     Eval {
         #[command(subcommand)]
         eval_command: EvalCommand,
+    },
+    /// Run microbenchmark
+    Ubench {
+        #[command(subcommand)]
+        ubench_command: UbenchCommand,
     },
     /// Interact with an S3 (MinIO server)
     S3 {
@@ -90,6 +96,23 @@ enum EvalCommand {
         #[command(subcommand)]
         eval_sub_command: EvalSubCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum UbenchCommand {
+    /// Microbenchmark to measure the time to verify an eDAG
+    VerifyEdag {
+        #[command(subcommand)]
+        ubench_sub_command: UbenchSubCommand,
+    }
+}
+
+#[derive(Debug, Subcommand)]
+enum UbenchSubCommand {
+    /// Run
+    Run(UbenchRunArgs),
+    /// Plot
+    Plot {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -214,6 +237,16 @@ async fn main() {
                     Eval::plot(&EvalExperiment::E2eLatencyCold);
                 }
             },
+        },
+        Command::Ubench { ubench_command} => match ubench_command {
+            UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
+                UbenchSubCommand::Run(run_args) => {
+                    Ubench::run(&MicroBenchmarks::VerifyEDag, run_args);
+                }
+                UbenchSubCommand::Plot {} => {
+                    Ubench::plot(&MicroBenchmarks::VerifyEDag);
+                }
+            }
         },
         // FIXME: move all S3 methods to &str
         Command::S3 { s3_command } => match s3_command {
