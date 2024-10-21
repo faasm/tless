@@ -860,7 +860,7 @@ impl Eval {
         plot_path.push("eval");
         plot_path.push(format!("{exp}"));
         plot_path.push("plots");
-        plot_path.push("e2e_latency.svg");
+        plot_path.push(format!("{}.svg", exp.to_string().replace("-", "_")));
 
         // Plot data
         let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
