@@ -410,14 +410,12 @@ impl Eval {
         kubectl
             .wait_with_output()
             .expect("invrs(eval): failed to run kubectl command");
+    }
 
-        // Sometimes the --cascade argument is not enough for all pods to
-        // have fully disappeared, we also wait until there's only one pod
-        // (minio) left
-        /*
+    async fn wait_for_scale_to_zero() {
         loop {
             let output = Self::run_kubectl_cmd(&format!("-n tless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
-            println!("output: {output}");
+            debug!("tlessctl: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
             if values.len() == 1 {
@@ -426,11 +424,10 @@ impl Eval {
 
             thread::sleep(time::Duration::from_secs(2));
         }
-        */
     }
 
     /// Run workflow once, and return result depending on the experiment
-    async fn run_workflow_once(workflow: &AvailableWorkflow) -> ExecutionResult {
+    async fn run_workflow_once(workflow: &AvailableWorkflow, exp: &EvalExperiment) -> ExecutionResult {
         let mut exp_result = ExecutionResult {
             start_time: Utc::now(),
             end_time: Utc::now(),
@@ -535,6 +532,15 @@ impl Eval {
         // Common-clean-up
         S3::clear_dir(EVAL_BUCKET_NAME.to_string(), "{workflow}/exec-tokens".to_string()).await;
 
+        // Per-experiment, per-workflow clean-up
+        match exp {
+            EvalExperiment::E2eLatencyCold => {
+                debug!("tlesssctl: {exp}: waiting for scale-to-zero...");
+                Self::wait_for_scale_to_zero().await;
+            },
+            _ => debug!("tlessctl: {exp}: noting to clean-up after single execution"),
+        }
+
         // Cautionary sleep between runs
         thread::sleep(time::Duration::from_secs(5));
 
@@ -561,13 +567,18 @@ impl Eval {
         // Upload the state for all workflows
         // TODO: add progress bar
         // TODO: consider re-using between baselines
-        // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::WordCount, EVAL_BUCKET_NAME, true)
-            .await;
+        // Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true).await;
+        let pb = Self::get_progress_bar(
+            AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
+        for workflow in AvailableWorkflow::iter_variants() {
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            pb.inc(1);
+        }
+        pb.finish();
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::WordCount] {
-            // AvailableWorkflow::iter_variants() {
+        // for workflow in vec![&AvailableWorkflow::MlInference] {
+        for workflow in AvailableWorkflow::iter_variants() {
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline);
 
@@ -581,13 +592,13 @@ impl Eval {
 
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
-                Self::run_workflow_once(workflow).await;
+                Self::run_workflow_once(workflow, exp).await;
                 S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
-                let mut result = Self::run_workflow_once(workflow).await;
+                let mut result = Self::run_workflow_once(workflow, exp).await;
                 S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
                 result.iter = i;
                 Self::write_result_to_file(workflow, &exp, &baseline, &result);
