@@ -54,7 +54,7 @@ spec:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: registry.coco-csg.com/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
@@ -80,7 +80,7 @@ spec:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: registry.coco-csg.com/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
@@ -117,7 +117,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:caeb2da3879f818a44a3030c1a39ca7dc3b2a687e327fdee9cc71257b9e64e7b
+              image: registry.coco-csg.com/coco-serverless/tless-knative-worker@sha256:b88d473092ecd6f98c59717223717129fc249df04556377b24224b3349fc7495
               ports:
                 - containerPort: 8080
               workingDir: /workflows/finra/knative
@@ -145,7 +145,7 @@ spec:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: registry.coco-csg.com/coco-serverless/tless-knative-worker:${TLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative

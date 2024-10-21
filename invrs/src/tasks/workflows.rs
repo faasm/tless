@@ -121,7 +121,7 @@ impl Workflows {
             AvailableWorkflow::WordCount => {
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
-                host_path.push("few-files");
+                host_path.push("fewer-files");
                 S3::upload_dir(
                     bucket_name.to_string(),
                     host_path.display().to_string(),

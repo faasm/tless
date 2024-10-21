@@ -13,7 +13,7 @@ use shell_words;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
-use std::{collections::BTreeMap, env, fmt, fs, io::Write, thread, time};
+use std::{collections::BTreeMap, env, fmt, fs, io::Write, str, thread, time};
 
 static EVAL_BUCKET_NAME: &str = "tless";
 
@@ -439,19 +439,21 @@ impl Eval {
         trigger_cmd.push(format!("{workflow}"));
         trigger_cmd.push("knative");
         trigger_cmd.push("curl_cmd.sh");
-        match Command::new(trigger_cmd.clone())
+        let output = Command::new(trigger_cmd.clone())
             .output()
-            .expect("invrs(eval): failed to execute trigger command")
-            .status
-            .code() {
+            .expect("invrs(eval): failed to execute trigger command");
+
+        match output.status.code() {
                 Some(0) => {
                     debug!("{trigger_cmd:?}: executed succesfully");
                 }
                 Some(code) => {
-                    panic!("{trigger_cmd:?}: exited with error code: {code}");
+                    let stderr = str::from_utf8(&output.stderr).unwrap_or("tlessctl(eval): failed to get stderr");
+                    panic!("{trigger_cmd:?}: exited with error (code: {code}): {stderr}");
                 }
                 None => {
-                    panic!("{trigger_cmd:?}: failed");
+                    let stderr = str::from_utf8(&output.stderr).unwrap_or("tlessctl(eval): failed to get stderr");
+                    panic!("{trigger_cmd:?}: failed: {stderr}");
                 }
             };
 
