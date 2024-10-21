@@ -117,7 +117,7 @@ spec:
             - name: main
               # TODO: pin to version
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:cce4af6db86034d5dc8f2e27cd067b2399846e91b978e52ebe0456fcc12bcfe9
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:caeb2da3879f818a44a3030c1a39ca7dc3b2a687e327fdee9cc71257b9e64e7b
               ports:
                 - containerPort: 8080
               workingDir: /workflows/finra/knative

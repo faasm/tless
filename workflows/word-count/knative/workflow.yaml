@@ -94,7 +94,7 @@ spec:
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
               # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:ca2c5152dd2c102c6cdd1e9fa75162291764f000faa565dc6e1c0b94217128dd
+              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:caeb2da3879f818a44a3030c1a39ca7dc3b2a687e327fdee9cc71257b9e64e7b
               ports:
                 - containerPort: 8080
               workingDir: /workflows/word-count/knative
