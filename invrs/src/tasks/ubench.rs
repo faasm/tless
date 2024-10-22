@@ -234,11 +234,13 @@ impl Ubench {
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .build_cartesian_2d(0..MAX_NUM_CHAINS, 0f64..300f64)
+            .margin_left(40)
+            .build_cartesian_2d(0..3, 0f64..300f64)
             .unwrap();
 
         chart
             .configure_mesh()
+            .x_label_style(("sans-serif", 20).into_font())
             .y_label_style(("sans-serif", 20).into_font())
             .x_desc("")
             // .x_labels(MAX_NUM_CHAINS.try_into().unwrap())
@@ -250,30 +252,97 @@ impl Ubench {
             .draw()
             .unwrap();
 
-        // Manually draw the y-axis label with a custom font and size
+        // Manually draw the X/Y-axis label with a custom font and size
         root.draw(&Text::new(
-            "Slowdown (vs non-confidential)",
-            (5, 260),
+            "Elapsed time [s]",
+            (5, 220),
             ("sans-serif", 20)
                 .into_font()
                 .transform(FontTransform::Rotate270)
                 .color(&BLACK),
         ))
         .unwrap();
+        root.draw(&Text::new(
+            "# of parallel chains",
+            (400, 280),
+            ("sans-serif", 20)
+                .into_font()
+                .color(&BLACK),
+        ))
+        .unwrap();
+
+        fn get_color_for_baseline(label :&str, mode: &str) -> RGBColor {
+            match format!("{label}_{mode}").as_str() {
+                "crypto-acc_agg" => RGBColor(171, 222, 230),
+                "crypto-acc_noagg" => RGBColor(203, 170, 203),
+                "vanilla_agg" => RGBColor(255, 204, 182),
+                "vanilla_noagg" => RGBColor(243, 176, 195),
+                _ => panic!("tlessctl: unrecognized combination: {label}, {mode}"),
+            }
+        }
+
+        fn get_text_for_baseline(label :&str, mode: &str) -> String {
+            match format!("{label}_{mode}").as_str() {
+                "crypto-acc_agg" => "tless verify".to_string(),
+                "crypto-acc_noagg" => "baseline + crypto".to_string(),
+                "vanilla_agg" => "baseline + sig. agg".to_string(),
+                "vanilla_noagg" => "baseline".to_string(),
+                _ => panic!("tlessctl: unrecognized combination: {label}, {mode}"),
+            }
+        }
 
         for (label, inner_data) in data {
             for (mode, values) in inner_data {
-                let y_values: Vec<f64> = values.iter().map(|&x| x as f64 / 1000.0).collect();
-                let x_values: Vec<u32> = (0..y_values.len() as u32).collect(); // x values from 0 to N-1
-
                 chart.draw_series(LineSeries::new(
-                    x_values.iter().zip(y_values.iter()).map(|(&x, &y)| (x, y)),
-                    &Palette99::pick(0),
-                )).unwrap()
-                .label(mode)
-                .legend(|(x, y)| {
-                    PathElement::new(vec![(x, y)], &Palette99::pick(0))
-                });
+                    (1..values.len()).zip(values[1..].iter()).map(|(x, y)| (x as i32, *y as f64 / 1000.0)),
+                    get_color_for_baseline(label, mode)
+                        .stroke_width(3),
+                )).unwrap();
+
+                chart.draw_series(
+                    (1..values.len()).zip(values[1..].iter())
+                    .map(|(x, y)| Circle::new(
+                            (x as i32, *y as f64 / 1000.0),
+                            5,
+                            get_color_for_baseline(label, mode)
+                                .filled())))
+                    .unwrap();
+            }
+
+        }
+
+        fn legend_label_pos_for_baseline(label :&str, mode: &str) -> (i32, i32) {
+            let legend_x_start = 100;
+            let legend_y_pos = 6;
+
+            match format!("{label}_{mode}").as_str() {
+                "crypto-acc_agg" => (legend_x_start, legend_y_pos),
+                "crypto-acc_noagg" => (legend_x_start + 150, legend_y_pos ),
+                "vanilla_agg" => (legend_x_start + 350, legend_y_pos ),
+                "vanilla_noagg" => (legend_x_start + 550, legend_y_pos ),
+                _ => panic!("tlessctl: unrecognized combination: {label}, {mode}"),
+            }
+        }
+
+        for id_x in 0..baselines.len() {
+            for id_y in 0..modes.len() {
+                // Calculate position for each legend item
+                let (x_pos, y_pos) = legend_label_pos_for_baseline(baselines[id_x], modes[id_y]);
+
+                // Draw the color box (Rectangle)
+                root.draw(&Rectangle::new(
+                    [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                    get_color_for_baseline(baselines[id_x], modes[id_y]).filled(),
+                ))
+                .unwrap();
+
+                // Draw the baseline label (Text)
+                root.draw(&Text::new(
+                    get_text_for_baseline(baselines[id_x], modes[id_y]),
+                    (x_pos + 30, y_pos + 5), // Adjust text position
+                    ("sans-serif", 20).into_font(),
+                ))
+                .unwrap();
             }
         }
 
