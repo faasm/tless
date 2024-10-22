@@ -914,6 +914,22 @@ impl Eval {
             let y_faasm : f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
             let y_knative : f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
 
+            /* Un-comment to print the overhead claimed in the paper
+            println!("{workflow}: knative overhead: {:.2} %",
+                     ((*workflow_data.get(&EvalBaseline::TlessKnative).unwrap() /
+                     *workflow_data.get(&EvalBaseline::CcKnative).unwrap()) - 1.0) * 100.0
+                    );
+            if *workflow == AvailableWorkflow::MlInference {
+                println!("{} vs {}",
+                     *workflow_data.get(&EvalBaseline::TlessKnative).unwrap(),
+                     *workflow_data.get(&EvalBaseline::CcKnative).unwrap());
+            }
+            println!("{workflow}: faasm overhead: {:.2} %",
+                     ((*workflow_data.get(&EvalBaseline::TlessFaasm).unwrap() /
+                     *workflow_data.get(&EvalBaseline::SgxFaasm).unwrap()) - 1.0) * 100.0
+                    );
+            */
+
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (baseline, y))| {
                     // Bar style

@@ -4,7 +4,7 @@ use csv::ReaderBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use plotters::prelude::*;
 use serde::Deserialize;
-use std::{collections::BTreeMap, fmt, fs, fs::File, io::{Write, BufWriter}, path::PathBuf, process::Command, str, str::FromStr, time::Instant};
+use std::{collections::BTreeMap, fmt, fs, fs::File, io::{Write, BufWriter}, path::PathBuf, process::Command, str, time::Instant};
 
 pub enum MicroBenchmarks {
     VerifyEDag,
@@ -147,10 +147,10 @@ impl Ubench {
         let baselines: Vec<&str> = vec!["crypto-acc", "vanilla"];
         // Aggreagate signatures or not
         let modes: Vec<&str> = vec!["agg", "noagg"];
-        let agg_func_exec_time: i32 = 10;
+        let agg_func_exec_time: i32 = 10 * 1000; // 10 seconds
 
         // one more than MAX_CHAINS
-        const VEC_SIZE : usize = 4;
+        const VEC_SIZE : usize = 11;
 
         // Collect data
         let mut data = BTreeMap::<&str, BTreeMap<&str, [u128; VEC_SIZE]>>::new();
@@ -209,6 +209,12 @@ impl Ubench {
             for i in 0..average_times.len() {
                 average_times[i] = average_times[i] / num_repeats;
 
+                // For signature aggregation baselines, add the expected runtime
+                // of the signature aggregation function
+                if mode == "agg" {
+                    average_times[i] += agg_func_exec_time as u128;
+                }
+
                 let y_val : f64 = (average_times[i] / 1000) as f64;
                 if y_val > y_max {
                     y_max = y_val;
@@ -234,7 +240,7 @@ impl Ubench {
             .margin(10)
             .margin_top(40)
             .margin_left(40)
-            .build_cartesian_2d(0..3, 0f64..300f64)
+            .build_cartesian_2d(0..10, 0f64..y_max as f64)
             .unwrap();
 
         chart
@@ -242,18 +248,35 @@ impl Ubench {
             .x_label_style(("sans-serif", 20).into_font())
             .y_label_style(("sans-serif", 20).into_font())
             .x_desc("")
-            // .x_labels(MAX_NUM_CHAINS.try_into().unwrap())
-            // .x_label_formatter(&|_| format!(""))
-            // .y_labels(10)
-            // .disable_x_mesh()
-            // .disable_x_axis()
-            // .y_label_formatter(&|y| format!("{:.0}", y))
+            .y_label_formatter(&|y| format!("{:.0}", y))
             .draw()
+            .unwrap();
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![
+                    (0, y_max),
+                    (10, y_max),
+                ],
+                &BLACK,
+            ))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![
+                    (10, 0.0),
+                    (10, y_max),
+                ],
+                &BLACK,
+            ))
             .unwrap();
 
         // Manually draw the X/Y-axis label with a custom font and size
         root.draw(&Text::new(
-            "Elapsed time [s]",
+            "Execution time [s]",
             (5, 220),
             ("sans-serif", 20)
                 .into_font()
@@ -262,7 +285,7 @@ impl Ubench {
         ))
         .unwrap();
         root.draw(&Text::new(
-            "# of parallel chains",
+            "# of leaves in eDag",
             (400, 280),
             ("sans-serif", 20)
                 .into_font()
