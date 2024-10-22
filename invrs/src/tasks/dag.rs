@@ -60,9 +60,11 @@ impl Dag {
     fn read_yaml_and_serialize(file_path: &str) -> Vec<u8> {
         let mut file = File::open(file_path).expect("tlessctl(dag): failed to load yaml path");
         let mut contents = String::new();
-        file.read_to_string(&mut contents).expect("tlessctl(dag): faild to read yaml");
+        file.read_to_string(&mut contents)
+            .expect("tlessctl(dag): faild to read yaml");
 
-        let dag: DagGraph = serde_yaml::from_str(&contents).expect("tlessctl(dag): failed to parse yaml");
+        let dag: DagGraph =
+            serde_yaml::from_str(&contents).expect("tlessctl(dag): failed to parse yaml");
         Self::serialize_dag(&dag)
     }
 
@@ -79,12 +81,7 @@ impl Dag {
     pub async fn upload(wflow_name: &str, yaml_path: &str) {
         // Load the given DAG to a byte array, and upload it to storage
         let serialized_dag = Self::read_yaml_and_serialize(yaml_path);
-        S3::upload_bytes(
-            "tless",
-            &format!("{wflow_name}/dag"),
-            &serialized_dag,
-        )
-        .await;
+        S3::upload_bytes("tless", &format!("{wflow_name}/dag"), &serialized_dag).await;
 
         // Calculate the hexstring of the hash of the DAG, to make it one
         // of our attributes for CP-ABE
@@ -153,11 +150,14 @@ impl Dag {
         };
 
         // DLETE ME - sanity check
-        let mut attributes : Vec<&str> = Vec::new();
+        let mut attributes: Vec<&str> = Vec::new();
         attributes.push(tee_identity_magic);
         attributes.push(&dag_hex_digest);
 
-        match rabe::schemes::bsw::decrypt(&rabe::schemes::bsw::keygen(&pk, &msk, &attributes).unwrap(), &ct) {
+        match rabe::schemes::bsw::decrypt(
+            &rabe::schemes::bsw::keygen(&pk, &msk, &attributes).unwrap(),
+            &ct,
+        ) {
             Ok(pt_str) => {
                 println!("correct!");
                 pt_str

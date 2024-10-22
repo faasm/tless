@@ -309,12 +309,14 @@ impl Eval {
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
-                ("TLESS_MODE",
-                match baseline {
-                    EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
-                    EvalBaseline::TlessKnative => "on",
-                    _ => panic!("woops"),
-                }),
+                (
+                    "TLESS_MODE",
+                    match baseline {
+                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::TlessKnative => "on",
+                        _ => panic!("woops"),
+                    },
+                ),
             ]),
         );
 
@@ -370,21 +372,24 @@ impl Eval {
         workflow_yaml.push("workflow.yaml");
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
-            BTreeMap::from([(
-                "RUNTIME_CLASS_NAME",
-                match baseline {
-                    EvalBaseline::Knative => "kata-qemu",
-                    EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
-                    _ => panic!("woops"),
-                },
+            BTreeMap::from([
+                (
+                    "RUNTIME_CLASS_NAME",
+                    match baseline {
+                        EvalBaseline::Knative => "kata-qemu",
+                        EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
+                        _ => panic!("woops"),
+                    },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
-                ("TLESS_MODE",
-                match baseline {
-                    EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
-                    EvalBaseline::TlessKnative => "on",
-                    _ => panic!("woops"),
-                }),
+                (
+                    "TLESS_MODE",
+                    match baseline {
+                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::TlessKnative => "on",
+                        _ => panic!("woops"),
+                    },
+                ),
             ]),
         );
 
@@ -427,7 +432,10 @@ impl Eval {
     }
 
     /// Run workflow once, and return result depending on the experiment
-    async fn run_workflow_once(workflow: &AvailableWorkflow, exp: &EvalExperiment) -> ExecutionResult {
+    async fn run_workflow_once(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+    ) -> ExecutionResult {
         let mut exp_result = ExecutionResult {
             start_time: Utc::now(),
             end_time: Utc::now(),
@@ -444,18 +452,20 @@ impl Eval {
             .expect("invrs(eval): failed to execute trigger command");
 
         match output.status.code() {
-                Some(0) => {
-                    debug!("{trigger_cmd:?}: executed succesfully");
-                }
-                Some(code) => {
-                    let stderr = str::from_utf8(&output.stderr).unwrap_or("tlessctl(eval): failed to get stderr");
-                    panic!("{trigger_cmd:?}: exited with error (code: {code}): {stderr}");
-                }
-                None => {
-                    let stderr = str::from_utf8(&output.stderr).unwrap_or("tlessctl(eval): failed to get stderr");
-                    panic!("{trigger_cmd:?}: failed: {stderr}");
-                }
-            };
+            Some(0) => {
+                debug!("{trigger_cmd:?}: executed succesfully");
+            }
+            Some(code) => {
+                let stderr = str::from_utf8(&output.stderr)
+                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                panic!("{trigger_cmd:?}: exited with error (code: {code}): {stderr}");
+            }
+            None => {
+                let stderr = str::from_utf8(&output.stderr)
+                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                panic!("{trigger_cmd:?}: failed: {stderr}");
+            }
+        };
 
         // Specific per-workflow completion detection
         match workflow {
@@ -532,14 +542,18 @@ impl Eval {
         }
 
         // Common-clean-up
-        S3::clear_dir(EVAL_BUCKET_NAME.to_string(), "{workflow}/exec-tokens".to_string()).await;
+        S3::clear_dir(
+            EVAL_BUCKET_NAME.to_string(),
+            "{workflow}/exec-tokens".to_string(),
+        )
+        .await;
 
         // Per-experiment, per-workflow clean-up
         match exp {
             EvalExperiment::E2eLatencyCold => {
                 debug!("tlesssctl: {exp}: waiting for scale-to-zero...");
                 Self::wait_for_scale_to_zero().await;
-            },
+            }
             _ => debug!("tlessctl: {exp}: noting to clean-up after single execution"),
         }
 
@@ -571,7 +585,11 @@ impl Eval {
         // TODO: consider re-using between baselines
         // Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true).await;
         let pb = Self::get_progress_bar(
-            AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
+            AvailableWorkflow::iter_variants().len().try_into().unwrap(),
+            exp,
+            &baseline,
+            "state",
+        );
         for workflow in AvailableWorkflow::iter_variants() {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
             pb.inc(1);
@@ -585,7 +603,12 @@ impl Eval {
             Self::init_data_file(workflow, &exp, &baseline);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, format!("{workflow}").as_str());
+            let pb = Self::get_progress_bar(
+                args.num_repeats.into(),
+                exp,
+                &baseline,
+                format!("{workflow}").as_str(),
+            );
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
@@ -595,13 +618,21 @@ impl Eval {
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_workflow_once(workflow, exp).await;
-                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+                S3::clear_dir(
+                    EVAL_BUCKET_NAME.to_string(),
+                    format!("{workflow}/exec-tokens"),
+                )
+                .await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
                 let mut result = Self::run_workflow_once(workflow, exp).await;
-                S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+                S3::clear_dir(
+                    EVAL_BUCKET_NAME.to_string(),
+                    format!("{workflow}/exec-tokens"),
+                )
+                .await;
                 result.iter = i;
                 Self::write_result_to_file(workflow, &exp, &baseline, &result);
 
@@ -696,14 +727,18 @@ impl Eval {
         }
 
         async fn cleanup_single_execution(workflow: &AvailableWorkflow, exp: &EvalExperiment) {
-            S3::clear_dir(EVAL_BUCKET_NAME.to_string(), format!("{workflow}/exec-tokens")).await;
+            S3::clear_dir(
+                EVAL_BUCKET_NAME.to_string(),
+                format!("{workflow}/exec-tokens"),
+            )
+            .await;
 
             match exp {
                 EvalExperiment::E2eLatencyCold => {
                     debug!("Flushing Faasm workers and sleeping...");
                     Eval::run_faasmctl_cmd("flush.workers");
                     thread::sleep(time::Duration::from_secs(2));
-                },
+                }
                 _ => debug!("nothing to do"),
             }
         }
@@ -711,7 +746,11 @@ impl Eval {
         // Upload the state for all workflows
         // TODO: undo me
         let pb = Self::get_progress_bar(
-            AvailableWorkflow::iter_variants().len().try_into().unwrap(), exp, &baseline, "state");
+            AvailableWorkflow::iter_variants().len().try_into().unwrap(),
+            exp,
+            &baseline,
+            "state",
+        );
         // for workflow in vec![&AvailableWorkflow::WordCount] {
         for workflow in AvailableWorkflow::iter_variants() {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
@@ -733,7 +772,12 @@ impl Eval {
             Self::init_data_file(workflow, &exp, &baseline);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, format!("{workflow}").as_str());
+            let pb = Self::get_progress_bar(
+                args.num_repeats.into(),
+                exp,
+                &baseline,
+                format!("{workflow}").as_str(),
+            );
 
             let faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
@@ -911,8 +955,8 @@ impl Eval {
             let x_orig = w_idx * (num_baselines + 1);
 
             // Work-out the slowest value for each set of baselines
-            let y_faasm : f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
-            let y_knative : f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
+            let y_faasm: f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
+            let y_knative: f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
 
             /* Un-comment to print the overhead claimed in the paper
             println!("{workflow}: knative overhead: {:.2} %",
@@ -946,8 +990,10 @@ impl Eval {
                         this_y = (y / y_knative) as f64;
                     }
 
-                    let mut bar =
-                        Rectangle::new([(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)], bar_style);
+                    let mut bar = Rectangle::new(
+                        [(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)],
+                        bar_style,
+                    );
                     bar.set_margin(0, 0, 2, 2);
                     bar
                 }))
@@ -963,23 +1009,24 @@ impl Eval {
 
                 // Add text
                 let y_offset = match this_y > 5.0 {
-                    true => - 0.1,
+                    true => -0.1,
                     false => 0.25,
                 };
-                chart.plotting_area().draw(&Text::new(
-                    format!("{:.1}", this_y),
-                    (x_orig + x, (this_y + y_offset) as f64),
-                    ("sans-serif", 15).into_font(),
-                ))
-                .unwrap();
+                chart
+                    .plotting_area()
+                    .draw(&Text::new(
+                        format!("{:.1}", this_y),
+                        (x_orig + x, (this_y + y_offset) as f64),
+                        ("sans-serif", 15).into_font(),
+                    ))
+                    .unwrap();
             }
-
 
             // Add label for the workflow
             let x_workflow_label = x_orig + num_baselines / 2 - 1;
             let label_px_coordinate = chart
                 .plotting_area()
-                .map_coordinate(&(x_workflow_label, - 0.25));
+                .map_coordinate(&(x_workflow_label, -0.25));
             root.draw(&Text::new(
                 format!("{workflow}"),
                 label_px_coordinate,
@@ -993,30 +1040,21 @@ impl Eval {
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (0, 100 as f64),
-                    (x_max, 100 as f64),
-                ],
+                vec![(0, 100 as f64), (x_max, 100 as f64)],
                 &BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (x_max, 0 as f64),
-                    (x_max, 100 as f64),
-                ],
+                vec![(x_max, 0 as f64), (x_max, 100 as f64)],
                 &BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (0, 0 as f64),
-                    (x_max, 0 as f64),
-                ],
+                vec![(0, 0 as f64), (x_max, 0 as f64)],
                 &BLACK,
             ))
             .unwrap();

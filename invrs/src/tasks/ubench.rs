@@ -1,10 +1,19 @@
-use clap::Args;
 use crate::env::Env;
+use clap::Args;
 use csv::ReaderBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use plotters::prelude::*;
 use serde::Deserialize;
-use std::{collections::BTreeMap, fmt, fs, fs::File, io::{Write, BufWriter}, path::PathBuf, process::Command, str, time::Instant};
+use std::{
+    collections::BTreeMap,
+    fmt, fs,
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf,
+    process::Command,
+    str,
+    time::Instant,
+};
 
 pub enum MicroBenchmarks {
     VerifyEDag,
@@ -86,7 +95,12 @@ impl Ubench {
                 let mut csv_file = BufWriter::new(File::create(results_dir).unwrap());
                 writeln!(csv_file, "Run,Parameter,ExecTimeMS").unwrap();
 
-                let pb = Self::get_progress_bar(MAX_NUM_CHAINS * run_args.num_repeats, &MicroBenchmarks::VerifyEDag, baseline, mode_name);
+                let pb = Self::get_progress_bar(
+                    MAX_NUM_CHAINS * run_args.num_repeats,
+                    &MicroBenchmarks::VerifyEDag,
+                    baseline,
+                    mode_name,
+                );
                 for param in 1..=MAX_NUM_CHAINS {
                     for run in 1..=run_args.num_repeats {
                         let start = Instant::now();
@@ -106,7 +120,8 @@ impl Ubench {
                                 pb.inc(1);
                             }
                             _ => {
-                                let stderr = str::from_utf8(&output.stderr).unwrap_or("tlessctl(eval): failed to get stderr");
+                                let stderr = str::from_utf8(&output.stderr)
+                                    .unwrap_or("tlessctl(eval): failed to get stderr");
                                 eprintln!("tlessctl(eval): error running command: {}", stderr);
                             }
                         }
@@ -150,7 +165,7 @@ impl Ubench {
         let agg_func_exec_time: i32 = 10 * 1000; // 10 seconds
 
         // one more than MAX_CHAINS
-        const VEC_SIZE : usize = 11;
+        const VEC_SIZE: usize = 11;
 
         // Collect data
         let mut data = BTreeMap::<&str, BTreeMap<&str, [u128; VEC_SIZE]>>::new();
@@ -176,7 +191,7 @@ impl Ubench {
                 .unwrap_or_default();
             let file_name_len = file_name.len();
             let file_name_no_ext = &file_name[0..file_name_len - 4];
-            let parts : Vec<&str> = file_name_no_ext.split("_").collect();
+            let parts: Vec<&str> = file_name_no_ext.split("_").collect();
 
             let baseline: &str = parts[0];
             let mode: &str = parts[1];
@@ -192,18 +207,14 @@ impl Ubench {
                 println!("{baseline}/{mode}: {csv_file:?}");
                 let record: Record = result.unwrap();
 
-                let agg_times = data
-                    .get_mut(&baseline)
-                    .unwrap()
-                    .get_mut(&mode)
-                    .unwrap();
+                let agg_times = data.get_mut(&baseline).unwrap().get_mut(&mode).unwrap();
 
                 count += 1;
                 let idx: usize = record.parameter.try_into().unwrap();
                 agg_times[idx] += record.exec_time_m_s;
             }
 
-            let num_repeats : u128 = (count / MAX_NUM_CHAINS).into();
+            let num_repeats: u128 = (count / MAX_NUM_CHAINS).into();
 
             let average_times = data.get_mut(&baseline).unwrap().get_mut(&mode).unwrap();
             for i in 0..average_times.len() {
@@ -215,12 +226,11 @@ impl Ubench {
                     average_times[i] += agg_func_exec_time as u128;
                 }
 
-                let y_val : f64 = (average_times[i] / 1000) as f64;
+                let y_val: f64 = (average_times[i] / 1000) as f64;
                 if y_val > y_max {
                     y_max = y_val;
                 }
             }
-
         }
 
         let mut plot_path = Env::proj_root();
@@ -255,23 +265,11 @@ impl Ubench {
         // Add solid frames
         chart
             .plotting_area()
-            .draw(&PathElement::new(
-                vec![
-                    (0, y_max),
-                    (10, y_max),
-                ],
-                &BLACK,
-            ))
+            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
             .unwrap();
         chart
             .plotting_area()
-            .draw(&PathElement::new(
-                vec![
-                    (10, 0.0),
-                    (10, y_max),
-                ],
-                &BLACK,
-            ))
+            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
             .unwrap();
 
         // Manually draw the X/Y-axis label with a custom font and size
@@ -287,13 +285,11 @@ impl Ubench {
         root.draw(&Text::new(
             "# of leaves in eDag",
             (400, 280),
-            ("sans-serif", 20)
-                .into_font()
-                .color(&BLACK),
+            ("sans-serif", 20).into_font().color(&BLACK),
         ))
         .unwrap();
 
-        fn get_color_for_baseline(label :&str, mode: &str) -> RGBColor {
+        fn get_color_for_baseline(label: &str, mode: &str) -> RGBColor {
             match format!("{label}_{mode}").as_str() {
                 "crypto-acc_agg" => RGBColor(171, 222, 230),
                 "crypto-acc_noagg" => RGBColor(203, 170, 203),
@@ -303,7 +299,7 @@ impl Ubench {
             }
         }
 
-        fn get_text_for_baseline(label :&str, mode: &str) -> String {
+        fn get_text_for_baseline(label: &str, mode: &str) -> String {
             match format!("{label}_{mode}").as_str() {
                 "crypto-acc_agg" => "tless verify".to_string(),
                 "crypto-acc_noagg" => "baseline + crypto".to_string(),
@@ -315,33 +311,36 @@ impl Ubench {
 
         for (label, inner_data) in data {
             for (mode, values) in inner_data {
-                chart.draw_series(LineSeries::new(
-                    (1..values.len()).zip(values[1..].iter()).map(|(x, y)| (x as i32, *y as f64 / 1000.0)),
-                    get_color_for_baseline(label, mode)
-                        .stroke_width(3),
-                )).unwrap();
+                chart
+                    .draw_series(LineSeries::new(
+                        (1..values.len())
+                            .zip(values[1..].iter())
+                            .map(|(x, y)| (x as i32, *y as f64 / 1000.0)),
+                        get_color_for_baseline(label, mode).stroke_width(3),
+                    ))
+                    .unwrap();
 
-                chart.draw_series(
-                    (1..values.len()).zip(values[1..].iter())
-                    .map(|(x, y)| Circle::new(
+                chart
+                    .draw_series((1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
+                        Circle::new(
                             (x as i32, *y as f64 / 1000.0),
                             5,
-                            get_color_for_baseline(label, mode)
-                                .filled())))
+                            get_color_for_baseline(label, mode).filled(),
+                        )
+                    }))
                     .unwrap();
             }
-
         }
 
-        fn legend_label_pos_for_baseline(label :&str, mode: &str) -> (i32, i32) {
+        fn legend_label_pos_for_baseline(label: &str, mode: &str) -> (i32, i32) {
             let legend_x_start = 100;
             let legend_y_pos = 6;
 
             match format!("{label}_{mode}").as_str() {
                 "crypto-acc_agg" => (legend_x_start, legend_y_pos),
-                "crypto-acc_noagg" => (legend_x_start + 150, legend_y_pos ),
-                "vanilla_agg" => (legend_x_start + 350, legend_y_pos ),
-                "vanilla_noagg" => (legend_x_start + 550, legend_y_pos ),
+                "crypto-acc_noagg" => (legend_x_start + 150, legend_y_pos),
+                "vanilla_agg" => (legend_x_start + 350, legend_y_pos),
+                "vanilla_noagg" => (legend_x_start + 550, legend_y_pos),
                 _ => panic!("tlessctl: unrecognized combination: {label}, {mode}"),
             }
         }

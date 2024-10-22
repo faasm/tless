@@ -104,7 +104,7 @@ enum UbenchCommand {
     VerifyEdag {
         #[command(subcommand)]
         ubench_sub_command: UbenchSubCommand,
-    }
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -238,7 +238,7 @@ async fn main() {
                 }
             },
         },
-        Command::Ubench { ubench_command} => match ubench_command {
+        Command::Ubench { ubench_command } => match ubench_command {
             UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {
                     Ubench::run(&MicroBenchmarks::VerifyEDag, run_args);
@@ -246,7 +246,7 @@ async fn main() {
                 UbenchSubCommand::Plot {} => {
                     Ubench::plot(&MicroBenchmarks::VerifyEDag);
                 }
-            }
+            },
         },
         // FIXME: move all S3 methods to &str
         Command::S3 { s3_command } => match s3_command {
