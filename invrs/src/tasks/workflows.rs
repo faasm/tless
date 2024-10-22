@@ -30,8 +30,8 @@ impl FromStr for AvailableWorkflow {
     fn from_str(input: &str) -> Result<AvailableWorkflow, Self::Err> {
         match input {
             "finra" => Ok(AvailableWorkflow::Finra),
-            "ml-inference" => Ok(AvailableWorkflow::MlTraining),
-            "ml-training" => Ok(AvailableWorkflow::MlInference),
+            "ml-inference" => Ok(AvailableWorkflow::MlInference),
+            "ml-training" => Ok(AvailableWorkflow::MlTraining),
             "word-count" => Ok(AvailableWorkflow::WordCount),
             _ => Err(()),
         }
