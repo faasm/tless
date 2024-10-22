@@ -2,7 +2,7 @@
 
 THIS_RUN_MAGIC=${RANDOM}
 
-${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=true --restart=Never -ti -- -X POST -v \
+${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-${THIS_RUN_MAGIC} --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli" \
