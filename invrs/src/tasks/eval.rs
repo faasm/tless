@@ -81,6 +81,7 @@ impl EvalBaseline {
     }
 }
 
+#[derive(PartialEq)]
 pub enum EvalExperiment {
     E2eLatency,
     E2eLatencyCold,
@@ -101,11 +102,11 @@ impl fmt::Display for EvalExperiment {
 pub struct EvalRunArgs {
     #[arg(short, long, num_args = 1.., value_name = "BASELINE")]
     baseline: Vec<EvalBaseline>,
-    #[arg(long, default_value = "3")]
+    #[arg(long, default_value = "2")]
     num_repeats: u32,
     #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
-    #[arg(long, default_value = "4")]
+    #[arg(long, default_value = "10")]
     scale_up_range: u32,
 }
 
@@ -774,16 +775,22 @@ impl Eval {
             }
         }
 
+        // Work-out the workflows to execute for each experiment
+        let workflow_iter = match exp {
+            // For the scale-up latency, we only run the FINRA workflow
+            EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            _ => AvailableWorkflow::iter_variants(),
+        };
+
         // Upload the state for all workflows
         // TODO: undo me
         let pb = Self::get_progress_bar(
-            AvailableWorkflow::iter_variants().len().try_into().unwrap(),
+            workflow_iter.len().try_into().unwrap(),
             exp,
             &baseline,
             "state",
         );
-        // for workflow in vec![&AvailableWorkflow::WordCount] {
-        for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in workflow_iter.clone() {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
             pb.inc(1);
         }
@@ -794,20 +801,25 @@ impl Eval {
         // Self::upload_wasm();
 
         // Invoke each workflow
-        // UNDO ME
-        // for workflow in vec![&AvailableWorkflow::WordCount] {
-        for workflow in AvailableWorkflow::iter_variants() {
-            let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
+        for workflow in workflow_iter.clone() {
+            let mut faasm_cmdline = Workflows::get_faasm_cmdline(workflow).to_string();
+            if *exp == EvalExperiment::ScaleUpLatency {
+                faasm_cmdline = format!("finra/yfinance.csv {scale_up_factor}");
+            }
 
             // Initialise result file
             Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
+            let mut workflow_str = format!("{workflow}");
+            if scale_up_factor > 0 {
+                workflow_str = format!("{workflow}-{scale_up_factor}");
+            }
             let pb = Self::get_progress_bar(
                 args.num_repeats.into(),
                 exp,
                 &baseline,
-                format!("{workflow}").as_str(),
+                &workflow_str,
             );
 
             let faasmctl_cmd = format!(
