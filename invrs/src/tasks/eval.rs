@@ -84,6 +84,7 @@ impl EvalBaseline {
 pub enum EvalExperiment {
     E2eLatency,
     E2eLatencyCold,
+    ScaleUpLatency,
 }
 
 impl fmt::Display for EvalExperiment {
@@ -91,6 +92,7 @@ impl fmt::Display for EvalExperiment {
         match self {
             EvalExperiment::E2eLatency => write!(f, "e2e-latency"),
             EvalExperiment::E2eLatencyCold => write!(f, "e2e-latency-cold"),
+            EvalExperiment::ScaleUpLatency => write!(f, "scale-up-latency"),
         }
     }
 }
@@ -103,6 +105,8 @@ pub struct EvalRunArgs {
     num_repeats: u32,
     #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
+    #[arg(long, default_value = "4")]
+    scale_up_range: u32,
 }
 
 pub struct ExecutionResult {
@@ -125,24 +129,32 @@ impl Eval {
         workflow: &AvailableWorkflow,
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
+        scale_up_factor: u32,
     ) -> String {
-        format!(
-            "{}/{exp}/data/{baseline}_{workflow}.csv",
-            Self::get_root().display()
-        )
+        if scale_up_factor == 0 {
+            format!(
+                "{}/{exp}/data/{baseline}_{workflow}.csv",
+                Self::get_root().display()
+            )
+        } else {
+            format!(
+                "{}/{exp}/data/{baseline}_{workflow}-{scale_up_factor}.csv",
+                Self::get_root().display()
+            )
+        }
     }
 
-    fn init_data_file(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+    fn init_data_file(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline, scale_up_factor: u32) {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline))
+            .open(Self::get_data_file_name(workflow, exp, baseline, scale_up_factor))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {
+            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold | EvalExperiment::ScaleUpLatency => {
                 writeln!(file, "Run,TimeMs").expect("invrs(eval): failed to write to file");
             }
         }
@@ -153,16 +165,17 @@ impl Eval {
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
         result: &ExecutionResult,
+        scale_up_factor: u32,
     ) {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .append(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline))
+            .open(Self::get_data_file_name(workflow, exp, baseline, scale_up_factor))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {
+            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold | EvalExperiment::ScaleUpLatency => {
                 let duration: Duration = result.end_time - result.start_time;
                 writeln!(file, "{},{}", result.iter, duration.num_milliseconds())
                     .expect("invrs(eval): failed to write to file");
@@ -435,6 +448,7 @@ impl Eval {
     async fn run_workflow_once(
         workflow: &AvailableWorkflow,
         exp: &EvalExperiment,
+        scale_up_factor: u32,
     ) -> ExecutionResult {
         let mut exp_result = ExecutionResult {
             start_time: Utc::now(),
@@ -447,9 +461,19 @@ impl Eval {
         trigger_cmd.push(format!("{workflow}"));
         trigger_cmd.push("knative");
         trigger_cmd.push("curl_cmd.sh");
-        let output = Command::new(trigger_cmd.clone())
-            .output()
-            .expect("invrs(eval): failed to execute trigger command");
+        let output = match exp {
+            EvalExperiment::ScaleUpLatency => {
+                Command::new(trigger_cmd.clone())
+                    .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
+                    .output()
+                    .expect("tlessctl(eval): failed to execute trigger command")
+            }
+            _ => {
+                Command::new(trigger_cmd.clone())
+                    .output()
+                    .expect("tlessctl(eval): failed to execute trigger command")
+            }
+        };
 
         match output.status.code() {
             Some(0) => {
@@ -563,7 +587,7 @@ impl Eval {
         return exp_result;
     }
 
-    async fn run_knative_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize) {
+    async fn run_knative_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize, scale_up_factor: u32) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
@@ -580,17 +604,20 @@ impl Eval {
             env::set_var("MINIO_URL", minio_url);
         }
 
-        // Upload the state for all workflows
-        // TODO: add progress bar
-        // TODO: consider re-using between baselines
+        // Upload the state for all workflows for the experiment
+        let workflow_iter = match exp {
+            // For the scale-up latency, we only run the FINRA workflow
+            EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            _ => AvailableWorkflow::iter_variants(),
+        };
         // Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true).await;
         let pb = Self::get_progress_bar(
-            AvailableWorkflow::iter_variants().len().try_into().unwrap(),
+            workflow_iter.len().try_into().unwrap(),
             exp,
             &baseline,
             "state",
         );
-        for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in workflow_iter.clone() {
             Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
             pb.inc(1);
         }
@@ -598,26 +625,28 @@ impl Eval {
 
         // Execute each workload individually
         // for workflow in vec![&AvailableWorkflow::MlInference] {
-        for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in workflow_iter.clone() {
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline);
+            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
+            let mut workflow_str = format!("{workflow}");
+            if scale_up_factor > 0 {
+                workflow_str = format!("{workflow}-{scale_up_factor}");
+            }
             let pb = Self::get_progress_bar(
                 args.num_repeats.into(),
                 exp,
                 &baseline,
-                format!("{workflow}").as_str(),
+                workflow_str.as_str(),
             );
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
 
-            // TODO: FIXME: consider differntiating between cold and warm starts!
-
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
-                Self::run_workflow_once(workflow, exp).await;
+                Self::run_workflow_once(workflow, exp, scale_up_factor).await;
                 S3::clear_dir(
                     EVAL_BUCKET_NAME.to_string(),
                     format!("{workflow}/exec-tokens"),
@@ -627,14 +656,14 @@ impl Eval {
 
             // Do actual experiment
             for i in 0..args.num_repeats {
-                let mut result = Self::run_workflow_once(workflow, exp).await;
+                let mut result = Self::run_workflow_once(workflow, exp, scale_up_factor).await;
                 S3::clear_dir(
                     EVAL_BUCKET_NAME.to_string(),
                     format!("{workflow}/exec-tokens"),
                 )
                 .await;
                 result.iter = i;
-                Self::write_result_to_file(workflow, &exp, &baseline, &result);
+                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
                 pb.inc(1);
             }
@@ -698,7 +727,7 @@ impl Eval {
         Utc.timestamp_opt(secs, nanos).single().unwrap()
     }
 
-    async fn run_faasm_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize) {
+    async fn run_faasm_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize, scale_up_factor: u32) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, work out the WASM VM we need
@@ -714,8 +743,10 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
-        env::set_var("FAASM_WASM_VM", wasm_vm);
-        env::set_var("TLESS_ENABLED", tless_enabled);
+        unsafe {
+            env::set_var("FAASM_WASM_VM", wasm_vm);
+            env::set_var("TLESS_ENABLED", tless_enabled);
+        }
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
 
@@ -769,7 +800,7 @@ impl Eval {
             let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
 
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline);
+            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
             let pb = Self::get_progress_bar(
@@ -800,7 +831,7 @@ impl Eval {
                     iter: i,
                 };
 
-                Self::write_result_to_file(workflow, &exp, &baseline, &result);
+                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
                 // Clean-up
                 cleanup_single_execution(workflow, exp).await;
@@ -817,10 +848,24 @@ impl Eval {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
                 EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => {
-                    Self::run_knative_experiment(exp, args, i).await;
+                    match exp {
+                        EvalExperiment::ScaleUpLatency => {
+                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                                Self::run_knative_experiment(exp, args, i, scale_up_factor).await;
+                            }
+                        },
+                        _ => Self::run_knative_experiment(exp, args, i, 0).await,
+                    }
                 }
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => {
-                    Self::run_faasm_experiment(exp, args, i).await;
+                    match exp {
+                        EvalExperiment::ScaleUpLatency => {
+                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                                Self::run_faasm_experiment(exp, args, i, scale_up_factor).await;
+                            }
+                        },
+                        _ => Self::run_faasm_experiment(exp, args, i, 0).await,
+                    }
                 }
             }
         }
@@ -1102,6 +1147,9 @@ impl Eval {
             }
             EvalExperiment::E2eLatencyCold => {
                 Self::plot_e2e_latency(&exp, &data_files);
+            }
+            EvalExperiment::ScaleUpLatency => {
+                panic!("implement plot!");
             }
         }
     }

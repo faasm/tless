@@ -96,6 +96,12 @@ enum EvalCommand {
         #[command(subcommand)]
         eval_sub_command: EvalSubCommand,
     },
+    /// Evaluate the latency when scaling-up the number of functions in the
+    /// workflow
+    ScaleUpLatency {
+        #[command(subcommand)]
+        eval_sub_command: EvalSubCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -235,6 +241,14 @@ async fn main() {
                 }
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatencyCold);
+                }
+            },
+            EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
+                EvalSubCommand::Run(run_args) => {
+                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await;
+                }
+                EvalSubCommand::Plot {} => {
+                    Eval::plot(&EvalExperiment::ScaleUpLatency);
                 }
             },
         },

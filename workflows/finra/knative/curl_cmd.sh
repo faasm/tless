@@ -1,9 +1,10 @@
 #!/bin/bash
 
 THIS_RUN_MAGIC=${RANDOM}
-NUM_AUDIT_FUNCS=8
+# Support overriding for scale-up plots
+NUM_AUDIT_FUNCS=${OVERRIDE_NUM_AUDIT_FUNCS:-8}
 
-${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=true --restart=Never -ti -- -X POST -v \
+${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-${THIS_RUN_MAGIC} --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli-fetch-public" \
@@ -14,7 +15,7 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=tru
 
 sleep 1
 
-${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-2 --image=curlimages/curl --rm=true --restart=Never -ti -- -X POST -v \
+${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-2-${THIS_RUN_MAGIC} --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli-fetch-private" \

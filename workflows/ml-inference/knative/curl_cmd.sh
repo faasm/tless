@@ -1,7 +1,8 @@
 #!/bin/bash
 
 THIS_RUN_MAGIC=${RANDOM}
-NUM_INF_FUNCS=8
+# Support overriding for scale-up plots
+NUM_INF_FUNCS=${OVERRIDE_NUM_INF_FUNCS:-8}
 
 ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \

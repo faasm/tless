@@ -149,22 +149,6 @@ impl Dag {
             Err(_) => panic!("tlessctl(dag): error serializing certificate chain"),
         };
 
-        // DLETE ME - sanity check
-        let mut attributes: Vec<&str> = Vec::new();
-        attributes.push(tee_identity_magic);
-        attributes.push(&dag_hex_digest);
-
-        match rabe::schemes::bsw::decrypt(
-            &rabe::schemes::bsw::keygen(&pk, &msk, &attributes).unwrap(),
-            &ct,
-        ) {
-            Ok(pt_str) => {
-                println!("correct!");
-                pt_str
-            }
-            Err(e) => panic!("error: {e}"),
-        };
-
         // Encapsulate the cipher-text in a symmetric encryption payload
         let abe_ct_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let abe_ct = cipher
