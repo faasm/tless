@@ -1149,6 +1149,181 @@ impl Eval {
         root.present().unwrap();
     }
 
+    fn plot_scale_up_latency(data_files: &Vec<PathBuf>) {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Record {
+            #[allow(dead_code)]
+            run: u32,
+            time_ms: u64,
+        }
+
+        const NUM_MAX_FUNCS: usize = 4;
+
+        // Collect data
+        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_MAX_FUNCS]>::new();
+        for baseline in EvalBaseline::iter_variants() {
+            data.insert(baseline.clone(), [0; NUM_MAX_FUNCS]);
+        }
+
+        let mut y_max: f64 = 0.0;
+        for csv_file in data_files {
+            let file_name = csv_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            let file_name_len = file_name.len();
+            let file_name_no_ext = &file_name[0..file_name_len - 4];
+            let parts: Vec<&str> = file_name_no_ext.split("_").collect();
+            let workload_parts: Vec<&str> = parts[1].split("-").collect();
+
+            let baseline: EvalBaseline = parts[0].parse().unwrap();
+            let _workload: &str = workload_parts[0];
+            let scale_up_factor: usize = workload_parts[1].parse().unwrap();
+
+            // Open the CSV and deserialize records
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .from_path(csv_file)
+                .unwrap();
+            let mut count = 0;
+            let avg_times = data.get_mut(&baseline).unwrap();
+
+            for result in reader.deserialize() {
+                let record: Record = result.unwrap();
+
+                avg_times[scale_up_factor - 1] += record.time_ms;
+                count += 1;
+            }
+
+            avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
+
+            let y_val : f64 = avg_times[scale_up_factor - 1] as f64 / 1000.0;
+            if y_val > y_max {
+                y_max = y_val;
+            }
+        }
+
+        let mut plot_path = Env::proj_root();
+        plot_path.push("eval");
+        plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
+        plot_path.push("plots");
+        fs::create_dir_all(plot_path.clone()).unwrap();
+        plot_path.push(format!("{}.svg", EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")));
+
+        // Plot data
+        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .margin_top(40)
+            .margin_left(40)
+            .build_cartesian_2d(0..(NUM_MAX_FUNCS + 1) as u32, 0f64..y_max as f64)
+            .unwrap();
+
+        chart
+            .configure_mesh()
+            .x_label_style(("sans-serif", 20).into_font())
+            .y_label_style(("sans-serif", 20).into_font())
+            .x_desc("")
+            .y_label_formatter(&|y| format!("{:.0}", y))
+            .draw()
+            .unwrap();
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
+            .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Execution time [s]",
+            (5, 220),
+            ("sans-serif", 20)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "# of audit functions",
+            (400, 280),
+            ("sans-serif", 20).into_font().color(&BLACK),
+        ))
+        .unwrap();
+
+        for (baseline, values) in data {
+            chart
+                .draw_series(LineSeries::new(
+                    (0..values.len())
+                        .zip(values.iter())
+                        .map(|(x, y)| ((x + 1) as u32, *y as f64 / 1000.0)),
+                    baseline.get_color().stroke_width(3),
+                ))
+                .unwrap();
+
+            chart
+                .draw_series(
+                    (0..values.len())
+                        .zip(values.iter()).map(|(x, y)| {
+                            Circle::new(
+                                ((x + 1) as u32, *y as f64 / 1000.0),
+                                5,
+                                baseline.get_color().filled())
+                    }))
+                .unwrap();
+        }
+
+        fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
+            let legend_x_start = 80;
+            let legend_y_pos = 6;
+
+            match baseline {
+                EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
+                EvalBaseline::TlessFaasm => (legend_x_start + 220, legend_y_pos),
+                EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
+                EvalBaseline::CcKnative => (legend_x_start + 400, legend_y_pos),
+                EvalBaseline::TlessKnative => (legend_x_start + 500, legend_y_pos),
+            }
+        }
+
+        for baseline in EvalBaseline::iter_variants() {
+            // Calculate position for each legend item
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+            // Draw the color box (Rectangle)
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                baseline.get_color().filled(),
+            ))
+            .unwrap();
+
+            let mut label = format!("{baseline}");
+            if baseline == &EvalBaseline::CcKnative {
+                label = "sev-knative".to_string();
+            }
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                label,
+                (x_pos + 30, y_pos + 5),
+                ("sans-serif", 20).into_font(),
+            ))
+            .unwrap();
+        }
+
+        root.present().unwrap();
+    }
+
     pub fn plot(exp: &EvalExperiment) {
         // First, get all the data files
         let data_files = Self::get_all_data_files(exp);
@@ -1161,7 +1336,7 @@ impl Eval {
                 Self::plot_e2e_latency(&exp, &data_files);
             }
             EvalExperiment::ScaleUpLatency => {
-                panic!("implement plot!");
+                Self::plot_scale_up_latency(&data_files);
             }
         }
     }
