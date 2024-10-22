@@ -19,12 +19,12 @@ impl fmt::Display for MicroBenchmarks {
 }
 
 // TODO: bump to 10
-static MAX_NUM_CHAINS: u32 = 3;
+static MAX_NUM_CHAINS: u32 = 10;
 
 #[derive(Debug, Args)]
 pub struct UbenchRunArgs {
     // TODO: bump to 3
-    #[arg(long, default_value = "1")]
+    #[arg(long, default_value = "3")]
     num_repeats: u32,
     #[arg(long, default_value = "0")]
     num_warmup_repeats: u32,
@@ -91,7 +91,6 @@ impl Ubench {
                     for run in 1..=run_args.num_repeats {
                         let start = Instant::now();
                         // Execute the baseline binary with the mode and parameter
-                        println!("{:?}", binary_path.clone());
                         let output = Command::new(binary_path.clone())
                             .current_dir(verify_dir.clone())
                             .arg(mode.to_string())
