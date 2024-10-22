@@ -1158,7 +1158,7 @@ impl Eval {
             time_ms: u64,
         }
 
-        const NUM_MAX_FUNCS: usize = 4;
+        const NUM_MAX_FUNCS: usize = 10;
 
         // Collect data
         let mut data = BTreeMap::<EvalBaseline, [u64; NUM_MAX_FUNCS]>::new();
@@ -1166,7 +1166,6 @@ impl Eval {
             data.insert(baseline.clone(), [0; NUM_MAX_FUNCS]);
         }
 
-        let mut y_max: f64 = 0.0;
         for csv_file in data_files {
             let file_name = csv_file
                 .file_name()
@@ -1198,12 +1197,15 @@ impl Eval {
 
             avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
 
+            /*
             let y_val : f64 = avg_times[scale_up_factor - 1] as f64 / 1000.0;
             if y_val > y_max {
                 y_max = y_val;
             }
+            */
         }
 
+        let mut y_max: f64 = 200.0;
         let mut plot_path = Env::proj_root();
         plot_path.push("eval");
         plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
@@ -1221,7 +1223,7 @@ impl Eval {
             .margin(10)
             .margin_top(40)
             .margin_left(40)
-            .build_cartesian_2d(0..(NUM_MAX_FUNCS + 1) as u32, 0f64..y_max as f64)
+            .build_cartesian_2d(0..(NUM_MAX_FUNCS) as u32, 0f64..y_max as f64)
             .unwrap();
 
         chart
@@ -1283,7 +1285,7 @@ impl Eval {
         }
 
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
-            let legend_x_start = 80;
+            let legend_x_start = 70;
             let legend_y_pos = 6;
 
             match baseline {
@@ -1291,8 +1293,8 @@ impl Eval {
                 EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
                 EvalBaseline::TlessFaasm => (legend_x_start + 220, legend_y_pos),
                 EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
-                EvalBaseline::CcKnative => (legend_x_start + 400, legend_y_pos),
-                EvalBaseline::TlessKnative => (legend_x_start + 500, legend_y_pos),
+                EvalBaseline::CcKnative => (legend_x_start + 450, legend_y_pos),
+                EvalBaseline::TlessKnative => (legend_x_start + 580, legend_y_pos),
             }
         }
 
