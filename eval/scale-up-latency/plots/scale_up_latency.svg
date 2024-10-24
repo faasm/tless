@@ -279,7 +279,7 @@ Execution time [s]
 <circle cx="647" cy="210" r="5" opacity="1" fill="#FFCCB6" stroke="none" stroke-width="1"/>
 <circle cx="718" cy="206" r="5" opacity="1" fill="#FFCCB6" stroke="none" stroke-width="1"/>
 <circle cx="789" cy="203" r="5" opacity="1" fill="#FFCCB6" stroke="none" stroke-width="1"/>
-<polyline fill="none" opacity="1" stroke="#F3B0C3" stroke-width="3" points="150,208 221,203 292,193 363,180 434,139 505,127 576,92 647,85 718,40 789,249 "/>
+<polyline fill="none" opacity="1" stroke="#F3B0C3" stroke-width="3" points="150,208 221,203 292,193 363,180 434,139 505,127 576,92 647,85 718,40 789,40 "/>
 <circle cx="150" cy="208" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
 <circle cx="221" cy="203" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
 <circle cx="292" cy="193" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
@@ -289,7 +289,7 @@ Execution time [s]
 <circle cx="576" cy="92" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
 <circle cx="647" cy="85" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
 <circle cx="718" cy="40" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
-<circle cx="789" cy="249" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
+<circle cx="789" cy="40" r="5" opacity="1" fill="#F3B0C3" stroke="none" stroke-width="1"/>
 <polyline fill="none" opacity="1" stroke="#97C1A9" stroke-width="3" points="150,200 221,194 292,184 363,142 434,130 505,90 576,82 647,75 718,40 789,40 "/>
 <circle cx="150" cy="200" r="5" opacity="1" fill="#97C1A9" stroke="none" stroke-width="1"/>
 <circle cx="221" cy="194" r="5" opacity="1" fill="#97C1A9" stroke="none" stroke-width="1"/>
