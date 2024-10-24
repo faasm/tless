@@ -145,17 +145,29 @@ impl Eval {
         }
     }
 
-    fn init_data_file(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline, scale_up_factor: u32) {
+    fn init_data_file(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+        scale_up_factor: u32,
+    ) {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline, scale_up_factor))
+            .open(Self::get_data_file_name(
+                workflow,
+                exp,
+                baseline,
+                scale_up_factor,
+            ))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold | EvalExperiment::ScaleUpLatency => {
+            EvalExperiment::E2eLatency
+            | EvalExperiment::E2eLatencyCold
+            | EvalExperiment::ScaleUpLatency => {
                 writeln!(file, "Run,TimeMs").expect("invrs(eval): failed to write to file");
             }
         }
@@ -172,11 +184,18 @@ impl Eval {
             .read(true)
             .write(true)
             .append(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline, scale_up_factor))
+            .open(Self::get_data_file_name(
+                workflow,
+                exp,
+                baseline,
+                scale_up_factor,
+            ))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold | EvalExperiment::ScaleUpLatency => {
+            EvalExperiment::E2eLatency
+            | EvalExperiment::E2eLatencyCold
+            | EvalExperiment::ScaleUpLatency => {
                 let duration: Duration = result.end_time - result.start_time;
                 writeln!(file, "{},{}", result.iter, duration.num_milliseconds())
                     .expect("invrs(eval): failed to write to file");
@@ -463,17 +482,13 @@ impl Eval {
         trigger_cmd.push("knative");
         trigger_cmd.push("curl_cmd.sh");
         let output = match exp {
-            EvalExperiment::ScaleUpLatency => {
-                Command::new(trigger_cmd.clone())
-                    .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
-                    .output()
-                    .expect("tlessctl(eval): failed to execute trigger command")
-            }
-            _ => {
-                Command::new(trigger_cmd.clone())
-                    .output()
-                    .expect("tlessctl(eval): failed to execute trigger command")
-            }
+            EvalExperiment::ScaleUpLatency => Command::new(trigger_cmd.clone())
+                .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
+                .output()
+                .expect("tlessctl(eval): failed to execute trigger command"),
+            _ => Command::new(trigger_cmd.clone())
+                .output()
+                .expect("tlessctl(eval): failed to execute trigger command"),
         };
 
         match output.status.code() {
@@ -588,7 +603,12 @@ impl Eval {
         return exp_result;
     }
 
-    async fn run_knative_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize, scale_up_factor: u32) {
+    async fn run_knative_experiment(
+        exp: &EvalExperiment,
+        args: &EvalRunArgs,
+        args_offset: usize,
+        scale_up_factor: u32,
+    ) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
@@ -728,7 +748,12 @@ impl Eval {
         Utc.timestamp_opt(secs, nanos).single().unwrap()
     }
 
-    async fn run_faasm_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize, scale_up_factor: u32) {
+    async fn run_faasm_experiment(
+        exp: &EvalExperiment,
+        args: &EvalRunArgs,
+        args_offset: usize,
+        scale_up_factor: u32,
+    ) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, work out the WASM VM we need
@@ -815,12 +840,7 @@ impl Eval {
             if scale_up_factor > 0 {
                 workflow_str = format!("{workflow}-{scale_up_factor}");
             }
-            let pb = Self::get_progress_bar(
-                args.num_repeats.into(),
-                exp,
-                &baseline,
-                &workflow_str,
-            );
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, &workflow_str);
 
             let faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
@@ -865,7 +885,7 @@ impl Eval {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await;
                             }
-                        },
+                        }
                         _ => Self::run_knative_experiment(exp, args, i, 0).await,
                     }
                 }
@@ -875,7 +895,7 @@ impl Eval {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
                                 Self::run_faasm_experiment(exp, args, i, scale_up_factor).await;
                             }
-                        },
+                        }
                         _ => Self::run_faasm_experiment(exp, args, i, 0).await,
                     }
                 }
@@ -1211,7 +1231,10 @@ impl Eval {
         plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
         plot_path.push("plots");
         fs::create_dir_all(plot_path.clone()).unwrap();
-        plot_path.push(format!("{}.svg", EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")));
+        plot_path.push(format!(
+            "{}.svg",
+            EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")
+        ));
 
         // Plot data
         let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
@@ -1273,14 +1296,13 @@ impl Eval {
                 .unwrap();
 
             chart
-                .draw_series(
-                    (0..values.len())
-                        .zip(values.iter()).map(|(x, y)| {
-                            Circle::new(
-                                ((x + 1) as u32, *y as f64 / 1000.0),
-                                5,
-                                baseline.get_color().filled())
-                    }))
+                .draw_series((0..values.len()).zip(values.iter()).map(|(x, y)| {
+                    Circle::new(
+                        ((x + 1) as u32, *y as f64 / 1000.0),
+                        5,
+                        baseline.get_color().filled(),
+                    )
+                }))
                 .unwrap();
         }
 

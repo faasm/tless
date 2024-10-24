@@ -42,12 +42,10 @@ pub fn get_json_from_event(event: &Event) -> Value {
 
 pub fn get_tless_mode() -> String {
     match env::var("TLESS_MODE") {
-        Ok(value) => {
-            match value.as_str() {
-                "on" => "on".to_string(),
-                _ => "off".to_string(),
-            }
-        }
+        Ok(value) => match value.as_str() {
+            "on" => "on".to_string(),
+            _ => "off".to_string(),
+        },
         _ => "off".to_string(),
     }
 }
