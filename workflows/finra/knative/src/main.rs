@@ -32,6 +32,16 @@ impl S3Data {
     const BUCKET: S3Data = S3Data { data: "tless" };
 }
 
+pub fn get_tless_mode() -> String {
+    match env::var("TLESS_MODE") {
+        Ok(value) => match value.as_str() {
+            "on" => "on".to_string(),
+            _ => "off".to_string(),
+        },
+        _ => "off".to_string(),
+    }
+}
+
 pub async fn wait_for_key(key_name: &str) {
     let base_url = format!("http://{}:{}", S3Data::HOST.data, S3Data::PORT.data)
         .parse::<BaseUrl>()
@@ -39,9 +49,9 @@ pub async fn wait_for_key(key_name: &str) {
 
     let static_provider = StaticProvider::new(S3Data::USER.data, S3Data::PASSWORD.data, None);
     let client = ClientBuilder::new(base_url.clone())
-            .provider(Some(Box::new(static_provider)))
-            .build()
-            .unwrap();
+        .provider(Some(Box::new(static_provider)))
+        .build()
+        .unwrap();
 
     // Return fast if the bucket does not exist
     let exists: bool = client
@@ -50,7 +60,10 @@ pub async fn wait_for_key(key_name: &str) {
         .unwrap();
 
     if !exists {
-        panic!("{WORKFLOW_NAME}: waiting for key ({key_name}) in non-existant bucket: {}", S3Data::BUCKET.data);
+        panic!(
+            "{WORKFLOW_NAME}: waiting for key ({key_name}) in non-existant bucket: {}",
+            S3Data::BUCKET.data
+        );
     }
 
     // Loop until the object appears
@@ -64,7 +77,7 @@ pub async fn wait_for_key(key_name: &str) {
 
         while let Some(result) = objects.next().await {
             match result {
-                Ok(_) => { return }
+                Ok(_) => return,
                 Err(e) => match e {
                     Error::S3Error(s3_error) => match s3_error.code.as_str() {
                         _ => panic!("{WORKFLOW_NAME}: error: {}", s3_error.message),
@@ -125,16 +138,24 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
+                .env("TLESS_MODE", get_tless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .arg("finra/yfinance.csv")
                 .output()
                 .expect("finra(driver): error: spawning executing fetch-public command")
                 .status
-                .code() {
-                Some(0) => { println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully") },
-                Some(code) => { panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}") },
-                None => { panic!("{WORKFLOW_NAME}: '{func_name}' failed") },
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
             }
 
             "audit"
@@ -151,15 +172,23 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
+                .env("TLESS_MODE", get_tless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
                 .expect("finra(driver): failed executing command")
                 .status
-                .code() {
-                Some(0) => { println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully") },
-                Some(code) => { panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}") },
-                None => { panic!("{WORKFLOW_NAME}: '{func_name}' failed") },
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
             }
 
             "audit"
@@ -189,6 +218,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
+                .env("TLESS_MODE", get_tless_mode())
                 .arg(audit_id.to_string())
                 .arg("finra/outputs/fetch-public/trades")
                 .arg("finra/outputs/fetch-private/portfolio")
@@ -197,10 +227,17 @@ pub fn process_event(mut event: Event) -> Event {
                 .output()
                 .expect("finra(driver): failed executing 'audit' command")
                 .status
-                .code() {
-                Some(0) => { println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully") },
-                Some(code) => { panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}") },
-                None => { panic!("{WORKFLOW_NAME}: '{func_name}' failed") },
+                .code()
+            {
+                Some(0) => {
+                    println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                }
+                Some(code) => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                }
+                None => {
+                    panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                }
             }
 
             "merge"
@@ -229,15 +266,23 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", S3Data::PASSWORD.data)
                     .env("S3_PORT", S3Data::PORT.data)
                     .env("S3_USER", S3Data::USER.data)
+                    .env("TLESS_MODE", get_tless_mode())
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .output()
                     .expect("finra(driver): failed executing 'merge' command")
                     .status
-                    .code() {
-                    Some(0) => { println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully") },
-                    Some(code) => { panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}") },
-                    None => { panic!("{WORKFLOW_NAME}: '{func_name}' failed") },
+                    .code()
+                {
+                    Some(0) => {
+                        println!("{WORKFLOW_NAME}: '{func_name}' executed succesfully")
+                    }
+                    Some(code) => {
+                        panic!("{WORKFLOW_NAME}: '{func_name}' failed with ec: {code}")
+                    }
+                    None => {
+                        panic!("{WORKFLOW_NAME}: '{func_name}' failed")
+                    }
                 }
 
                 // Reset counter for next (warm) execution
@@ -288,6 +333,11 @@ pub fn process_event(mut event: Event) -> Event {
                     event.ty(),
                 );
                 post_event(event.ty().to_string(), scaled_event.clone());
+
+                // Be gentle when scaling-up, as otherwise SEV will take too
+                // long
+                println!("{WORKFLOW_NAME}: sleeping for a bit...");
+                thread::sleep(time::Duration::from_secs(3));
             }
 
             // Update the event for the zero-th id (the one we return as part
@@ -338,7 +388,10 @@ async fn main() {
             // we make sure both 'fetch-public' and 'fetch-private' only
             // trigger one job (using the same id), and here we wait for
             // both of them to finish
-            let keys_to_wait = vec!["finra/outputs/fetch-public/trades", "finra/outputs/fetch-private/portfolio"];
+            let keys_to_wait = vec![
+                "finra/outputs/fetch-public/trades",
+                "finra/outputs/fetch-private/portfolio",
+            ];
             for key_to_wait in keys_to_wait {
                 println!("{WORKFLOW_NAME}: audit: waiting for key {key_to_wait}");
                 wait_for_key(key_to_wait).await;

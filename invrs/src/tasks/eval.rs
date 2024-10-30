@@ -13,7 +13,7 @@ use shell_words;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
-use std::{collections::BTreeMap, env, fmt, fs, io::Write, thread, time};
+use std::{collections::BTreeMap, env, fmt, fs, io::Write, str, thread, time};
 
 static EVAL_BUCKET_NAME: &str = "tless";
 
@@ -81,14 +81,19 @@ impl EvalBaseline {
     }
 }
 
+#[derive(PartialEq)]
 pub enum EvalExperiment {
     E2eLatency,
+    E2eLatencyCold,
+    ScaleUpLatency,
 }
 
 impl fmt::Display for EvalExperiment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvalExperiment::E2eLatency => write!(f, "e2e-latency"),
+            EvalExperiment::E2eLatencyCold => write!(f, "e2e-latency-cold"),
+            EvalExperiment::ScaleUpLatency => write!(f, "scale-up-latency"),
         }
     }
 }
@@ -97,10 +102,12 @@ impl fmt::Display for EvalExperiment {
 pub struct EvalRunArgs {
     #[arg(short, long, num_args = 1.., value_name = "BASELINE")]
     baseline: Vec<EvalBaseline>,
-    #[arg(long, default_value = "3")]
+    #[arg(long, default_value = "2")]
     num_repeats: u32,
     #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
+    #[arg(long, default_value = "10")]
+    scale_up_range: u32,
 }
 
 pub struct ExecutionResult {
@@ -123,24 +130,44 @@ impl Eval {
         workflow: &AvailableWorkflow,
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
+        scale_up_factor: u32,
     ) -> String {
-        format!(
-            "{}/{exp}/data/{baseline}_{workflow}.csv",
-            Self::get_root().display()
-        )
+        if scale_up_factor == 0 {
+            format!(
+                "{}/{exp}/data/{baseline}_{workflow}.csv",
+                Self::get_root().display()
+            )
+        } else {
+            format!(
+                "{}/{exp}/data/{baseline}_{workflow}-{scale_up_factor}.csv",
+                Self::get_root().display()
+            )
+        }
     }
 
-    fn init_data_file(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+    fn init_data_file(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+        scale_up_factor: u32,
+    ) {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline))
+            .open(Self::get_data_file_name(
+                workflow,
+                exp,
+                baseline,
+                scale_up_factor,
+            ))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency => {
+            EvalExperiment::E2eLatency
+            | EvalExperiment::E2eLatencyCold
+            | EvalExperiment::ScaleUpLatency => {
                 writeln!(file, "Run,TimeMs").expect("invrs(eval): failed to write to file");
             }
         }
@@ -151,16 +178,24 @@ impl Eval {
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
         result: &ExecutionResult,
+        scale_up_factor: u32,
     ) {
         let mut file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .append(true)
-            .open(Self::get_data_file_name(workflow, exp, baseline))
+            .open(Self::get_data_file_name(
+                workflow,
+                exp,
+                baseline,
+                scale_up_factor,
+            ))
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency => {
+            EvalExperiment::E2eLatency
+            | EvalExperiment::E2eLatencyCold
+            | EvalExperiment::ScaleUpLatency => {
                 let duration: Duration = result.end_time - result.start_time;
                 writeln!(file, "{},{}", result.iter, duration.num_milliseconds())
                     .expect("invrs(eval): failed to write to file");
@@ -188,7 +223,7 @@ impl Eval {
         num_repeats: u64,
         exp: &EvalExperiment,
         baseline: &EvalBaseline,
-        workflow: &AvailableWorkflow,
+        workflow: &str,
     ) -> ProgressBar {
         let pb = ProgressBar::new(num_repeats);
         pb.set_style(
@@ -307,6 +342,14 @@ impl Eval {
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
+                (
+                    "TLESS_MODE",
+                    match baseline {
+                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::TlessKnative => "on",
+                        _ => panic!("woops"),
+                    },
+                ),
             ]),
         );
 
@@ -362,14 +405,25 @@ impl Eval {
         workflow_yaml.push("workflow.yaml");
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
-            BTreeMap::from([(
-                "RUNTIME_CLASS_NAME",
-                match baseline {
-                    EvalBaseline::Knative => "kata-qemu",
-                    EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
-                    _ => panic!("woops"),
-                },
-            )]),
+            BTreeMap::from([
+                (
+                    "RUNTIME_CLASS_NAME",
+                    match baseline {
+                        EvalBaseline::Knative => "kata-qemu",
+                        EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
+                        _ => panic!("woops"),
+                    },
+                ),
+                ("TLESS_VERSION", &Env::get_version().unwrap()),
+                (
+                    "TLESS_MODE",
+                    match baseline {
+                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::TlessKnative => "on",
+                        _ => panic!("woops"),
+                    },
+                ),
+            ]),
         );
 
         let mut kubectl = Command::new(Self::get_kubectl_cmd())
@@ -394,14 +448,12 @@ impl Eval {
         kubectl
             .wait_with_output()
             .expect("invrs(eval): failed to run kubectl command");
+    }
 
-        // Sometimes the --cascade argument is not enough for all pods to
-        // have fully disappeared, we also wait until there's only one pod
-        // (minio) left
-        /*
+    async fn wait_for_scale_to_zero() {
         loop {
             let output = Self::run_kubectl_cmd(&format!("-n tless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
-            println!("output: {output}");
+            debug!("tlessctl: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
             if values.len() == 1 {
@@ -410,11 +462,14 @@ impl Eval {
 
             thread::sleep(time::Duration::from_secs(2));
         }
-        */
     }
 
     /// Run workflow once, and return result depending on the experiment
-    async fn run_workflow_once(workflow: &AvailableWorkflow) -> ExecutionResult {
+    async fn run_workflow_once(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        scale_up_factor: u32,
+    ) -> ExecutionResult {
         let mut exp_result = ExecutionResult {
             start_time: Utc::now(),
             end_time: Utc::now(),
@@ -426,9 +481,31 @@ impl Eval {
         trigger_cmd.push(format!("{workflow}"));
         trigger_cmd.push("knative");
         trigger_cmd.push("curl_cmd.sh");
-        Command::new(trigger_cmd)
-            .output()
-            .expect("invrs(eval): failed to execute trigger command");
+        let output = match exp {
+            EvalExperiment::ScaleUpLatency => Command::new(trigger_cmd.clone())
+                .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
+                .output()
+                .expect("tlessctl(eval): failed to execute trigger command"),
+            _ => Command::new(trigger_cmd.clone())
+                .output()
+                .expect("tlessctl(eval): failed to execute trigger command"),
+        };
+
+        match output.status.code() {
+            Some(0) => {
+                debug!("{trigger_cmd:?}: executed succesfully");
+            }
+            Some(code) => {
+                let stderr = str::from_utf8(&output.stderr)
+                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                panic!("{trigger_cmd:?}: exited with error (code: {code}): {stderr}");
+            }
+            None => {
+                let stderr = str::from_utf8(&output.stderr)
+                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                panic!("{trigger_cmd:?}: failed: {stderr}");
+            }
+        };
 
         // Specific per-workflow completion detection
         match workflow {
@@ -504,13 +581,34 @@ impl Eval {
             }
         }
 
+        // Common-clean-up
+        S3::clear_dir(
+            EVAL_BUCKET_NAME.to_string(),
+            "{workflow}/exec-tokens".to_string(),
+        )
+        .await;
+
+        // Per-experiment, per-workflow clean-up
+        match exp {
+            EvalExperiment::E2eLatencyCold => {
+                debug!("tlesssctl: {exp}: waiting for scale-to-zero...");
+                Self::wait_for_scale_to_zero().await;
+            }
+            _ => debug!("tlessctl: {exp}: noting to clean-up after single execution"),
+        }
+
         // Cautionary sleep between runs
         thread::sleep(time::Duration::from_secs(5));
 
         return exp_result;
     }
 
-    async fn run_knative_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize) {
+    async fn run_knative_experiment(
+        exp: &EvalExperiment,
+        args: &EvalRunArgs,
+        args_offset: usize,
+        scale_up_factor: u32,
+    ) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
@@ -527,37 +625,66 @@ impl Eval {
             env::set_var("MINIO_URL", minio_url);
         }
 
-        // Upload the state for all workflows
-        // TODO: add progress bar
-        // TODO: consider re-using between baselines
-        // Workflows::upload_workflow(EVAL_BUCKET_NAME, true).await;
-        Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true)
-            .await;
+        // Upload the state for all workflows for the experiment
+        let workflow_iter = match exp {
+            // For the scale-up latency, we only run the FINRA workflow
+            EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            _ => AvailableWorkflow::iter_variants(),
+        };
+        // Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true).await;
+        let pb = Self::get_progress_bar(
+            workflow_iter.len().try_into().unwrap(),
+            exp,
+            &baseline,
+            "state",
+        );
+        for workflow in workflow_iter.clone() {
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            pb.inc(1);
+        }
+        pb.finish();
 
         // Execute each workload individually
-        for workflow in vec![&AvailableWorkflow::MlInference] {
-            // AvailableWorkflow::iter_variants() {
+        // for workflow in vec![&AvailableWorkflow::MlInference] {
+        for workflow in workflow_iter.clone() {
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline);
+            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
+            let mut workflow_str = format!("{workflow}");
+            if scale_up_factor > 0 {
+                workflow_str = format!("{workflow}-{scale_up_factor}");
+            }
+            let pb = Self::get_progress_bar(
+                args.num_repeats.into(),
+                exp,
+                &baseline,
+                workflow_str.as_str(),
+            );
 
             // Deploy workflow
             Self::deploy_workflow(workflow, &baseline);
 
-            // TODO: FIXME: consider differntiating between cold and warm starts!
-
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
-                Self::run_workflow_once(workflow).await;
+                Self::run_workflow_once(workflow, exp, scale_up_factor).await;
+                S3::clear_dir(
+                    EVAL_BUCKET_NAME.to_string(),
+                    format!("{workflow}/exec-tokens"),
+                )
+                .await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
-                let mut result = Self::run_workflow_once(workflow).await;
+                let mut result = Self::run_workflow_once(workflow, exp, scale_up_factor).await;
+                S3::clear_dir(
+                    EVAL_BUCKET_NAME.to_string(),
+                    format!("{workflow}/exec-tokens"),
+                )
+                .await;
                 result.iter = i;
-                Self::write_result_to_file(workflow, &exp, &baseline, &result);
+                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
                 pb.inc(1);
             }
@@ -621,7 +748,12 @@ impl Eval {
         Utc.timestamp_opt(secs, nanos).single().unwrap()
     }
 
-    async fn run_faasm_experiment(exp: &EvalExperiment, args: &EvalRunArgs, args_offset: usize) {
+    async fn run_faasm_experiment(
+        exp: &EvalExperiment,
+        args: &EvalRunArgs,
+        args_offset: usize,
+        scale_up_factor: u32,
+    ) {
         let baseline = args.baseline[args_offset].clone();
 
         // First, work out the WASM VM we need
@@ -631,8 +763,15 @@ impl Eval {
             _ => panic!("invrs(eval): should not be here"),
         };
 
+        let tless_enabled = match baseline {
+            EvalBaseline::Faasm | EvalBaseline::SgxFaasm => "off",
+            EvalBaseline::TlessFaasm => "on",
+            _ => panic!("invrs(eval): should not be here"),
+        };
+
         unsafe {
             env::set_var("FAASM_WASM_VM", wasm_vm);
+            env::set_var("TLESS_ENABLED", tless_enabled);
         }
         // TODO: uncomment when deploying on k8s
         // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
@@ -644,25 +783,64 @@ impl Eval {
             env::set_var("MINIO_URL", minio_url);
         }
 
+        async fn cleanup_single_execution(workflow: &AvailableWorkflow, exp: &EvalExperiment) {
+            S3::clear_dir(
+                EVAL_BUCKET_NAME.to_string(),
+                format!("{workflow}/exec-tokens"),
+            )
+            .await;
+
+            match exp {
+                EvalExperiment::E2eLatencyCold => {
+                    debug!("Flushing Faasm workers and sleeping...");
+                    Eval::run_faasmctl_cmd("flush.workers");
+                    thread::sleep(time::Duration::from_secs(2));
+                }
+                _ => debug!("nothing to do"),
+            }
+        }
+
+        // Work-out the workflows to execute for each experiment
+        let workflow_iter = match exp {
+            // For the scale-up latency, we only run the FINRA workflow
+            EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            _ => AvailableWorkflow::iter_variants(),
+        };
+
         // Upload the state for all workflows
-        // TODO: uncomment me in a real deployment
-        // TODO: add progress bar
-        // TODO: consider sharing if we have multiple baselines/workflows
-        // Workflows::upload_state(EVAL_BUCKET_NAME, true).await;
+        // TODO: undo me
+        let pb = Self::get_progress_bar(
+            workflow_iter.len().try_into().unwrap(),
+            exp,
+            &baseline,
+            "state",
+        );
+        for workflow in workflow_iter.clone() {
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            pb.inc(1);
+        }
+        pb.finish();
 
         // Upload the WASM files for all workflows
         // TODO: add progress bar
-        Self::upload_wasm();
+        // Self::upload_wasm();
 
         // Invoke each workflow
-        for workflow in AvailableWorkflow::iter_variants() {
-            let faasm_cmdline = Workflows::get_faasm_cmdline(workflow);
+        for workflow in workflow_iter.clone() {
+            let mut faasm_cmdline = Workflows::get_faasm_cmdline(workflow).to_string();
+            if *exp == EvalExperiment::ScaleUpLatency {
+                faasm_cmdline = format!("finra/yfinance.csv {scale_up_factor}");
+            }
 
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline);
+            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
-            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, workflow);
+            let mut workflow_str = format!("{workflow}");
+            if scale_up_factor > 0 {
+                workflow_str = format!("{workflow}-{scale_up_factor}");
+            }
+            let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, &workflow_str);
 
             let faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
@@ -670,6 +848,7 @@ impl Eval {
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_faasmctl_cmd(&faasmctl_cmd);
+                cleanup_single_execution(workflow, exp).await;
             }
 
             // Do actual experiment
@@ -684,7 +863,10 @@ impl Eval {
                     iter: i,
                 };
 
-                Self::write_result_to_file(workflow, &exp, &baseline, &result);
+                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
+
+                // Clean-up
+                cleanup_single_execution(workflow, exp).await;
 
                 pb.inc(1);
             }
@@ -698,10 +880,24 @@ impl Eval {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
                 EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => {
-                    Self::run_knative_experiment(exp, args, i).await;
+                    match exp {
+                        EvalExperiment::ScaleUpLatency => {
+                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                                Self::run_knative_experiment(exp, args, i, scale_up_factor).await;
+                            }
+                        }
+                        _ => Self::run_knative_experiment(exp, args, i, 0).await,
+                    }
                 }
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => {
-                    Self::run_faasm_experiment(exp, args, i).await;
+                    match exp {
+                        EvalExperiment::ScaleUpLatency => {
+                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                                Self::run_faasm_experiment(exp, args, i, scale_up_factor).await;
+                            }
+                        }
+                        _ => Self::run_faasm_experiment(exp, args, i, 0).await,
+                    }
                 }
             }
         }
@@ -718,7 +914,7 @@ impl Eval {
         }
     }
 
-    fn plot_e2e_latency(data_files: &Vec<PathBuf>) {
+    fn plot_e2e_latency(exp: &EvalExperiment, data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -783,9 +979,9 @@ impl Eval {
 
         let mut plot_path = env::current_dir().expect("invrs: failed to get current directory");
         plot_path.push("eval");
-        plot_path.push(format!("{}", EvalExperiment::E2eLatency));
+        plot_path.push(format!("{exp}"));
         plot_path.push("plots");
-        plot_path.push("e2e_latency.svg");
+        plot_path.push(format!("{}.svg", exp.to_string().replace("-", "_")));
 
         // Plot data
         let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
@@ -836,8 +1032,24 @@ impl Eval {
             let x_orig = w_idx * (num_baselines + 1);
 
             // Work-out the slowest value for each set of baselines
-            let y_faasm : f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
-            let y_knative : f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
+            let y_faasm: f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
+            let y_knative: f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
+
+            /* Un-comment to print the overhead claimed in the paper
+            println!("{workflow}: knative overhead: {:.2} %",
+                     ((*workflow_data.get(&EvalBaseline::TlessKnative).unwrap() /
+                     *workflow_data.get(&EvalBaseline::CcKnative).unwrap()) - 1.0) * 100.0
+                    );
+            if *workflow == AvailableWorkflow::MlInference {
+                println!("{} vs {}",
+                     *workflow_data.get(&EvalBaseline::TlessKnative).unwrap(),
+                     *workflow_data.get(&EvalBaseline::CcKnative).unwrap());
+            }
+            println!("{workflow}: faasm overhead: {:.2} %",
+                     ((*workflow_data.get(&EvalBaseline::TlessFaasm).unwrap() /
+                     *workflow_data.get(&EvalBaseline::SgxFaasm).unwrap()) - 1.0) * 100.0
+                    );
+            */
 
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (baseline, y))| {
@@ -855,8 +1067,10 @@ impl Eval {
                         this_y = (y / y_knative) as f64;
                     }
 
-                    let mut bar =
-                        Rectangle::new([(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)], bar_style);
+                    let mut bar = Rectangle::new(
+                        [(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)],
+                        bar_style,
+                    );
                     bar.set_margin(0, 0, 2, 2);
                     bar
                 }))
@@ -872,23 +1086,24 @@ impl Eval {
 
                 // Add text
                 let y_offset = match this_y > 5.0 {
-                    true => - 0.1,
+                    true => -0.1,
                     false => 0.25,
                 };
-                chart.plotting_area().draw(&Text::new(
-                    format!("{:.1}", this_y),
-                    (x_orig + x, (this_y + y_offset) as f64),
-                    ("sans-serif", 15).into_font(),
-                ))
-                .unwrap();
+                chart
+                    .plotting_area()
+                    .draw(&Text::new(
+                        format!("{:.1}", this_y),
+                        (x_orig + x, (this_y + y_offset) as f64),
+                        ("sans-serif", 15).into_font(),
+                    ))
+                    .unwrap();
             }
-
 
             // Add label for the workflow
             let x_workflow_label = x_orig + num_baselines / 2 - 1;
             let label_px_coordinate = chart
                 .plotting_area()
-                .map_coordinate(&(x_workflow_label, - 0.25));
+                .map_coordinate(&(x_workflow_label, -0.25));
             root.draw(&Text::new(
                 format!("{workflow}"),
                 label_px_coordinate,
@@ -902,30 +1117,21 @@ impl Eval {
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (0, 100 as f64),
-                    (x_max, 100 as f64),
-                ],
+                vec![(0, 100 as f64), (x_max, 100 as f64)],
                 &BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (x_max, 0 as f64),
-                    (x_max, 100 as f64),
-                ],
+                vec![(x_max, 0 as f64), (x_max, 100 as f64)],
                 &BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![
-                    (0, 0 as f64),
-                    (x_max, 0 as f64),
-                ],
+                vec![(0, 0 as f64), (x_max, 0 as f64)],
                 &BLACK,
             ))
             .unwrap();
@@ -963,13 +1169,198 @@ impl Eval {
         root.present().unwrap();
     }
 
+    fn plot_scale_up_latency(data_files: &Vec<PathBuf>) {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Record {
+            #[allow(dead_code)]
+            run: u32,
+            time_ms: u64,
+        }
+
+        const NUM_MAX_FUNCS: usize = 10;
+
+        // Collect data
+        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_MAX_FUNCS]>::new();
+        for baseline in EvalBaseline::iter_variants() {
+            data.insert(baseline.clone(), [0; NUM_MAX_FUNCS]);
+        }
+
+        for csv_file in data_files {
+            let file_name = csv_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            let file_name_len = file_name.len();
+            let file_name_no_ext = &file_name[0..file_name_len - 4];
+            let parts: Vec<&str> = file_name_no_ext.split("_").collect();
+            let workload_parts: Vec<&str> = parts[1].split("-").collect();
+
+            let baseline: EvalBaseline = parts[0].parse().unwrap();
+            let _workload: &str = workload_parts[0];
+            let scale_up_factor: usize = workload_parts[1].parse().unwrap();
+
+            // Open the CSV and deserialize records
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .from_path(csv_file)
+                .unwrap();
+            let mut count = 0;
+            let avg_times = data.get_mut(&baseline).unwrap();
+
+            for result in reader.deserialize() {
+                let record: Record = result.unwrap();
+
+                avg_times[scale_up_factor - 1] += record.time_ms;
+                count += 1;
+            }
+
+            avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
+
+            /*
+            let y_val : f64 = avg_times[scale_up_factor - 1] as f64 / 1000.0;
+            if y_val > y_max {
+                y_max = y_val;
+            }
+            */
+        }
+
+        let mut y_max: f64 = 200.0;
+        let mut plot_path = Env::proj_root();
+        plot_path.push("eval");
+        plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
+        plot_path.push("plots");
+        fs::create_dir_all(plot_path.clone()).unwrap();
+        plot_path.push(format!(
+            "{}.svg",
+            EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")
+        ));
+
+        // Plot data
+        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .margin_top(40)
+            .margin_left(40)
+            .build_cartesian_2d(0..(NUM_MAX_FUNCS) as u32, 0f64..y_max as f64)
+            .unwrap();
+
+        chart
+            .configure_mesh()
+            .x_label_style(("sans-serif", 20).into_font())
+            .y_label_style(("sans-serif", 20).into_font())
+            .x_desc("")
+            .y_label_formatter(&|y| format!("{:.0}", y))
+            .draw()
+            .unwrap();
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
+            .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Execution time [s]",
+            (5, 220),
+            ("sans-serif", 20)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "# of audit functions",
+            (400, 280),
+            ("sans-serif", 20).into_font().color(&BLACK),
+        ))
+        .unwrap();
+
+        for (baseline, values) in data {
+            chart
+                .draw_series(LineSeries::new(
+                    (0..values.len())
+                        .zip(values.iter())
+                        .map(|(x, y)| ((x + 1) as u32, *y as f64 / 1000.0)),
+                    baseline.get_color().stroke_width(3),
+                ))
+                .unwrap();
+
+            chart
+                .draw_series((0..values.len()).zip(values.iter()).map(|(x, y)| {
+                    Circle::new(
+                        ((x + 1) as u32, *y as f64 / 1000.0),
+                        5,
+                        baseline.get_color().filled(),
+                    )
+                }))
+                .unwrap();
+        }
+
+        fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
+            let legend_x_start = 70;
+            let legend_y_pos = 6;
+
+            match baseline {
+                EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
+                EvalBaseline::TlessFaasm => (legend_x_start + 220, legend_y_pos),
+                EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
+                EvalBaseline::CcKnative => (legend_x_start + 450, legend_y_pos),
+                EvalBaseline::TlessKnative => (legend_x_start + 580, legend_y_pos),
+            }
+        }
+
+        for baseline in EvalBaseline::iter_variants() {
+            // Calculate position for each legend item
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+            // Draw the color box (Rectangle)
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                baseline.get_color().filled(),
+            ))
+            .unwrap();
+
+            let mut label = format!("{baseline}");
+            if baseline == &EvalBaseline::CcKnative {
+                label = "sev-knative".to_string();
+            }
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                label,
+                (x_pos + 30, y_pos + 5),
+                ("sans-serif", 20).into_font(),
+            ))
+            .unwrap();
+        }
+
+        root.present().unwrap();
+    }
+
     pub fn plot(exp: &EvalExperiment) {
         // First, get all the data files
         let data_files = Self::get_all_data_files(exp);
 
         match exp {
             EvalExperiment::E2eLatency => {
-                Self::plot_e2e_latency(&data_files);
+                Self::plot_e2e_latency(&exp, &data_files);
+            }
+            EvalExperiment::E2eLatencyCold => {
+                Self::plot_e2e_latency(&exp, &data_files);
+            }
+            EvalExperiment::ScaleUpLatency => {
+                Self::plot_scale_up_latency(&data_files);
             }
         }
     }

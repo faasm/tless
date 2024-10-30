@@ -1,3 +1,4 @@
+use crate::tasks::dag::Dag;
 use crate::tasks::s3::S3;
 use clap::ValueEnum;
 use std::path::PathBuf;
@@ -29,8 +30,8 @@ impl FromStr for AvailableWorkflow {
     fn from_str(input: &str) -> Result<AvailableWorkflow, Self::Err> {
         match input {
             "finra" => Ok(AvailableWorkflow::Finra),
-            "ml-inference" => Ok(AvailableWorkflow::MlTraining),
-            "ml-training" => Ok(AvailableWorkflow::MlInference),
+            "ml-inference" => Ok(AvailableWorkflow::MlInference),
+            "ml-training" => Ok(AvailableWorkflow::MlTraining),
             "word-count" => Ok(AvailableWorkflow::WordCount),
             _ => Err(()),
         }
@@ -66,13 +67,22 @@ impl Workflows {
     ) {
         // Note that cleaning here means cleaning the outputs of previous runs
         if clean {
-            S3::clear_dir(
-                bucket_name.to_string(),
-                format!("{workflow}/outputs").to_string(),
-            )
-            .await;
+            for key_dir in vec!["outputs", "exec-tokens", "cert-chains"] {
+                S3::clear_dir(
+                    bucket_name.to_string(),
+                    format!("{workflow}/{key_dir}").to_string(),
+                )
+                .await;
+            }
         }
 
+        // First, upload the DAG
+        let mut yaml_path = Self::get_root();
+        yaml_path.push(format!("{workflow}"));
+        yaml_path.push("tless.yaml");
+        Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await;
+
+        // Then, upload the respective state
         match workflow {
             AvailableWorkflow::Finra => {
                 let mut host_path = S3::get_datasets_root();
@@ -111,7 +121,7 @@ impl Workflows {
             AvailableWorkflow::WordCount => {
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
-                host_path.push("few-files");
+                host_path.push("fewer-files");
                 S3::upload_dir(
                     bucket_name.to_string(),
                     host_path.display().to_string(),

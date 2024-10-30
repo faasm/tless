@@ -1,9 +1,10 @@
 #!/bin/bash
 
 THIS_RUN_MAGIC=${RANDOM}
-NUM_INF_FUNCS=8
+# Support overriding for scale-up plots
+NUM_INF_FUNCS=${OVERRIDE_NUM_INF_FUNCS:-8}
 
-${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=true --restart=Never -ti -- -X POST -v \
+${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli-partition" \
@@ -12,7 +13,7 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl --image=curlimages/curl --rm=tru
    -d '{"model-dir": "ml-inference/model", "data-dir": "ml-inference/images-inference-1k", "num-inf-funcs": '"${NUM_INF_FUNCS}"', "run-magic": '"${THIS_RUN_MAGIC}}"'' \
    http://ingress-to-partition-kn-channel.tless.svc.cluster.local &
 
-${COCO_SOURCE:-/usr/local}/bin/kubectl run curl2 --image=curlimages/curl --rm=true --restart=Never -ti -- -X POST -v \
+${COCO_SOURCE:-/usr/local}/bin/kubectl run curl2 --image=curlimages/curl --rm=true --restart=Never -i -- -X POST -v \
    -H "content-type: application/json"  \
    -H "ce-specversion: 1.0" \
    -H "ce-source: cli-load" \
