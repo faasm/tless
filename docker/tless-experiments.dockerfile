@@ -14,10 +14,9 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    # TODO: update when #47 lands
-    && git checkout d4b1b4efc3b41f6ccd870429dd9d67de8db22568 \
+    && git checkout 9797ec398f242cb7b37def798748f392cb170998 \
     && git submodule update --init -f cpp \
-    && git clone -b tless-skeleton https://github.com/faasm/experiment-tless /code/experiment-tless \
+    && git clone https://github.com/faasm/experiment-tless /code/experiment-tless \
     && cp -r /code/experiment-tless/workflows /code/faasm-examples/
 
 # Build specific libraries we need
