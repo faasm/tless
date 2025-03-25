@@ -12,7 +12,7 @@ pushd ${PROJ_ROOT}>>/dev/null
 
 export PROJ_ROOT=${PROJ_ROOT}
 export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
-export PS1="(exp-tless) $PS1"
+export PS1="(tless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
 # alias tlessctl="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
@@ -34,6 +34,15 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 export FAASM_INI_FILE=${PROJ_ROOT}/faasm.ini
 # TODO: update me
 export FAASM_VERSION=0.28.0
+
+# ----------------------------
+# APT deps
+# ----------------------------
+
+sudo apt install -y \
+    libfontconfig1-dev \
+    libssl-dev \
+    pkg-config > /dev/null 2>&1
 
 # ----------------------------
 # Python deps

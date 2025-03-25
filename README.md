@@ -21,14 +21,6 @@ source ./bin/workon.sh
 
 Install `rust` and `rust-analyzer`. Then `rustup component add rust-analyzer`.
 
-```bash
-# TODO: install this in the background
-sudo apt install -y \
-  libfontconfig1-dev \
-  libssl-dev \
-  pkg-config \
-```
-
 ## Baselines
 
 TLess currently supports being deployed on top of two serverless runtimes,
@@ -50,10 +42,10 @@ This repository implements four different workflows:
 
 | Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
 |---|---|---|---|---|---|---|
-| FINRA | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
-| ML Training | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
-| ML Inference | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
-| Word Count | :white_check_mark: | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | :x: |
+| FINRA | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| ML Training | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| ML Inference | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Word Count | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 
 ## Experiments
 
