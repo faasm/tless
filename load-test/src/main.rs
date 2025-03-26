@@ -1,10 +1,10 @@
 use anyhow::Result;
+use csv::Writer;
 use futures::stream::{self, StreamExt};
+use serde::Serialize;
 use std::process::Command;
 use std::time::Instant;
 use tokio::fs;
-use csv::Writer;
-use serde::Serialize;
 
 // TODO: may make this variables
 const PARALLELISM: usize = 100;
@@ -12,12 +12,13 @@ const REPETITIONS: usize = 5;
 const REQUEST_COUNTS: &[usize] = &[1, 10, 100, 1000];
 
 // TODO: may have to change this
-const TEE: &str = "sample";
+const TEE: &str = "azsnpvtpm";
 
-const KBS_CLIENT_PATH: &str = "/home/tless/git/confidential-containers/trustee/target/release/kbs-client";
+const KBS_CLIENT_PATH: &str =
+    "/home/csegarra/git/confidential-containers/trustee/target/release/kbs-client";
 const KBS_URL: &str = "https://127.0.0.1:8080";
 
-const WORK_DIR: &str = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
+const WORK_DIR: &str = "/home/csegarra/git/confidential-containers/trustee/kbs/test/work";
 
 fn get_attestation_token() -> String {
     format!("{WORK_DIR}/attestation_token")
@@ -43,11 +44,17 @@ struct Record {
 
 async fn generate_attestation_token() -> Result<()> {
     let output = Command::new("sudo")
-        .args(["-E", KBS_CLIENT_PATH,
-               "--url", KBS_URL,
-               "--cert-file", &get_https_cert(),
-               "attest",
-               "--tee-key-file", &get_tee_key()])
+        .args([
+            "-E",
+            KBS_CLIENT_PATH,
+            "--url",
+            KBS_URL,
+            "--cert-file",
+            &get_https_cert(),
+            "attest",
+            "--tee-key-file",
+            &get_tee_key(),
+        ])
         .output()?;
 
     fs::write(&get_attestation_token(), output.stdout).await?;
@@ -56,46 +63,70 @@ async fn generate_attestation_token() -> Result<()> {
 }
 
 async fn set_resource_policy() -> Result<()> {
-    let tee_policy_rego = format!(r#"
+    let tee_policy_rego = format!(
+        r#"
 package policy
 default allow = false
 allow {{
     input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
 }}
-"#, TEE);
+"#,
+        TEE
+    );
 
     let tmp_file = "/tmp/tee_policy.rego";
     fs::write(tmp_file, &tee_policy_rego).await?;
 
     Command::new("sudo")
-        .args(["-E", KBS_CLIENT_PATH,
-               "--url", KBS_URL,
-               "--cert-file", &get_https_cert(),
-               "config",
-               "--auth-private-key", &get_kbs_key(),
-               "set-resource-policy",
-               "--policy-file", tmp_file])
-        .status()?;
+        .args([
+            "-E",
+            KBS_CLIENT_PATH,
+            "--url",
+            KBS_URL,
+            "--cert-file",
+            &get_https_cert(),
+            "config",
+            "--auth-private-key",
+            &get_kbs_key(),
+            "set-resource-policy",
+            "--policy-file",
+            tmp_file,
+        ])
+        .output()?;
 
     Ok(())
 }
 
 async fn get_resource() -> Result<()> {
     Command::new("sudo")
-        .args(["-E", KBS_CLIENT_PATH,
-               "--url", KBS_URL,
-               "--cert-file", &get_https_cert(),
-               "get-resource",
-               "--tee-key-file", &get_tee_key(),
-               "--attestation-token", &get_attestation_token(),
-               "--path", "one/two/three"])
-        .status()?;
+        .args([
+            "-E",
+            KBS_CLIENT_PATH,
+            "--url",
+            KBS_URL,
+            "--cert-file",
+            &get_https_cert(),
+            "get-resource",
+            // TODO: if we comment out these next two lines we are including
+            // the attestation in the loop, which seems more realistic, but
+            // i am running into some race conditions
+            "--tee-key-file",
+            &get_tee_key(),
+            "--attestation-token",
+            &get_attestation_token(),
+            "--path",
+            "one/two/three",
+        ])
+        .output()?;
 
     Ok(())
 }
 
 async fn measure_requests(num_requests: usize) -> Result<f64> {
-    println!("Processing {} requests with parallelism={}...", num_requests, PARALLELISM);
+    println!(
+        "Processing {} requests with parallelism={}...",
+        num_requests, PARALLELISM
+    );
 
     let start = Instant::now();
 
@@ -124,7 +155,10 @@ async fn run_load_test() -> Result<()> {
     for &num_req in REQUEST_COUNTS {
         for _ in 0..REPETITIONS {
             let elapsed = measure_requests(num_req).await?;
-            wtr.serialize(Record { num_requests: num_req, time_elapsed: elapsed })?;
+            wtr.serialize(Record {
+                num_requests: num_req,
+                time_elapsed: elapsed,
+            })?;
         }
     }
     wtr.flush()?;
@@ -134,12 +168,10 @@ async fn run_load_test() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    generate_attestation_token().await?;
     set_resource_policy().await?;
-    get_resource().await?;
 
-    // run_load_test().await?;
+    generate_attestation_token().await?;
+    run_load_test().await?;
 
     Ok(())
 }
-

@@ -3,7 +3,7 @@
 - hosts: snpguest
   gather_facts: yes
   tasks:
-    #     - include_tasks: tasks/apt.yaml
-    #     - include_tasks: tasks/rust.yaml
-    #     - include_tasks: tasks/code.yaml
+    - include_tasks: tasks/apt.yaml
+    - include_tasks: tasks/rust.yaml
+    - include_tasks: tasks/code.yaml
     - include_tasks: tasks/trustee.yaml
