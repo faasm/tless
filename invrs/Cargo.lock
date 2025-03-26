@@ -1328,6 +1328,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
+ "base64",
  "bytes",
  "chrono",
  "clap",
@@ -1346,6 +1347,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "shell-words",
+ "shellexpand",
  "tokio",
 ]
 
@@ -2419,6 +2421,15 @@ name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
+
+[[package]]
+name = "shellexpand"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da03fa3b94cc19e3ebfc88c4229c49d8f08cdbd1228870a45f0ffdf84988e14b"
+dependencies = [
+ "dirs",
+]
 
 [[package]]
 name = "shlex"

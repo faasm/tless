@@ -1,0 +1,15 @@
+- name: "Build KBS"
+  shell: make cli CLI_FEATURES=sample_only
+  args:
+    chdir: "/home/{{ ansible_user }}/git/confidential-containers/trustee/kbs"
+    executable: /bin/bash
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: "Build KBS CLI"
+  shell: make background-check-kbs
+  args:
+    chdir: "/home/{{ ansible_user }}/git/confidential-containers/trustee/kbs"
+    executable: /bin/bash
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

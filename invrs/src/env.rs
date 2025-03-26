@@ -13,6 +13,12 @@ impl Env {
         env::current_dir().expect("invrs: failed to get current directory")
     }
 
+    pub fn ansible_root() -> PathBuf {
+        let mut path = Self::proj_root();
+        path.push("ansible");
+        path
+    }
+
     pub fn docker_root() -> PathBuf {
         let mut path = Self::proj_root();
         path.push("docker");

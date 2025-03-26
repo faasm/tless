@@ -1,3 +1,4 @@
+use crate::tasks::azure::Azure;
 use crate::tasks::dag::Dag;
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
@@ -45,6 +46,11 @@ enum Command {
     S3 {
         #[command(subcommand)]
         s3_command: S3Command,
+    },
+    /// Provision SGX or SNP capable VMs on Azure
+    Azure {
+        #[command(subcommand)]
+        az_command: AzureCommand,
     },
 }
 
@@ -95,6 +101,10 @@ enum EvalCommand {
     E2eLatencyCold {
         #[command(subcommand)]
         eval_sub_command: EvalSubCommand,
+    },
+    /// Measure the throughput of the trusted escrow as we increase the number
+    /// of parallel authorization requests
+    EscrowXput {
     },
     /// Evaluate the latency when scaling-up the number of functions in the
     /// workflow
@@ -188,6 +198,27 @@ enum S3Command {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum AzureCommand {
+    /// Provision a managed SNP cVM in Azure
+    SnpGuest {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AzureSubCommand {
+    /// Create an Azure resource
+    Create {},
+    /// Provision Azure resource using Ansible
+    Provision {},
+    /// Get a SSH command into the Azure resource (if applicable)
+    Ssh {},
+    /// Delete the Azure resource
+    Delete {},
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -243,6 +274,8 @@ async fn main() {
                     Eval::plot(&EvalExperiment::E2eLatencyCold);
                 }
             },
+            // TODO:
+            EvalCommand::EscrowXput {} => {},
             EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
                     Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await;
@@ -312,6 +345,22 @@ async fn main() {
             } => {
                 S3::upload_file(bucket_name, host_path, s3_path).await;
             }
+        },
+        Command::Azure { az_command } => match az_command {
+            AzureCommand::SnpGuest { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_guest();
+                }
+                AzureSubCommand::Provision {} => {
+                    Azure::provision_snp_guest();
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command();
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_snp_guest();
+                }
+            },
         },
     }
 }
