@@ -14,7 +14,7 @@ const REQUEST_COUNTS: &[usize] = &[1, 10, 100, 1000];
 // TODO: may have to change this
 const TEE: &str = "sample";
 
-const KBS_CLIENT_PATH: &str = "./client";
+const KBS_CLIENT_PATH: &str = "/home/tless/git/confidential-containers/trustee/target/release/kbs-client";
 const KBS_URL: &str = "https://127.0.0.1:8080";
 
 const WORK_DIR: &str = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
@@ -42,14 +42,16 @@ struct Record {
 }
 
 async fn generate_attestation_token() -> Result<()> {
-    Command::new("sudo")
+    let output = Command::new("sudo")
         .args(["-E", KBS_CLIENT_PATH,
                "--url", KBS_URL,
                "--cert-file", &get_https_cert(),
                "attest",
                "--tee-key-file", &get_tee_key()])
-        .output()?
-        .stdout;
+        .output()?;
+
+    fs::write(&get_attestation_token(), output.stdout).await?;
+
     Ok(())
 }
 
@@ -62,7 +64,7 @@ allow {{
 }}
 "#, TEE);
 
-    let tmp_file = "./work/tee_policy.rego";
+    let tmp_file = "/tmp/tee_policy.rego";
     fs::write(tmp_file, &tee_policy_rego).await?;
 
     Command::new("sudo")
@@ -87,7 +89,8 @@ async fn get_resource() -> Result<()> {
                "--tee-key-file", &get_tee_key(),
                "--attestation-token", &get_attestation_token(),
                "--path", "one/two/three"])
-        .output()?;
+        .status()?;
+
     Ok(())
 }
 
@@ -133,8 +136,9 @@ async fn run_load_test() -> Result<()> {
 async fn main() -> Result<()> {
     generate_attestation_token().await?;
     set_resource_policy().await?;
+    get_resource().await?;
 
-    run_load_test().await?;
+    // run_load_test().await?;
 
     Ok(())
 }
