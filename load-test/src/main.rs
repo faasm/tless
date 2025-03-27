@@ -11,14 +11,13 @@ const PARALLELISM: usize = 100;
 const REPETITIONS: usize = 5;
 const REQUEST_COUNTS: &[usize] = &[1, 10, 100, 1000];
 
-// TODO: may have to change this
 const TEE: &str = "azsnpvtpm";
 
 const KBS_CLIENT_PATH: &str =
-    "/home/csegarra/git/confidential-containers/trustee/target/release/kbs-client";
+    "/home/tless/git/confidential-containers/trustee/target/release/kbs-client";
 const KBS_URL: &str = "https://127.0.0.1:8080";
 
-const WORK_DIR: &str = "/home/csegarra/git/confidential-containers/trustee/kbs/test/work";
+const WORK_DIR: &str = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
 
 fn get_attestation_token() -> String {
     format!("{WORK_DIR}/attestation_token")
