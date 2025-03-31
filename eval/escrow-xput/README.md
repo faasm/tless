@@ -43,6 +43,8 @@ To run the experiments, first SSH into the server machine and start Trustee
 ```bash
 # Client and Server IP addresses should appear
 invrs azure trustee ssh
+
+# Take note of the server's IP address
 ```
 
 ```bash
@@ -54,7 +56,9 @@ sudo ../../target/release/kbs --config-file ./config/kbs.toml
 then, SSH into the client and:
 
 ```bash
-export TLESS_KBS_URL=${server_ip_from_above}:8080
+cd git/faasm/tless
+# TODO: set this env. var as part of provisioning
+export TLESS_KBS_URL=https://${server_ip_from_above}:8080
 source ./bin/workon.sh
 invrs ubench escrow-xput run --baseline trustee
 ```
