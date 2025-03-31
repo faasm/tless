@@ -1,5 +1,4 @@
 use crate::env::Env;
-use crate::Azure;
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
@@ -10,7 +9,7 @@ use plotters::prelude::*;
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
-    fmt, fs,
+    env, fmt, fs,
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
@@ -24,7 +23,7 @@ use std::{
 static MAX_NUM_CHAINS: u32 = 10;
 
 // EscrowXput constants
-const REQUEST_COUNTS: &[usize] = &[10, 100, 200, 400, 600, 800, 1000];
+const REQUEST_COUNTS: &[usize] = &[1, 10, 20, 40, 60, 80, 100];
 const REQUEST_PARALLELISM: usize = 100; // TODO: maybe `nproc`?
 
 pub enum MicroBenchmarks {
@@ -95,8 +94,120 @@ impl EscrowBaseline {
     // Trustee methods and constants
     // -------------------------------------------------------------------------
 
+    const TEE: &str = "azsnpvtpm";
+
+    fn get_work_dir() -> String {
+        format!(
+            "{}/confidential-containers/trustee/kbs/test/work",
+            Self::SNP_VM_CODE_DIR
+        )
+    }
+
+    fn get_https_cert() -> String {
+        format!("{}/https.crt", Self::get_work_dir())
+    }
+
+    fn get_kbs_key() -> String {
+        format!("{}/kbs.key", Self::get_work_dir())
+    }
+
+    fn get_tee_key() -> String {
+        format!("{}/tee.key", Self::get_work_dir())
+    }
+
+    fn get_attestation_token() -> String {
+        format!("{}/attestation_token", Self::get_work_dir())
+    }
+
+    fn get_kbs_client_path() -> String {
+        format!(
+            "{}/confidential-containers/trustee/target/release/kbs-client",
+            Self::SNP_VM_CODE_DIR
+        )
+    }
+
+    fn get_kbs_url() -> String {
+        env::var("TLESS_KBS_URL").unwrap()
+    }
+
+    async fn set_resource_policy() -> Result<()> {
+        let tee_policy_rego = format!(
+            r#"
+package policy
+default allow = false
+allow {{
+    input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
+}}
+"#,
+            Self::TEE
+        );
+
+        let tmp_file = "/tmp/tee_policy.rego";
+        fs::write(tmp_file, &tee_policy_rego)?;
+
+        Command::new("sudo")
+            .args([
+                "-E",
+                &Self::get_kbs_client_path(),
+                "--url",
+                &Self::get_kbs_url(),
+                "--cert-file",
+                &Self::get_https_cert(),
+                "config",
+                "--auth-private-key",
+                &Self::get_kbs_key(),
+                "set-resource-policy",
+                "--policy-file",
+                tmp_file,
+            ])
+            .output()?;
+
+        Ok(())
+    }
+
+    async fn generate_attestation_token() -> Result<()> {
+        let output = Command::new("sudo")
+            .args([
+                "-E",
+                &Self::get_kbs_client_path(),
+                "--url",
+                &Self::get_kbs_url(),
+                "--cert-file",
+                &Self::get_https_cert(),
+                "attest",
+                "--tee-key-file",
+                &Self::get_tee_key(),
+            ])
+            .output()?;
+
+        fs::write(&Self::get_attestation_token(), output.stdout)?;
+
+        Ok(())
+    }
+
     pub async fn get_trustee_resource() -> Result<()> {
-        todo!("finish me!");
+        Command::new("sudo")
+            .args([
+                "-E",
+                &Self::get_kbs_client_path(),
+                "--url",
+                &Self::get_kbs_url(),
+                "--cert-file",
+                &Self::get_https_cert(),
+                "get-resource",
+                // TODO: if we comment out these next two lines we are including
+                // the attestation in the loop, which seems more realistic, but
+                // i am running into some race conditions
+                "--tee-key-file",
+                &Self::get_tee_key(),
+                "--attestation-token",
+                &Self::get_attestation_token(),
+                "--path",
+                "one/two/three",
+            ])
+            .output()?;
+
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -108,20 +219,26 @@ impl EscrowBaseline {
     /// attestation token from MAA.
     pub async fn wrap_key_in_mhsm() -> Result<()> {
         let azure_attest_bin_path = format!(
-            "{}/azure/confidential-computing-cvm-guest-\
-            securekey-release-app/build",
+            "{}/azure/confidential-computing-cvm-guest-attestation\
+            /cvm-securekey-release-app/build",
             Self::SNP_VM_CODE_DIR
         );
+
+        // This method is ran from the client SNP cVM in Azure, so we cannot
+        // use create::Azure (i.e. `az`) to query for the resource URIs
+        let az_attestation_uri = "https://tlessmhsm.eus.attest.azure.net";
+        let az_kv_kid = "https://tless-mhsm-kv.vault.azure.net/keys/tless-mhsm-key";
+
         Command::new("sudo")
             .args([
                 format!("{azure_attest_bin_path}/AzureAttestSKR").as_str(),
                 "-a",
-                &Azure::get_aa_attest_uri("tless-mhsm-aa"),
+                az_attestation_uri,
                 "-k",
-                &Azure::get_key_uri("tless-mhsm-kv", "tless-mhsm-key"),
+                az_kv_kid,
                 "-s",
                 "foobar123",
-                "w",
+                "-w",
             ])
             .output()?;
 
@@ -268,21 +385,34 @@ impl Ubench {
     }
 
     async fn run_escrow_ubench(run_args: &UbenchRunArgs) -> Result<()> {
-        // fs::create_dir_all(WORK_DIR).await.unwrap();
         let results_file = Env::proj_root()
             .join("eval")
             .join(format!("{}", MicroBenchmarks::EscrowXput))
+            .join("data")
             .join(format!("{}.csv", run_args.baseline));
 
-        // let mut wtr = Writer::from_path("results.csv")?;
-        // wtr.write_record(["num_requests", "time_elapsed"])?;
         let mut csv_file = BufWriter::new(File::create(results_file).unwrap());
         writeln!(csv_file, "NumRequests,TimeElapsed").unwrap();
 
+        if run_args.baseline == EscrowBaseline::Trustee {
+            EscrowBaseline::set_resource_policy().await?;
+            // TODO: ideally we would generate the attestation token with
+            // each new request but, unfortunately, there seems to be some
+            // race condition in the vTPM source code that prevents getting
+            // many HW attesation reports concurrently.
+            EscrowBaseline::generate_attestation_token().await?;
+        }
+
         for &num_req in REQUEST_COUNTS {
             for _ in 0..run_args.num_repeats {
-                let elapsed_time =
-                    Self::measure_requests_latency(&run_args.baseline, num_req).await?;
+                let elapsed_time = Self::measure_requests_latency(
+                    &run_args.baseline,
+                    match run_args.baseline {
+                        EscrowBaseline::Trustee | EscrowBaseline::Tless => num_req * 10,
+                        EscrowBaseline::ManagedHSM => num_req,
+                    },
+                )
+                .await?;
                 println!("elapsed time: {elapsed_time}");
                 writeln!(csv_file, "{},{:?}", num_req, elapsed_time)?;
             }
@@ -311,18 +441,14 @@ impl Ubench {
         #[serde(rename_all = "PascalCase")]
         struct Record {
             #[allow(dead_code)]
-            num_requests: u32,
+            num_requests: usize,
             time_elapsed: f64,
         }
 
-        let baselines: Vec<&str> = vec!["trustee", "managed-hsm"];
-
-        const NUM_REQUESTS: [u32; 4] = [1, 10, 100, 1000];
-
         // Collect data
-        let mut data = BTreeMap::<&str, [f64; NUM_REQUESTS.len()]>::new();
-        for baseline in &baselines {
-            data.insert(*baseline, [0.0; NUM_REQUESTS.len()]);
+        let mut data = BTreeMap::<EscrowBaseline, [f64; REQUEST_COUNTS.len()]>::new();
+        for baseline in EscrowBaseline::iter_variants() {
+            data.insert(baseline.clone(), [0.0; REQUEST_COUNTS.len()]);
         }
 
         let mut y_max: f64 = 0.0;
@@ -332,7 +458,7 @@ impl Ubench {
                 .and_then(|f| f.to_str())
                 .unwrap_or_default();
             let file_name_len = file_name.len();
-            let baseline = &file_name[0..file_name_len - 4];
+            let baseline: EscrowBaseline = file_name[0..file_name_len - 4].parse().unwrap();
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -349,14 +475,20 @@ impl Ubench {
 
                 count += 1;
                 let n_req = record.num_requests;
-                let idx = NUM_REQUESTS
+                let idx = REQUEST_COUNTS
                     .iter()
-                    .position(|&x| x == n_req)
+                    .position(|&x| {
+                        n_req
+                            == match baseline {
+                                EscrowBaseline::Trustee | EscrowBaseline::Tless => x * 10,
+                                EscrowBaseline::ManagedHSM => x,
+                            }
+                    })
                     .expect("num. requests not found!");
                 agg_times[idx] += record.time_elapsed;
             }
 
-            let num_repeats: f64 = (count / NUM_REQUESTS.len()) as f64;
+            let num_repeats: f64 = (count / REQUEST_COUNTS.len()) as f64;
 
             let average_times = data.get_mut(&baseline).unwrap();
             for i in 0..average_times.len() {
@@ -413,7 +545,7 @@ impl Ubench {
         // Manually draw the X/Y-axis label with a custom font and size
         root.draw(&Text::new(
             "Latency [s]",
-            (5, 220),
+            (5, 180),
             ("sans-serif", 20)
                 .into_font()
                 .transform(FontTransform::Rotate270)
@@ -427,27 +559,14 @@ impl Ubench {
         ))
         .unwrap();
 
-        fn get_color_for_baseline(baseline: &str) -> RGBColor {
-            match baseline {
-                "trustee" => RGBColor(171, 222, 230),
-                "managed-hsm" => RGBColor(203, 170, 203),
-                _ => panic!("invrs: unrecognized baseline: {baseline}"),
-            }
-        }
-
-        fn get_text_for_baseline(baseline: &str) -> String {
-            // TODO: decide if we want a special text for each baseline
-            baseline.to_string()
-        }
-
         for (baseline, values) in data {
             // Draw line
             chart
                 .draw_series(LineSeries::new(
                     (1..values.len())
                         .zip(values[1..].iter())
-                        .map(|(x, y)| (NUM_REQUESTS[x] as i32, *y)),
-                    get_color_for_baseline(baseline).stroke_width(3),
+                        .map(|(x, y)| (REQUEST_COUNTS[x] as i32, *y)),
+                    EscrowBaseline::get_color(&baseline).stroke_width(3),
                 ))
                 .unwrap();
 
@@ -455,39 +574,48 @@ impl Ubench {
             chart
                 .draw_series((1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
                     Circle::new(
-                        (NUM_REQUESTS[x] as i32, *y),
+                        (
+                            match baseline {
+                                EscrowBaseline::Trustee | EscrowBaseline::Tless => {
+                                    (REQUEST_COUNTS[x] * 10) as i32
+                                }
+                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS[x] as i32,
+                            },
+                            *y,
+                        ),
                         5,
-                        get_color_for_baseline(baseline).filled(),
+                        EscrowBaseline::get_color(&baseline).filled(),
                     )
                 }))
                 .unwrap();
         }
 
-        fn legend_label_pos_for_baseline(baseline: &str) -> (i32, i32) {
+        fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
             let legend_x_start = 100;
             let legend_y_pos = 6;
 
             match baseline {
-                "trustee" => (legend_x_start, legend_y_pos),
-                "managed-hsm" => (legend_x_start + 150, legend_y_pos),
-                _ => panic!("tlessctl: unrecognized baseline: {baseline}"),
+                EscrowBaseline::Trustee => (legend_x_start, legend_y_pos),
+                EscrowBaseline::ManagedHSM => (legend_x_start + 150, legend_y_pos),
+                EscrowBaseline::Tless => (legend_x_start + 350, legend_y_pos),
             }
         }
 
-        for id_x in 0..baselines.len() {
+        // for id_x in 0..EscrowBaseline::iter_variants().len() {
+        for baseline in EscrowBaseline::iter_variants() {
             // Calculate position for each legend item
-            let (x_pos, y_pos) = legend_label_pos_for_baseline(baselines[id_x]);
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
             // Draw the color box (Rectangle)
             root.draw(&Rectangle::new(
                 [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
-                get_color_for_baseline(baselines[id_x]).filled(),
+                EscrowBaseline::get_color(&baseline).filled(),
             ))
             .unwrap();
 
             // Draw the baseline label (Text)
             root.draw(&Text::new(
-                get_text_for_baseline(baselines[id_x]),
+                format!("{baseline}"),
                 (x_pos + 30, y_pos + 5), // Adjust text position
                 ("sans-serif", 20).into_font(),
             ))

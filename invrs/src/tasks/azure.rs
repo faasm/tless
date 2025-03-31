@@ -195,7 +195,7 @@ impl Azure {
         Self::run_cmd_get_output(&az_cmd, "error getting subscription id")
     }
 
-    fn get_vm_ip(vm_name: &str) -> String {
+    pub fn get_vm_ip(vm_name: &str) -> String {
         let az_cmd = format!("az vm list-ip-addresses -n {vm_name} -g {AZURE_RESOURCE_GROUP}");
         let stdout = Self::run_cmd_get_output(&az_cmd, "error getting VM ip");
         let json: Vec<Value> =
@@ -449,6 +449,12 @@ impl Azure {
         Self::run_cmd_check_status(&ansible_cmd, "failed to run ansible playbook");
     }
 
+    pub fn build_scp_command(vm_name: &str) -> String {
+        format!(
+            "scp -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
+            Self::get_vm_ip(vm_name),
+        )
+    }
     pub fn build_ssh_command(vm_name: &str) {
         println!(
             "ssh -A -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",

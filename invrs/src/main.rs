@@ -1,3 +1,4 @@
+use crate::env::Env;
 use crate::tasks::azure::Azure;
 use crate::tasks::dag::Dag;
 use crate::tasks::docker::{Docker, DockerContainer};
@@ -6,6 +7,7 @@ use crate::tasks::s3::S3;
 use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
 use env_logger;
+use std::process;
 
 pub mod env;
 pub mod tasks;
@@ -222,6 +224,8 @@ enum AzureSubCommand {
     Create {},
     /// Provision Azure resource using Ansible
     Provision {},
+    /// Copy the results directory corresponding to this resoiurce
+    ScpResults {},
     /// Get a SSH command into the Azure resource (if applicable)
     Ssh {},
     /// Delete the Azure resource
@@ -302,8 +306,8 @@ async fn main() {
                 }
             },
             UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
-                UbenchSubCommand::Run(run_args) => {
-                    Ubench::run(&MicroBenchmarks::VerifyEDag, run_args);
+                UbenchSubCommand::Run(_) => {
+                    panic!("verify-edag not supported anymore!");
                 }
                 UbenchSubCommand::Plot {} => {
                     Ubench::plot(&MicroBenchmarks::VerifyEDag);
@@ -377,6 +381,22 @@ async fn main() {
                 AzureSubCommand::Provision {} => {
                     Azure::provision_with_ansible("tless-mhsm", "mhsm");
                 }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless";
+                    let result_path = "eval/escrow-xput/data/managed-hsm.csv";
+
+                    let scp_cmd = format!(
+                        "{}:{src_results_dir}/{result_path} {}",
+                        Azure::build_scp_command("tless-mhsm-cvm"),
+                        Env::proj_root().join(result_path).display(),
+                    );
+
+                    process::Command::new("sh")
+                        .arg("-c")
+                        .arg(scp_cmd)
+                        .status()
+                        .expect("invrs: error scp-ing results");
+                }
                 AzureSubCommand::Ssh {} => {
                     Azure::build_ssh_command("tless-mhsm-cvm");
                 }
@@ -399,15 +419,57 @@ async fn main() {
                     Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("tless-trustee", "trustee");
+                    // Azure::provision_with_ansible("tless-trustee", "trustee");
 
-                    // TODO: must somehow copy the certs from the server
-                    // to the client
+                    // Copy the necessary stuff from the server to the client
+                    let client_ip = Azure::get_vm_ip("tless-trustee-client");
+                    let server_ip = Azure::get_vm_ip("tless-trustee-server");
 
-                    // TODO: also open the corresponding port for the KBS (8080?)
+                    let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
+                    for file in ["https.crt", "kbs.key", "tee.key"] {
+                        let scp_cmd_in =
+                            format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");
+                        let status = process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd_in)
+                            .status()
+                            .expect("invrs: error scp-ing data (in)");
+                        if !status.success() {
+                            panic!("invrs: error scp-ing data (in)");
+                        }
+
+                        let scp_cmd_out =
+                            format!("scp /tmp/{file} tless@{client_ip}:{work_dir}/{file}");
+                        let status = process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd_out)
+                            .status()
+                            .expect("invrs: error scp-ing data (out)");
+                        if !status.success() {
+                            panic!("invrs: error scp-ing data (out)");
+                        }
+                    }
+                }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless";
+                    let result_path = "eval/escrow-xput/data/trustee.csv";
+
+                    let scp_cmd = format!(
+                        "{}:{src_results_dir}/{result_path} {}",
+                        Azure::build_scp_command("tless-trustee-client"),
+                        Env::proj_root().join(result_path).display(),
+                    );
+
+                    process::Command::new("sh")
+                        .arg("-c")
+                        .arg(scp_cmd)
+                        .status()
+                        .expect("invrs: error scp-ing results");
                 }
                 AzureSubCommand::Ssh {} => {
+                    println!("client:");
                     Azure::build_ssh_command("tless-trustee-client");
+                    println!("server:");
                     Azure::build_ssh_command("tless-trustee-server");
                 }
                 AzureSubCommand::Delete {} => {
