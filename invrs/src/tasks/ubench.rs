@@ -24,7 +24,7 @@ static MAX_NUM_CHAINS: u32 = 10;
 
 // EscrowXput constants
 const REQUEST_COUNTS: &[usize] = &[1, 10, 20, 40, 60, 80, 100];
-const REQUEST_PARALLELISM: usize = 100; // TODO: maybe `nproc`?
+const REQUEST_PARALLELISM: usize = 10;
 
 pub enum MicroBenchmarks {
     EscrowXput,
