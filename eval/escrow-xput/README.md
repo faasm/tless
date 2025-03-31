@@ -46,8 +46,17 @@ invrs azure trustee ssh
 ```
 
 ```bash
+# tless@tless-trustee-server
 cd /home/tless/git/confidential-containers/trustee/kbs/test
 sudo ../../target/release/kbs --config-file ./config/kbs.toml
+```
+
+then, SSH into the client and:
+
+```bash
+export TLESS_KBS_URL=${server_ip_from_above}:8080
+source ./bin/workon.sh
+invrs ubench escrow-xput run --baseline trustee
 ```
 
 ### Clean-Up
@@ -56,8 +65,8 @@ Once you are done running the experiment, you may copy the results from the
 cVM by running:
 
 ```bash
-invrs azure managed-hsm scp-results
-invrs azure managed-hsm delete
+invrs azure trustee scp-results
+invrs azure trustee delete
 ```
 
 ## Managed HSM

@@ -22,8 +22,8 @@ use std::{
 // eDAG Verify constants
 static MAX_NUM_CHAINS: u32 = 10;
 
-// EscrowXput constants
-const REQUEST_COUNTS: &[usize] = &[1, 10, 20, 40, 60, 80, 100];
+const REQUEST_COUNTS_MHSM: &[usize] = &[1, 5, 10, 15, 20, 40, 60, 80, 100];
+const REQUEST_COUNTS_TRUSTEE: &[usize] = &[1, 10, 50, 100, 200, 400, 600, 800, 1000];
 const REQUEST_PARALLELISM: usize = 10;
 
 pub enum MicroBenchmarks {
@@ -403,16 +403,14 @@ impl Ubench {
             EscrowBaseline::generate_attestation_token().await?;
         }
 
-        for &num_req in REQUEST_COUNTS {
+        let request_counts = match run_args.baseline {
+            EscrowBaseline::Trustee | EscrowBaseline::Tless => REQUEST_COUNTS_TRUSTEE,
+            EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
+        };
+        for &num_req in request_counts {
             for _ in 0..run_args.num_repeats {
-                let elapsed_time = Self::measure_requests_latency(
-                    &run_args.baseline,
-                    match run_args.baseline {
-                        EscrowBaseline::Trustee | EscrowBaseline::Tless => num_req * 10,
-                        EscrowBaseline::ManagedHSM => num_req,
-                    },
-                )
-                .await?;
+                let elapsed_time =
+                    Self::measure_requests_latency(&run_args.baseline, num_req).await?;
                 println!("elapsed time: {elapsed_time}");
                 writeln!(csv_file, "{},{:?}", num_req, elapsed_time)?;
             }
@@ -446,9 +444,9 @@ impl Ubench {
         }
 
         // Collect data
-        let mut data = BTreeMap::<EscrowBaseline, [f64; REQUEST_COUNTS.len()]>::new();
+        let mut data = BTreeMap::<EscrowBaseline, [f64; REQUEST_COUNTS_TRUSTEE.len()]>::new();
         for baseline in EscrowBaseline::iter_variants() {
-            data.insert(baseline.clone(), [0.0; REQUEST_COUNTS.len()]);
+            data.insert(baseline.clone(), [0.0; REQUEST_COUNTS_TRUSTEE.len()]);
         }
 
         let mut y_max: f64 = 0.0;
@@ -475,20 +473,18 @@ impl Ubench {
 
                 count += 1;
                 let n_req = record.num_requests;
-                let idx = REQUEST_COUNTS
+                let request_counts = match baseline {
+                    EscrowBaseline::Trustee | EscrowBaseline::Tless => REQUEST_COUNTS_TRUSTEE,
+                    EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
+                };
+                let idx = request_counts
                     .iter()
-                    .position(|&x| {
-                        n_req
-                            == match baseline {
-                                EscrowBaseline::Trustee | EscrowBaseline::Tless => x * 10,
-                                EscrowBaseline::ManagedHSM => x,
-                            }
-                    })
+                    .position(|&x| n_req == x)
                     .expect("num. requests not found!");
                 agg_times[idx] += record.time_elapsed;
             }
 
-            let num_repeats: f64 = (count / REQUEST_COUNTS.len()) as f64;
+            let num_repeats: f64 = (count / REQUEST_COUNTS_TRUSTEE.len()) as f64;
 
             let average_times = data.get_mut(&baseline).unwrap();
             for i in 0..average_times.len() {
@@ -518,6 +514,7 @@ impl Ubench {
             .margin(10)
             .margin_top(40)
             .margin_left(40)
+            .margin_right(20)
             .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
             .unwrap();
 
@@ -563,9 +560,17 @@ impl Ubench {
             // Draw line
             chart
                 .draw_series(LineSeries::new(
-                    (1..values.len())
-                        .zip(values[1..].iter())
-                        .map(|(x, y)| (REQUEST_COUNTS[x] as i32, *y)),
+                    (1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
+                        (
+                            match baseline {
+                                EscrowBaseline::Trustee | EscrowBaseline::Tless => {
+                                    REQUEST_COUNTS_TRUSTEE[x] as i32
+                                }
+                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
+                            },
+                            *y,
+                        )
+                    }),
                     EscrowBaseline::get_color(&baseline).stroke_width(3),
                 ))
                 .unwrap();
@@ -577,9 +582,9 @@ impl Ubench {
                         (
                             match baseline {
                                 EscrowBaseline::Trustee | EscrowBaseline::Tless => {
-                                    (REQUEST_COUNTS[x] * 10) as i32
+                                    REQUEST_COUNTS_TRUSTEE[x] as i32
                                 }
-                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS[x] as i32,
+                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
                             },
                             *y,
                         ),

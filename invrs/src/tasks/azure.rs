@@ -415,7 +415,11 @@ impl Azure {
 
     // WARNING: this method assumes that the VM names are prefixed with the
     // VM deployment group name
-    pub fn provision_with_ansible(vm_deployment: &str, inventory_name: &str) {
+    pub fn provision_with_ansible(
+        vm_deployment: &str,
+        inventory_name: &str,
+        extra_vars: Option<&str>,
+    ) {
         let mut inventory_file = Env::ansible_root().join("inventory");
         fs::create_dir_all(&inventory_file).expect("invrs: failed to create inventory directory");
         inventory_file.push("vms.ini");
@@ -438,13 +442,17 @@ impl Azure {
         info!("generated ansible inventory:\n{}", inventory.join("\n"));
 
         let ansible_cmd = format!(
-            "ANSIBLE_CONFIG={} ansible-playbook -i {} {}",
+            "ANSIBLE_CONFIG={} ansible-playbook -i {} {} {}",
             Env::ansible_root().join("ansible.cfg").to_str().unwrap(),
             inventory_file.to_str().unwrap(),
             Env::ansible_root()
                 .join(format!("{inventory_name}.yaml"))
                 .to_str()
-                .unwrap()
+                .unwrap(),
+            match extra_vars {
+                Some(val) => format!("-e {val}"),
+                None => "".to_string(),
+            }
         );
         Self::run_cmd_check_status(&ansible_cmd, "failed to run ansible playbook");
     }

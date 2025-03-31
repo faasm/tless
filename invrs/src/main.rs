@@ -379,7 +379,7 @@ async fn main() {
                     Azure::open_vm_ports("tless-mhsm-cvm", &[22]);
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("tless-mhsm", "mhsm");
+                    Azure::provision_with_ansible("tless-mhsm", "mhsm", None);
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless";
@@ -419,12 +419,16 @@ async fn main() {
                     Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
                 }
                 AzureSubCommand::Provision {} => {
-                    // Azure::provision_with_ansible("tless-trustee", "trustee");
-
-                    // Copy the necessary stuff from the server to the client
                     let client_ip = Azure::get_vm_ip("tless-trustee-client");
                     let server_ip = Azure::get_vm_ip("tless-trustee-server");
 
+                    Azure::provision_with_ansible(
+                        "tless-trustee",
+                        "trustee",
+                        Some(format!("kbs_ip={server_ip}").as_str()),
+                    );
+
+                    // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
                     for file in ["https.crt", "kbs.key", "tee.key"] {
                         let scp_cmd_in =

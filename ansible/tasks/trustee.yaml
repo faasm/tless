@@ -14,6 +14,20 @@
   environment:
     PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+- name: "Make the KBS server bind to all input IPs"
+  shell: sed -i 's/127\.0\.0\.1:8080/0.0.0.0:8080/' test/config/kbs.toml
+  args:
+    chdir: "/home/{{ ansible_user }}/git/confidential-containers/trustee/kbs"
+    executable: /bin/bash
+
+- name: "Update KBS certificates to point to the cVM's external IP"
+  shell: sed -i "s/subjectAltName=IP:[0-9.]\+/subjectAltName=IP:${KBS_IP}/" test/Makefile
+  args:
+    executable: /bin/bash
+    chdir: "/home/{{ ansible_user }}/git/confidential-containers/trustee/kbs"
+  environment:
+    KBS_IP: "{{ kbs_ip }}"
+
 - name: "Prepare certs and keys for KBS load test"
   shell: make kbs-certs /home/{{ ansible_user }}/git/confidential-containers/trustee/kbs/test/work/tee.key /home/{{ ansible_user }}/git/confidential-containers/trustee/kbs/test/work/repository/one/two/three
   args:

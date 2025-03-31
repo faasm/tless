@@ -29,4 +29,5 @@
       - libtss2-dev
       - pkg-config
       - protobuf-compiler
+      - python3-venv
     update_cache: yes
