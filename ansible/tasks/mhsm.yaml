@@ -1,0 +1,5 @@
+- name: "Build demo"
+  shell: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j `nproc`
+  args:
+    chdir: "/home/{{ ansible_user }}/git/azure/confidential-computing-cvm-guest-attestation/cvm-securekey-release-app"
+    executable: /bin/bash

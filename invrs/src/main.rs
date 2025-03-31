@@ -102,10 +102,6 @@ enum EvalCommand {
         #[command(subcommand)]
         eval_sub_command: EvalSubCommand,
     },
-    /// Measure the throughput of the trusted escrow as we increase the number
-    /// of parallel authorization requests
-    EscrowXput {
-    },
     /// Evaluate the latency when scaling-up the number of functions in the
     /// workflow
     ScaleUpLatency {
@@ -116,6 +112,12 @@ enum EvalCommand {
 
 #[derive(Debug, Subcommand)]
 enum UbenchCommand {
+    /// Measure the throughput of the trusted escrow as we increase the number
+    /// of parallel authorization requests
+    EscrowXput {
+        #[command(subcommand)]
+        ubench_sub_command: UbenchSubCommand,
+    },
     /// Microbenchmark to measure the time to verify an eDAG
     VerifyEdag {
         #[command(subcommand)]
@@ -200,8 +202,15 @@ enum S3Command {
 
 #[derive(Debug, Subcommand)]
 enum AzureCommand {
-    /// Provision a managed SNP cVM in Azure
-    SnpGuest {
+    /// Deploy an environment with an SNP cVM and a managed HSM acting as
+    /// relying party to perform secure key release (SKR)
+    ManagedHSM {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
+    /// Deploy an environment with two SNP cVMs, one running Trustee as a
+    /// relying party, and the other one requesting a secure key release (SKR)
+    Trustee {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
@@ -274,8 +283,6 @@ async fn main() {
                     Eval::plot(&EvalExperiment::E2eLatencyCold);
                 }
             },
-            // TODO:
-            EvalCommand::EscrowXput {} => {},
             EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
                     Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await;
@@ -286,6 +293,14 @@ async fn main() {
             },
         },
         Command::Ubench { ubench_command } => match ubench_command {
+            UbenchCommand::EscrowXput { ubench_sub_command } => match ubench_sub_command {
+                UbenchSubCommand::Run(run_args) => {
+                    Ubench::run(&MicroBenchmarks::EscrowXput, run_args).await;
+                }
+                UbenchSubCommand::Plot {} => {
+                    Ubench::plot(&MicroBenchmarks::EscrowXput);
+                }
+            },
             UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {
                     Ubench::run(&MicroBenchmarks::VerifyEDag, run_args);
@@ -347,18 +362,57 @@ async fn main() {
             }
         },
         Command::Azure { az_command } => match az_command {
-            AzureCommand::SnpGuest { az_sub_command } => match az_sub_command {
+            AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest();
+                    Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5");
+                    Azure::create_aa("tlessmhsm");
+                    // WARNING: the key release policy in the mHSM depends
+                    // on the name of the attestaion provider even though it
+                    // is not passed as an argument (it is used in the ARM
+                    // template file: ./azure/mhsm_skr_policy.json)
+                    Azure::create_mhsm("tless-mhsm-kv", "tless-mhsm-cvm", "tless-mhsm-key");
+
+                    Azure::open_vm_ports("tless-mhsm-cvm", &[22]);
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_snp_guest();
+                    Azure::provision_with_ansible("tless-mhsm", "mhsm");
                 }
                 AzureSubCommand::Ssh {} => {
-                    Azure::build_ssh_command();
+                    Azure::build_ssh_command("tless-mhsm-cvm");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest();
+                    Azure::delete_snp_guest("tless-mhsm-cvm");
+                    Azure::delete_aa("tlessmhsm");
+                    Azure::delete_mhsm("tless-mhsm-kv");
+                }
+            },
+            AzureCommand::Trustee { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    // DC2 is 62.78$/month
+                    // DC4 is DC2 * 2
+                    // DC8 is DC2 * 4
+                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");
+                    Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5");
+
+                    // Open port 8080 on the server VM
+                    Azure::open_vm_ports("tless-trustee-client", &[22]);
+                    Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
+                }
+                AzureSubCommand::Provision {} => {
+                    Azure::provision_with_ansible("tless-trustee", "trustee");
+
+                    // TODO: must somehow copy the certs from the server
+                    // to the client
+
+                    // TODO: also open the corresponding port for the KBS (8080?)
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("tless-trustee-client");
+                    Azure::build_ssh_command("tless-trustee-server");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_snp_guest("tless-trustee-client");
+                    Azure::delete_snp_guest("tless-trustee-server");
                 }
             },
         },

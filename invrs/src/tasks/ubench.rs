@@ -1,7 +1,11 @@
 use crate::env::Env;
-use clap::Args;
+use crate::Azure;
+use anyhow::Result;
+use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
+use futures::stream::{self, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
+use log::debug;
 use plotters::prelude::*;
 use serde::Deserialize;
 use std::{
@@ -12,27 +16,123 @@ use std::{
     path::PathBuf,
     process::Command,
     str,
+    str::FromStr,
     time::Instant,
 };
 
+// eDAG Verify constants
+static MAX_NUM_CHAINS: u32 = 10;
+
+// EscrowXput constants
+const REQUEST_COUNTS: &[usize] = &[10, 100, 200, 400, 600, 800, 1000];
+const REQUEST_PARALLELISM: usize = 100; // TODO: maybe `nproc`?
+
 pub enum MicroBenchmarks {
+    EscrowXput,
     VerifyEDag,
 }
 
 impl fmt::Display for MicroBenchmarks {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            MicroBenchmarks::EscrowXput => write!(f, "escrow-xput"),
             MicroBenchmarks::VerifyEDag => write!(f, "verify-edag"),
         }
     }
 }
 
-// TODO: bump to 10
-static MAX_NUM_CHAINS: u32 = 10;
+#[derive(Clone, Debug, ValueEnum, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EscrowBaseline {
+    Trustee,
+    ManagedHSM,
+    Tless,
+}
+
+impl fmt::Display for EscrowBaseline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EscrowBaseline::Trustee => write!(f, "trustee"),
+            EscrowBaseline::ManagedHSM => write!(f, "managed-hsm"),
+            EscrowBaseline::Tless => write!(f, "tless"),
+        }
+    }
+}
+
+impl FromStr for EscrowBaseline {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<EscrowBaseline, Self::Err> {
+        match input {
+            "trustee" => Ok(EscrowBaseline::Trustee),
+            "managed-hsm" => Ok(EscrowBaseline::ManagedHSM),
+            "tless" => Ok(EscrowBaseline::Tless),
+            _ => Err(()),
+        }
+    }
+}
+
+impl EscrowBaseline {
+    const SNP_VM_CODE_DIR: &str = "/home/tless/git";
+
+    pub fn iter_variants() -> std::slice::Iter<'static, EscrowBaseline> {
+        static VARIANTS: [EscrowBaseline; 3] = [
+            EscrowBaseline::Trustee,
+            EscrowBaseline::ManagedHSM,
+            EscrowBaseline::Tless,
+        ];
+        VARIANTS.iter()
+    }
+
+    pub fn get_color(&self) -> RGBColor {
+        match self {
+            EscrowBaseline::Trustee => RGBColor(171, 222, 230),
+            EscrowBaseline::ManagedHSM => RGBColor(203, 170, 203),
+            EscrowBaseline::Tless => RGBColor(255, 255, 181),
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Trustee methods and constants
+    // -------------------------------------------------------------------------
+
+    pub async fn get_trustee_resource() -> Result<()> {
+        todo!("finish me!");
+    }
+
+    // -------------------------------------------------------------------------
+    // Managed HSM methods and constants
+    // -------------------------------------------------------------------------
+
+    /// The individual request to the managed HSM is to wrap a payload using
+    /// the policy-protected key. To unlock the key we must provide a valid
+    /// attestation token from MAA.
+    pub async fn wrap_key_in_mhsm() -> Result<()> {
+        let azure_attest_bin_path = format!(
+            "{}/azure/confidential-computing-cvm-guest-\
+            securekey-release-app/build",
+            Self::SNP_VM_CODE_DIR
+        );
+        Command::new("sudo")
+            .args([
+                format!("{azure_attest_bin_path}/AzureAttestSKR").as_str(),
+                "-a",
+                &Azure::get_aa_attest_uri("tless-mhsm-aa"),
+                "-k",
+                &Azure::get_key_uri("tless-mhsm-kv", "tless-mhsm-key"),
+                "-s",
+                "foobar123",
+                "w",
+            ])
+            .output()?;
+
+        Ok(())
+    }
+}
 
 #[derive(Debug, Args)]
 pub struct UbenchRunArgs {
-    // TODO: bump to 3
+    #[arg(short, long, value_name = "BASELINE")]
+    baseline: EscrowBaseline,
     #[arg(long, default_value = "3")]
     num_repeats: u32,
     #[arg(long, default_value = "0")]
@@ -133,6 +233,64 @@ impl Ubench {
         }
     }
 
+    async fn measure_requests_latency(
+        baseline: &EscrowBaseline,
+        num_requests: usize,
+    ) -> Result<f64> {
+        // TODO: get rid of me
+        println!(
+            "Processing {} requests for baseline {baseline} with parallelism={}...",
+            num_requests, REQUEST_PARALLELISM
+        );
+
+        let start = Instant::now();
+
+        stream::iter(0..num_requests)
+            .map(|_| match &baseline {
+                EscrowBaseline::Trustee => tokio::spawn(EscrowBaseline::get_trustee_resource()),
+                EscrowBaseline::ManagedHSM => tokio::spawn(EscrowBaseline::wrap_key_in_mhsm()),
+                EscrowBaseline::Tless => panic!("tless get_method not implemented!"),
+            })
+            .buffer_unordered(REQUEST_PARALLELISM)
+            .for_each(|res| async {
+                if let Err(e) = res {
+                    eprintln!(
+                        "individual secret release request failed: {:?} (baseline: {baseline})",
+                        e
+                    );
+                }
+            })
+            .await;
+
+        let time_elapsed = start.elapsed().as_secs_f64();
+        println!("Time elapsed: {}s", time_elapsed);
+        Ok(time_elapsed)
+    }
+
+    async fn run_escrow_ubench(run_args: &UbenchRunArgs) -> Result<()> {
+        // fs::create_dir_all(WORK_DIR).await.unwrap();
+        let results_file = Env::proj_root()
+            .join("eval")
+            .join(format!("{}", MicroBenchmarks::EscrowXput))
+            .join(format!("{}.csv", run_args.baseline));
+
+        // let mut wtr = Writer::from_path("results.csv")?;
+        // wtr.write_record(["num_requests", "time_elapsed"])?;
+        let mut csv_file = BufWriter::new(File::create(results_file).unwrap());
+        writeln!(csv_file, "NumRequests,TimeElapsed").unwrap();
+
+        for &num_req in REQUEST_COUNTS {
+            for _ in 0..run_args.num_repeats {
+                let elapsed_time =
+                    Self::measure_requests_latency(&run_args.baseline, num_req).await?;
+                println!("elapsed time: {elapsed_time}");
+                writeln!(csv_file, "{},{:?}", num_req, elapsed_time)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn get_all_data_files(exp: &MicroBenchmarks) -> Vec<PathBuf> {
         let data_path = format!("{}/eval/{exp}/data", Env::proj_root().display());
 
@@ -146,6 +304,198 @@ impl Ubench {
         }
 
         return csv_files;
+    }
+
+    fn plot_escrow_xput_ubench(data_files: &Vec<PathBuf>) {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Record {
+            #[allow(dead_code)]
+            num_requests: u32,
+            time_elapsed: f64,
+        }
+
+        let baselines: Vec<&str> = vec!["trustee", "managed-hsm"];
+
+        const NUM_REQUESTS: [u32; 4] = [1, 10, 100, 1000];
+
+        // Collect data
+        let mut data = BTreeMap::<&str, [f64; NUM_REQUESTS.len()]>::new();
+        for baseline in &baselines {
+            data.insert(*baseline, [0.0; NUM_REQUESTS.len()]);
+        }
+
+        let mut y_max: f64 = 0.0;
+        for csv_file in data_files {
+            let file_name = csv_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            let file_name_len = file_name.len();
+            let baseline = &file_name[0..file_name_len - 4];
+
+            // Open the CSV and deserialize records
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .from_path(csv_file)
+                .unwrap();
+            let mut count = 0;
+
+            for result in reader.deserialize() {
+                debug!("{baseline}: {csv_file:?}");
+                let record: Record = result.unwrap();
+
+                let agg_times = data.get_mut(&baseline).unwrap();
+
+                count += 1;
+                let n_req = record.num_requests;
+                let idx = NUM_REQUESTS
+                    .iter()
+                    .position(|&x| x == n_req)
+                    .expect("num. requests not found!");
+                agg_times[idx] += record.time_elapsed;
+            }
+
+            let num_repeats: f64 = (count / NUM_REQUESTS.len()) as f64;
+
+            let average_times = data.get_mut(&baseline).unwrap();
+            for i in 0..average_times.len() {
+                average_times[i] = average_times[i] / num_repeats;
+
+                if average_times[i] > y_max {
+                    y_max = average_times[i];
+                }
+            }
+        }
+
+        let mut plot_path = Env::proj_root();
+        plot_path.push("eval");
+        plot_path.push(format!("{}", MicroBenchmarks::EscrowXput));
+        plot_path.push("plots");
+        fs::create_dir_all(plot_path.clone()).unwrap();
+        plot_path.push(format!("{}.svg", MicroBenchmarks::EscrowXput));
+
+        // Plot data
+        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let x_max = 1000;
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .margin_top(40)
+            .margin_left(40)
+            .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
+            .unwrap();
+
+        chart
+            .configure_mesh()
+            .x_label_style(("sans-serif", 20).into_font())
+            .y_label_style(("sans-serif", 20).into_font())
+            .x_desc("")
+            .draw()
+            .unwrap();
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_max, 0.0), (x_max, y_max)],
+                &BLACK,
+            ))
+            .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Latency [s]",
+            (5, 220),
+            ("sans-serif", 20)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "Throughput [RPS]",
+            (400, 280),
+            ("sans-serif", 20).into_font().color(&BLACK),
+        ))
+        .unwrap();
+
+        fn get_color_for_baseline(baseline: &str) -> RGBColor {
+            match baseline {
+                "trustee" => RGBColor(171, 222, 230),
+                "managed-hsm" => RGBColor(203, 170, 203),
+                _ => panic!("invrs: unrecognized baseline: {baseline}"),
+            }
+        }
+
+        fn get_text_for_baseline(baseline: &str) -> String {
+            // TODO: decide if we want a special text for each baseline
+            baseline.to_string()
+        }
+
+        for (baseline, values) in data {
+            // Draw line
+            chart
+                .draw_series(LineSeries::new(
+                    (1..values.len())
+                        .zip(values[1..].iter())
+                        .map(|(x, y)| (NUM_REQUESTS[x] as i32, *y)),
+                    get_color_for_baseline(baseline).stroke_width(3),
+                ))
+                .unwrap();
+
+            // Draw data point on line
+            chart
+                .draw_series((1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
+                    Circle::new(
+                        (NUM_REQUESTS[x] as i32, *y),
+                        5,
+                        get_color_for_baseline(baseline).filled(),
+                    )
+                }))
+                .unwrap();
+        }
+
+        fn legend_label_pos_for_baseline(baseline: &str) -> (i32, i32) {
+            let legend_x_start = 100;
+            let legend_y_pos = 6;
+
+            match baseline {
+                "trustee" => (legend_x_start, legend_y_pos),
+                "managed-hsm" => (legend_x_start + 150, legend_y_pos),
+                _ => panic!("tlessctl: unrecognized baseline: {baseline}"),
+            }
+        }
+
+        for id_x in 0..baselines.len() {
+            // Calculate position for each legend item
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(baselines[id_x]);
+
+            // Draw the color box (Rectangle)
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                get_color_for_baseline(baselines[id_x]).filled(),
+            ))
+            .unwrap();
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                get_text_for_baseline(baselines[id_x]),
+                (x_pos + 30, y_pos + 5), // Adjust text position
+                ("sans-serif", 20).into_font(),
+            ))
+            .unwrap();
+        }
+
+        root.present().unwrap();
+        println!("invrs: generated plot at: {}", plot_path.display());
     }
 
     fn plot_edag_verify_ubench(data_files: &Vec<PathBuf>) {
@@ -370,16 +720,18 @@ impl Ubench {
         root.present().unwrap();
     }
 
-    pub fn run(ubench: &MicroBenchmarks, run_args: &UbenchRunArgs) {
+    pub async fn run(ubench: &MicroBenchmarks, run_args: &UbenchRunArgs) {
         match ubench {
+            MicroBenchmarks::EscrowXput => Self::run_escrow_ubench(&run_args).await.unwrap(),
             MicroBenchmarks::VerifyEDag => Self::run_edag_verify_ubench(&run_args),
-        };
+        }
     }
 
     pub fn plot(ubench: &MicroBenchmarks) {
         let data_files = Self::get_all_data_files(ubench);
 
         match ubench {
+            MicroBenchmarks::EscrowXput => Self::plot_escrow_xput_ubench(&data_files),
             MicroBenchmarks::VerifyEDag => Self::plot_edag_verify_ubench(&data_files),
         };
     }

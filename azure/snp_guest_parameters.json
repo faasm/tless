@@ -3,9 +3,6 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
 
-    "vmSize": {
-      "value": "Standard_DC8as_v5"
-    },
     "location": {
       "value": "East US"
     },
@@ -14,9 +11,6 @@
     },
     "securityType": {
       "value": "VMGuestStateOnly"
-    },
-    "adminUsername": {
-      "value": "tless"
     },
     "authenticationType": {
       "value": "sshPublicKey"

@@ -322,6 +322,9 @@
       "apiVersion": "2021-07-01",
       "name": "[parameters('vmName')]",
       "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "dependsOn": [
         "[concat('Microsoft.Network/networkInterfaces/', variables('networkInterfaceName'))]"
       ],

@@ -1,17 +1,14 @@
-use base64::Engine;
 use crate::env::Env;
+use base64::Engine;
 use log::info;
 use serde_json::Value;
 use shellexpand;
-use std::{fs, process::Command};
+use std::{fs, process::Command, process::ExitStatus};
 
 const AZURE_RESOURCE_GROUP: &str = "faasm";
+const AZURE_USERNAME: &str = "tless";
+const AZURE_LOCATION: &str = "eastus";
 
-const AZURE_SNP_VM_DEPLOYMENT: &str = "tless-snp-deployment";
-const AZURE_SNP_VM_ADMIN: &str = "tless";
-const AZURE_SNP_VM_IMAGE: &str = "Canonical:ubuntu-24_04-lts:server:latest";
-const AZURE_SNP_VM_LOCATION: &str = "eastus";
-const AZURE_SNP_VM_NAME: &str = "tless-snp-guest";
 const AZURE_SNP_VM_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
 const AZURE_SNP_VM_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
 
@@ -27,44 +24,96 @@ const RESOURCE_TYPE_PRECEDENCE: [&str; 4] = [
 pub struct Azure {}
 
 impl Azure {
-    fn list_all(resource: &str, prefix: Option<&str>) -> Vec<Value> {
-        let az_cmd = format!("az {resource} list -g {AZURE_RESOURCE_GROUP}");
+    // -------------------------------------------------------------------------
+    // Misc Helpers
+    // -------------------------------------------------------------------------
 
+    fn create_self_signed_cert(key_out_path: &str, cert_out_path: &str) {
+        let openssl_cmd = format!(
+            "openssl req -newkey rsa:2048 -nodes -keyout {key_out_path} \
+            -subj \"/O=TLess/OU=TLess/CN=TLess-mhsm-cert\" \
+            -x509 -days 365 -out {cert_out_path}"
+        );
+        Self::run_cmd_check_status(
+            &openssl_cmd,
+            "error generating self-signed openssl certificate",
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Command Helpers
+    // -------------------------------------------------------------------------
+
+    fn run_cmd(cmd: &str, error_msg: &str) -> ExitStatus {
+        Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .status()
+            .expect(format!("invrs: {}", error_msg).as_str())
+    }
+
+    fn run_cmd_check_status(cmd: &str, error_msg: &str) {
+        let status = Self::run_cmd(cmd, error_msg);
+
+        if !status.success() {
+            panic!("invrs: {error_msg}");
+        }
+    }
+
+    fn run_cmd_get_output(cmd: &str, error_msg: &str) -> String {
         let output = Command::new("sh")
             .arg("-c")
-            .arg(az_cmd)
+            .arg(cmd)
             .output()
-            .expect("invrs: error listing resources");
+            .expect(format!("invrs: {}", error_msg).as_str());
 
-        let stdout =
-            String::from_utf8(output.stdout).expect("invrs: error: invalid UTF-8 from az command");
-        let json: Vec<Value> =
-            serde_json::from_str(&stdout).expect("invrs: error: invalid JSON from az command");
-        if let Some(prefix_str) = prefix {
-            json.into_iter()
-                .filter(|v| {
-                    v["name"]
-                        .as_str()
-                        .map(|name| name.starts_with(prefix_str))
-                        .unwrap_or(false)
-                })
-                .collect()
-        } else {
-            json
-        }
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        stdout.trim().to_string()
+    }
+
+    // -------------------------------------------------------------------------
+    // Azure Helpers
+    // -------------------------------------------------------------------------
+
+    /// Activate a managed HSM by providing three certificates for the security
+    /// domain
+    fn activate_managed_hsm(mhsm_name: &str) {
+        let key_dir = Env::proj_root().join("azure").join("keys");
+        fs::create_dir_all(&key_dir).expect("invrs: failed to create key directory");
+
+        Self::create_self_signed_cert(
+            key_dir.join("cert0.key").to_str().unwrap(),
+            key_dir.join("cert0.cert").to_str().unwrap(),
+        );
+        Self::create_self_signed_cert(
+            key_dir.join("cert1.key").to_str().unwrap(),
+            key_dir.join("cert1.cert").to_str().unwrap(),
+        );
+        Self::create_self_signed_cert(
+            key_dir.join("cert2.key").to_str().unwrap(),
+            key_dir.join("cert2.cert").to_str().unwrap(),
+        );
+
+        let key_dir_str = key_dir.to_str().unwrap();
+        let az_cmd = format!(
+            "az keyvault security-domain download --hsm-name {mhsm_name} \
+            --sd-wrapping-keys {key_dir_str}/cert0.cert {key_dir_str}/cert1.cert \
+            {key_dir_str}/cert2.cert --sd-quorum 2 \
+            --security-domain-file {key_dir_str}/{mhsm_name}-sd.json"
+        );
+        Self::run_cmd_check_status(&az_cmd, "error activating managed HSM");
     }
 
     fn delete_resource(name: &str, resource_type: &str) {
         info!("deleting resource: {name} (type: {resource_type})");
 
         let cmd = format!(
-            "az resource delete -g {AZURE_RESOURCE_GROUP} --name {name} --resource-type {resource_type}",
+            "az resource delete --resource-group {AZURE_RESOURCE_GROUP} \
+            --name {name} --resource-type {resource_type}"
         );
-        Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .status()
-            .expect("invrs: error: failed to delete resource");
+        // Some delete operations may fail sometimes, we still want to make
+        // progress
+        Self::run_cmd(&cmd, "failed to delete resource");
     }
 
     fn delete_resources(resources: Vec<Value>) {
@@ -110,31 +159,45 @@ impl Azure {
         }
     }
 
-    fn vm_op(op: &str, name: &str, extra_args: &[&str]) {
-        info!("performing {} on vm {}", op, name);
-
-        let extra = extra_args.join(" ");
-        let cmd = format!(
-            "az vm {} --resource-group {} --name {} {}",
-            op, AZURE_RESOURCE_GROUP, name, extra
+    pub fn get_aa_attest_uri(aa_name: &str) -> String {
+        let az_cmd = format!(
+            "az attestation show --name {aa_name} --resource-group {AZURE_RESOURCE_GROUP} \
+            --query attestUri --output tsv"
         );
-        Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .status()
-            .expect("invrs: error: failed to execute vm_op");
+        Self::run_cmd_get_output(&az_cmd, "error getting atestation uri")
     }
 
-    fn vm_ip(vm_name: &str) -> String {
-        let az_cmd = format!("az vm list-ip-addresses -n {vm_name} -g {AZURE_RESOURCE_GROUP}");
+    pub fn get_key_uri(kv_name: &str, key_name: &str) -> String {
+        let az_cmd = format!(
+            "az keyvault show --vault-name {kv_name} --name {key_name} \
+            --query \"key.kid\" --output tsv"
+        );
+        Self::run_cmd_get_output(&az_cmd, "error getting key id from key vault")
+    }
 
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(az_cmd)
-            .output()
-            .expect("invrs: error getting VM ip");
-        let stdout =
-            String::from_utf8(output.stdout).expect("invrs: error: invalid UTF-8 from az command");
+    fn get_managed_identity_oid(vm_name: &str) -> String {
+        let subscription_id = Self::get_subscription_id();
+        let resource_id = format!(
+            "/subscriptions/{subscription_id}/resourceGroups\
+            /{AZURE_RESOURCE_GROUP}/providers/Microsoft.Compute/virtualMachines\
+            /{vm_name}"
+        );
+
+        let az_cmd = format!(
+            "az resource show --ids {resource_id} \
+            --query \"identity.principalId\" -o tsv"
+        );
+        Self::run_cmd_get_output(&az_cmd, "error getting managed resource id")
+    }
+
+    fn get_subscription_id() -> String {
+        let az_cmd = "az account show --query id --output tsv";
+        Self::run_cmd_get_output(&az_cmd, "error getting subscription id")
+    }
+
+    fn get_vm_ip(vm_name: &str) -> String {
+        let az_cmd = format!("az vm list-ip-addresses -n {vm_name} -g {AZURE_RESOURCE_GROUP}");
+        let stdout = Self::run_cmd_get_output(&az_cmd, "error getting VM ip");
         let json: Vec<Value> =
             serde_json::from_str(&stdout).expect("invrs: error: invalid JSON from az command");
 
@@ -144,12 +207,76 @@ impl Azure {
             .to_string()
     }
 
-    pub fn create_snp_guest() {
-        info!("creating snp guest: {AZURE_SNP_VM_NAME}");
+    /// List all resources of type `resource` beginning with prefix `prefix
+    fn list_all_resources(resource: &str, prefix: Option<&str>) -> Vec<Value> {
+        let az_cmd = format!("az {resource} list --resource-group {AZURE_RESOURCE_GROUP}");
+        let stdout = Self::run_cmd_get_output(&az_cmd, "error listing resources");
+        let json: Vec<Value> =
+            serde_json::from_str(&stdout).expect("invrs: error: invalid JSON from az command");
 
-        let parameter_file = Env::proj_root().join("azure").join("snp_guest_parameters.json");
-        let template_file = Env::proj_root().join("azure").join("snp_guest_template.json");
-        let cloud_init_file = Env::proj_root().join("azure").join("snp_guest_cloud-init.txt");
+        // Filter by name prefix
+        if let Some(prefix_str) = prefix {
+            json.into_iter()
+                .filter(|v| {
+                    v["name"]
+                        .as_str()
+                        .map(|name| name.starts_with(prefix_str))
+                        .unwrap_or(false)
+                })
+                .collect()
+        } else {
+            json
+        }
+    }
+
+    /// Open a list of ports in a VM. Note that, given that we do not set
+    /// priorities in the port rules, trying to run the same method twice
+    /// on the same VM will fail. Hence why we support passing a list of ports
+    /// so that the operation is only done once.
+    pub fn open_vm_ports(vm_name: &str, ports: &[usize]) {
+        let port_str = ports
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let az_cmd = format!(
+            "az vm open-port --resource-group {AZURE_RESOURCE_GROUP} \
+            --name {vm_name} --port {port_str}"
+        );
+        Self::run_cmd_check_status(&az_cmd, "error opening port on VM");
+    }
+
+    /// Perform an arbitrary operation `op` on a VM with name `name`. We can
+    /// pass additional arguments via extra_args: `["--yes", "--no"]`
+    fn vm_op(op: &str, name: &str, extra_args: &[&str]) {
+        info!("performing {} on vm {}", op, name);
+
+        let extra = extra_args.join(" ");
+        let cmd = format!(
+            "az vm {} --resource-group {} --name {} {}",
+            op, AZURE_RESOURCE_GROUP, name, extra
+        );
+        Self::run_cmd_check_status(&cmd, "failed to execute vm_op");
+    }
+
+    // -------------------------------------------------------------------------
+    // Create/Delete Azure Resources
+    // -------------------------------------------------------------------------
+
+    // ------------------------------ SNP cVMs ---------------------------------
+
+    pub fn create_snp_guest(vm_name: &str, vm_sku: &str) {
+        info!("creating snp guest: {vm_name} (sku: {vm_sku})");
+
+        let parameter_file = Env::proj_root()
+            .join("azure")
+            .join("snp_guest_parameters.json");
+        let template_file = Env::proj_root()
+            .join("azure")
+            .join("snp_guest_template.json");
+        let cloud_init_file = Env::proj_root()
+            .join("azure")
+            .join("snp_guest_cloud-init.txt");
 
         let cinit_content = fs::read(cloud_init_file).expect("error: reading cloud-init file");
         let custom_data = base64::engine::general_purpose::STANDARD.encode(cinit_content);
@@ -157,40 +284,151 @@ impl Azure {
         let pub_key = fs::read_to_string(shellexpand::tilde(AZURE_SNP_VM_SSH_PUB_KEY).into_owned())
             .expect("invrs: error loading ssh pub key");
         let az_cmd = format!(
-            "az deployment group create -g {AZURE_RESOURCE_GROUP} -n {AZURE_SNP_VM_DEPLOYMENT} --template-file {} -p {} -p vmName={AZURE_SNP_VM_NAME} -p adminPasswordOrKey='{pub_key}' -p customData='{custom_data}'",
+            "az deployment group create --resource-group {AZURE_RESOURCE_GROUP} \
+            --name {vm_name} --template-file {} --parameters {} \
+            --parameters vmName={vm_name} --parameters vmSize={vm_sku} \
+            --parameters adminPasswordOrKey='{pub_key}' --parameters \
+            adminUsername={AZURE_USERNAME} --parameters customData='{custom_data}'",
             template_file.display(),
             parameter_file.display()
         );
-        Command::new("sh")
-            .arg("-c")
-            .arg(az_cmd)
-            .status()
-            .expect("invrs: error deploying snp guest on azure");
-
-        // Also open port 22, which seems to be closed by default in this cVMs
-        let az_cmd =
-            format!("az vm open-port -g {AZURE_RESOURCE_GROUP} -n {AZURE_SNP_VM_NAME} --port 22");
-        Command::new("sh")
-            .arg("-c")
-            .arg(az_cmd)
-            .status()
-            .expect("invrs: error opening port on vm");
+        Self::run_cmd(&az_cmd, "error deploying snp guest");
     }
 
-    pub fn provision_snp_guest() {
+    pub fn delete_snp_guest(vm_name: &str) {
+        info!("deleting snp guest: {vm_name}");
+
+        // First delete VM
+        Self::vm_op("delete", vm_name, &["--yes"]);
+
+        // Then delete all attached resources
+        let all_resources = Self::list_all_resources("resource", Some(vm_name));
+        Self::delete_resources(all_resources);
+
+        let az_cmd = format!("az deployment group delete -g {AZURE_RESOURCE_GROUP} -n {vm_name}",);
+        Self::run_cmd(&az_cmd, "error deleting snp guest");
+    }
+
+    // ---------------------------- Managed HSM --------------------------------
+
+    /// This method creates a managed HSM (mHSM) on Azure, and activates it.
+    /// It also gives `vm_name` the rights to perform key-release operations
+    /// on the mHSM. Lastly, it populates the mHSM with a key (`key_name`)
+    /// whose release is protected by an access policy that depends on an
+    /// attestation token granted by an Azure Attestation instance.
+    ///
+    /// This scenario is a standard secure key release (SKR) scenario,
+    /// as described here:
+    /// https://learn.microsoft.com/en-us/azure/confidential-computing/concept-skr-attestation
+    /// https://github.com/Azure/confidential-computing-cvm-guest-attestation/tree/main/cvm-securekey-release-app
+    ///
+    /// WARNING: creating a managed HSM can take between 15 to 30 minutes. To
+    /// avoid this cost, for the time being we use an AKV with premium SKU.
+    pub fn create_mhsm(mhsm_name: &str, vm_name: &str, key_name: &str) {
+        info!("creating managed hsm: {mhsm_name} (paired with vm: {vm_name})");
+
+        // Create managed HSM
+        /* FIXME: allocating a mHSM can take between 15 to 30'. To avoid this,
+         * and for the time being, we run the tests with an AKV with the
+         * `premium` SKU.
+        let az_cmd = "az ad signed-in-user show --query id -o tsv";
+        let oid = Self::run_cmd_get_output(az_cmd, "error showing user id");
+        let az_cmd = format!(
+            "az keyvault create --hsm-name {mhsm_name} \
+            --resource-group {AZURE_RESOURCE_GROUP} \
+            --location {AZURE_LOCATION} --administrators {} \
+            --enable-rbac-authorization false \
+            --retention-days 7", oid.trim());
+        */
+        let az_cmd = format!(
+            "az keyvault create --name {mhsm_name} \
+            --resource-group {AZURE_RESOURCE_GROUP} --sku premium \
+            --enable-rbac-authorization false"
+        );
+        Self::run_cmd_check_status(&az_cmd, "error creating managed-hsm");
+
+        // FIXME: see above
+        // Activate managed HSM
+        // Self::activate_managed_hsm(&mhsm_name);
+
+        // Give our cVM key-release access in this managed HSM
+        let az_cmd = format!(
+            "az keyvault set-policy --name {mhsm_name} \
+            --object-id {} --key-permissions release",
+            Self::get_managed_identity_oid(vm_name)
+        );
+        Self::run_cmd_check_status(&az_cmd, "error granting cVM access to mHSM");
+
+        // Create an exportable key with an attached key-release policy. Given
+        // that we use a managed HSM, we must select a key type with the -HSM
+        // extension:
+        // https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys
+        let az_cmd = format!(
+            "az keyvault key create --exportable true --vault-name {mhsm_name} \
+            --kty RSA-HSM --name {key_name} --policy {}",
+            Env::proj_root()
+                .join("azure")
+                .join("mhsm_skr_policy.json")
+                .display()
+        );
+        Self::run_cmd_check_status(&az_cmd, "error creating key with release policy");
+    }
+
+    pub fn delete_mhsm(mhsm_name: &str) {
+        /* FIXME: see above
+        let az_cmd = format!(
+            "az keyvault delete --hsm-name {mhsm_name} \
+            --resource-group {AZURE_RESOURCE_GROUP}");
+        */
+        let az_cmd = format!(
+            "az keyvault delete --name {mhsm_name} \
+            --resource-group {AZURE_RESOURCE_GROUP}"
+        );
+        Self::run_cmd(&az_cmd, "error deleting mhsm");
+
+        // let az_cmd = format!("az keyvault purge --hsm-name {mhsm_name} --location {AZURE_LOCATION}");
+        let az_cmd = format!("az keyvault purge --name {mhsm_name} --location {AZURE_LOCATION}");
+        Self::run_cmd(&az_cmd, "error deleting mhsm");
+    }
+
+    // ------------------------ Azure Attestation ------------------------------
+
+    pub fn create_aa(aa_name: &str) {
+        let az_cmd = format!(
+            "az attestation create --name {aa_name} -g {AZURE_RESOURCE_GROUP} \
+            --location {AZURE_LOCATION}"
+        );
+        Self::run_cmd_check_status(&az_cmd, "error creating attestation provider");
+    }
+
+    pub fn delete_aa(aa_name: &str) {
+        let az_cmd = format!(
+            "az attestation delete --name {aa_name} \
+            --resource-group {AZURE_RESOURCE_GROUP} --yes"
+        );
+        Self::run_cmd(&az_cmd, "error deleting attestation provider");
+    }
+
+    // -------------------------------------------------------------------------
+    // Ansible Provisioning Functions
+    // -------------------------------------------------------------------------
+
+    // WARNING: this method assumes that the VM names are prefixed with the
+    // VM deployment group name
+    pub fn provision_with_ansible(vm_deployment: &str, inventory_name: &str) {
         let mut inventory_file = Env::ansible_root().join("inventory");
         fs::create_dir_all(&inventory_file).expect("invrs: failed to create inventory directory");
         inventory_file.push("vms.ini");
 
-        let mut inventory = vec!["[snpguest]".to_string()];
+        let mut inventory = vec![format!("[{inventory_name}]")];
 
-        let vms: Vec<Value> = Self::list_all("vm", Some(AZURE_SNP_VM_NAME));
+        let vms: Vec<Value> = Self::list_all_resources("vm", Some(vm_deployment));
         for vm in vms {
             let name = vm["name"].as_str().unwrap();
-            let ip = Self::vm_ip(name);
+            let ip = Self::get_vm_ip(name);
             inventory.push(format!(
                 "{} ansible_host={} ansible_user={}",
-                name, ip, AZURE_SNP_VM_ADMIN
+                name, ip, AZURE_USERNAME
             ));
         }
 
@@ -199,40 +437,22 @@ impl Azure {
 
         info!("generated ansible inventory:\n{}", inventory.join("\n"));
 
-        let playbook = Env::ansible_root().join("snp_vm.yaml");
-        Command::new("ansible-playbook")
-            .arg("-i")
-            .arg(inventory_file)
-            .arg(playbook)
-            .status()
-            .expect("error: failed to run ansible playbook");
-    }
-
-    pub fn build_ssh_command() {
-        println!(
-            "ssh -A -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_SNP_VM_ADMIN}@{}",
-            Self::vm_ip(AZURE_SNP_VM_NAME),
-        )
-    }
-
-    pub fn delete_snp_guest() {
-        info!("deleting snp guest: {AZURE_SNP_VM_NAME}");
-
-        // First delete VM
-        Self::vm_op("delete", AZURE_SNP_VM_NAME, &["--yes"]);
-
-        // Then delete all attached resources
-        let all_resources = Self::list_all("resource", Some(AZURE_SNP_VM_NAME));
-        Self::delete_resources(all_resources);
-
-        // Lastly delete deployment group
-        let az_cmd = format!(
-            "az deployment group delete -g {AZURE_RESOURCE_GROUP} -n {AZURE_SNP_VM_DEPLOYMENT}",
+        let ansible_cmd = format!(
+            "ANSIBLE_CONFIG={} ansible-playbook -i {} {}",
+            Env::ansible_root().join("ansible.cfg").to_str().unwrap(),
+            inventory_file.to_str().unwrap(),
+            Env::ansible_root()
+                .join(format!("{inventory_name}.yaml"))
+                .to_str()
+                .unwrap()
         );
-        Command::new("sh")
-            .arg("-c")
-            .arg(az_cmd)
-            .status()
-            .expect("invrs: error deleting snp guest on azure");
+        Self::run_cmd_check_status(&ansible_cmd, "failed to run ansible playbook");
+    }
+
+    pub fn build_ssh_command(vm_name: &str) {
+        println!(
+            "ssh -A -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
+            Self::get_vm_ip(vm_name),
+        )
     }
 }
