@@ -36,9 +36,9 @@ set(TLESS_WORKFLOW_LIBS
 )
 
 add_executable(${CMAKE_PROJECT_TARGET}
-    main.cpp
-    logger.cpp
-    utils.cpp
+    src/main.cpp
+    src/logger.cpp
+    src/utils.cpp
 )
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${TLESS_WORKFLOW_HEADERS})
 target_link_libraries(${CMAKE_PROJECT_TARGET} ${TLESS_WORKFLOW_LIBS})

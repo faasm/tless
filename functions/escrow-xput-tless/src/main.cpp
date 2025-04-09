@@ -29,12 +29,6 @@ std::vector<std::string> split(const std::string& str, char delim) {
 std::string fetchHwAttReportGetAzJwt(const std::string& attestationUrl)
 {
     assert(!attestationUrl.empty());
-
-    if (output_type.empty()) {
-        // set the default output type to boolean
-        output_type = OUTPUT_TYPE_BOOL;
-    }
-
     AttestationClient* attestationClient = nullptr;
     Logger* logHandle = new Logger();
 
@@ -49,6 +43,7 @@ std::string fetchHwAttReportGetAzJwt(const std::string& attestationUrl)
     attest::ClientParameters params = {};
     params.attestation_endpoint_url = (unsigned char*)attestationUrl.c_str();
     // TODO: can we add a public key here?
+    std::string nonce = "foo";
     std::string clientPayload = "{\"nonce\":\"" + nonce + "\"}";
     params.client_payload = (unsigned char*) client_payload_str.c_str();
     params.version = CLIENT_PARAMS_VERSION;
@@ -56,7 +51,6 @@ std::string fetchHwAttReportGetAzJwt(const std::string& attestationUrl)
     bool is_cvm = false;
     bool attestation_success = true;
     std::string jwt_str;
-    // call attest
 
     unsigned char* jwt = nullptr;
     auto attResult = attestationClient->Attest(params, &jwt);
