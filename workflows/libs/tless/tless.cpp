@@ -87,7 +87,16 @@ bool on()
 #endif
 }
 
-// Specific per-TEE mechanism to get attestation
+// Specific per-TEE mechanism to get attestation:
+// 1. For SGX-Faasm, we manually call the SGX routines in the SGX SDK
+// 2. For SNP, two options:
+//  2.1. Bare metal: query /dev/sev-guest (with `snpguest` crate?)
+//  2.2. Use Azure's guest attestation library
+//  TODO: in both cases, not clear we can do this from inside the confidential
+//  container?
+//
+// In both cases, we get an attestation report and send it to the MAA for
+// validation.
 static bool validHardwareAttestation()
 {
 #ifdef __faasm
@@ -105,6 +114,7 @@ static bool validHardwareAttestation()
 #endif
 
     // Verify JWT signature
+    // TODO: verify should happen for both Faasm and Knative
     bool valid = tless::jwt::verify(jwtStr);
     if (!valid) {
         return false;
@@ -117,7 +127,9 @@ static bool validHardwareAttestation()
         return false;
     }
 
-    // To compare the MRENCLAVE with the one in the JWT, we need to convert
+    // Sanity check: compare the MRENCLAVE with the one in the JWT. We rely
+    // on the untrusted host to actually validate the JWT, so we want to
+    // make sure that this JWT includes our actual MRENCLAVE. We need to convert
     // the raw bytes from the measurement to a hex string
     std::vector<uint8_t> mrEnclave(MRENCLAVE_SIZE);
     __tless_get_mrenclave(mrEnclave.data(), mrEnclave.size());
@@ -126,14 +138,14 @@ static bool validHardwareAttestation()
         std::cout << "tless: error: failed to validate MrEnclave" << std::endl;
         return false;
     }
+#else
+    // For SNP, will we run on bare metal or in the cloud?
+#endif
 
     // FIXME(tless-prod): as a consequence of a valid attestation, the MAA
     // would have provided us with the TEE shared identity, wrapped in the
     // public key we provide as part of the enclave held data of the report.
     // We still do not have implemented this functionality in the MAA
-#else
-    // For SNP we could just use snpguest crate from here
-#endif
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("hw-att-validate-end", NOW));
@@ -190,9 +202,12 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
 
     // -----------------------------------------------------------------------
     // 1. Get TEE certificate
-    // 1.1. Generate quote w/ public key for MAA
+    // 1.1. Generate HW quote w/ public key
     // 1.2. Send quote to MAA for validation
-    // 1.3. Receive quote and valiate signature
+    // 1.3. Receive quote and valiate signature MAA signature and claims
+    //
+    // Note that the MAA can validate both SGX and SNP quotes, so we take
+    // advantage of that
     // -----------------------------------------------------------------------
 
     if (!validHardwareAttestation()) {
@@ -272,6 +287,8 @@ bool checkChain(const std::string& workflow, const std::string& function, int id
     // TODO: this does not work well for functions with more than one parent!
     auto expectedChain = tless::dag::getCallChain(dag, function);
 
+    // TODO(accless-prod): attributes should be derived from the chaining
+    // message, not from the DAG itself
     for (int i = 0; i < expectedChain.size() - 1; i++) {
         attributes.push_back(expectedChain.at(i));
     }

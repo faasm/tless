@@ -3,8 +3,8 @@
 - hosts: mhsm
   gather_facts: yes
   tasks:
-    - include_tasks: tasks/mhsm/apt.yaml
+    - include_tasks: tasks/accless/apt.yaml
     - include_tasks: tasks/util/az_guest_attestation.yaml
     - include_tasks: tasks/rust.yaml
-    - include_tasks: tasks/mhsm/code.yaml
-    - include_tasks: tasks/mhsm.yaml
+    - include_tasks: tasks/accless/code.yaml
+      # - include_tasks: tasks/accless.yaml

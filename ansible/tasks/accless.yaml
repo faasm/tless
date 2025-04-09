@@ -1,0 +1,6 @@
+- name: "Build demo"
+  shell: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j `nproc`
+  args:
+    # TODO: rename function!
+    chdir: "/home/{{ ansible_user }}/git/faasm/tless/functions/escrow-xput-tless"
+    executable: /bin/bash

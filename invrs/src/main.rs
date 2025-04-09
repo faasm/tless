@@ -204,6 +204,12 @@ enum S3Command {
 
 #[derive(Debug, Subcommand)]
 enum AzureCommand {
+    /// Deploy an environment witn an SNP cVM and our CP-ABE based secret-
+    /// release logic
+    Accless {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
     /// Deploy an environment with an SNP cVM and a managed HSM acting as
     /// relying party to perform secure key release (SKR)
     ManagedHSM {
@@ -366,6 +372,40 @@ async fn main() {
             }
         },
         Command::Azure { az_command } => match az_command {
+            AzureCommand::Accless { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
+                    Azure::create_aa("accless");
+
+                    Azure::open_vm_ports("accless-cvm", &[22]);
+                }
+                AzureSubCommand::Provision {} => {
+                    Azure::provision_with_ansible("accless", "accless", None);
+                }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless";
+                    let result_path = "eval/escrow-xput/data/managed-hsm.csv";
+
+                    let scp_cmd = format!(
+                        "{}:{src_results_dir}/{result_path} {}",
+                        Azure::build_scp_command("accless-cvm"),
+                        Env::proj_root().join(result_path).display(),
+                    );
+
+                    process::Command::new("sh")
+                        .arg("-c")
+                        .arg(scp_cmd)
+                        .status()
+                        .expect("invrs: error scp-ing results");
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("accless-cvm");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_snp_guest("accless-cvm");
+                    Azure::delete_aa("accless");
+                }
+            },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
                     Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5");

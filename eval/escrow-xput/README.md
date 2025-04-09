@@ -23,6 +23,11 @@ is based on the cVM's vTPM.
 As a consequence, when running the [Trustee](#trustee) and [Managed HSM](
 #managed-hsm) baselines, you will have to SSH into the client cVM.
 
+This experiment deliberately ignores phases involved in the set-up, like
+generating key material inside the cVM, or attesting the Trustee, Managed HSM,
+or Azure Attestation service. A full breakdown of the overheads of access
+control can be found in TODO WHICH EXPERIMENT.
+
 ## Trustee
 
 ### Deploy
