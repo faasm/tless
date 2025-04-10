@@ -1,5 +1,6 @@
 #include "logger.h"
 
+#include <iostream>
 #include <stdarg.h>
 #include <vector>
 
@@ -20,4 +21,7 @@ void Logger::Log(const char* log_tag,
     va_start(args, fmt);
     std::vsnprintf(&str[0], len + 1, fmt, args);
     va_end(args);
+
+    // Uncomment for debug logs
+    // std::cout << std::string(str.begin(), str.end()) << std::endl;
 }
