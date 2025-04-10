@@ -16,4 +16,6 @@
     accept_hostkey: yes
   with_items:
     - "tless"
+    - "azure-cvm-guest-attestation"
     - "examples"
+    - "snpguest"

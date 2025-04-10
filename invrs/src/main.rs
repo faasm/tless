@@ -216,6 +216,13 @@ enum AzureCommand {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
+    /// Deploy our port of Faasm that can run Faaslets inside SGX enclaves
+    /// (for the time being, we deploy Faasm using docker compose, we could
+    /// consider moving to AKS, or a single-node K8s)
+    SgxFaasm {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
     /// Deploy an environment with two SNP cVMs, one running Trustee as a
     /// relying party, and the other one requesting a secure key release (SKR)
     Trustee {
@@ -374,6 +381,7 @@ async fn main() {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
+                    // TODO: create one VM for the server too
                     Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
                     Azure::create_aa("accless");
 
@@ -444,6 +452,23 @@ async fn main() {
                     Azure::delete_snp_guest("tless-mhsm-cvm");
                     Azure::delete_aa("tlessmhsm");
                     Azure::delete_mhsm("tless-mhsm-kv");
+                }
+            },
+            AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    todo!("finish");
+                }
+                AzureSubCommand::Provision {} => {
+                    todo!("finish");
+                }
+                AzureSubCommand::ScpResults {} => {
+                    todo!("finish");
+                }
+                AzureSubCommand::Ssh {} => {
+                    todo!("finish");
+                }
+                AzureSubCommand::Delete {} => {
+                    todo!("finish");
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {

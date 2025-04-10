@@ -8,5 +8,8 @@
       - libcurl4-openssl-dev
       - libjsoncpp-dev
       - libssl-dev
+      - ninja-build
       - nlohmann-json3-dev
+      - pkg-config
+      - python3-venv
     update_cache: yes

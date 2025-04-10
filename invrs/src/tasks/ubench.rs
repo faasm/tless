@@ -403,6 +403,11 @@ impl Ubench {
             EscrowBaseline::generate_attestation_token().await?;
         }
 
+        if run_args.baseline == EscrowBaseline::Tless {
+            // TODO: for TLess we need to call directly into the C++ logic
+            return Ok(())
+        }
+
         let request_counts = match run_args.baseline {
             EscrowBaseline::Trustee | EscrowBaseline::Tless => REQUEST_COUNTS_TRUSTEE,
             EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
