@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let app = Router::new()
-        .route("/process", post(process))
+        .route("/verify-snp-report", post(verify_snp_report))
         .layer(Extension(state.clone()));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
@@ -62,13 +62,12 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-async fn process(Extension(state): Extension<Arc<AppState>>, body: Body) -> impl IntoResponse {
+async fn verify_snp_report(Extension(state): Extension<Arc<AppState>>, body: Body) -> impl IntoResponse {
     // Convert raw body to Bytes
     let full_body = to_bytes(body, 1024 * 1024).await;
 
     match full_body {
         Ok(bytes) => {
-            // Simulated task: here we just reverse the bytes
             match snpguest::verify::attestation::verify_attestation(&state.vcek_pem, bytes.as_ref())
             {
                 Ok(_) => (StatusCode::OK, "attestation report verified"),

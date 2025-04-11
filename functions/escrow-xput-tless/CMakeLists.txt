@@ -16,10 +16,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(AzGuestAttestation)
 
-# Ideally, we should have two options to measure the full authenctication +
-# authorization lifecycle or not
-# target_compile_definitions(tless PUBLIC ACCLESS_FULL_UBENCH)
-
 # ------------------------------------------------------------------------------
 # This project has two main dependencies:
 # 1. The rabe Rust library for CP-ABE (and its CPP bindings):
@@ -48,6 +44,7 @@ set(TLESS_WORKFLOW_HEADERS
 )
 set(TLESS_WORKFLOW_LIBS
     azguestattestation
+    curl
     # Order matters: librabe-cpp must preceede librabe
     "/usr/local/lib/rabe/librabe-cpp.a"
     "/usr/local/lib/rabe/librabe.a"

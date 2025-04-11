@@ -131,6 +131,10 @@ getAzureAttestationParameters(AttestationClient *attestationClient) {
     return params;
 }
 
+/*
+ * This method gets a JWT from the MAA in response of a set of attestation
+ * parameters.
+ */
 std::string maaGetJwtFromParams(AttestationClient *attestationClient,
                                 const AttestationParameters &params,
                                 const std::string &attestationUri) {
@@ -154,6 +158,49 @@ std::string maaGetJwtFromParams(AttestationClient *attestationClient,
     attestationClient->Free(jwt);
 
     return jwtStr;
+}
+
+/*
+ * This methodd gets a JWT from our own attestation service by POST-ing the
+ * SNP report.
+ */
+std::string asGetJwtFromReport(const std::string& asUrl,
+                               const std::vector<uint8_t>& snpReport)
+{
+    std::string jwt;
+
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "accless: failed to initialize CURL" << std::endl;
+        throw std::runtime_error("curl error");
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.data());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, data.size());
+
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // Set write function and data
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &jwt);
+
+    // Perform the request
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "accless: CURL error: " << curl_easy_strerror(res) << std::endl;
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
+        throw std::runtime_error("curl error");
+    }
+
+    curl_easy_cleanup(curl);
+    curl_slist_free_all(headers);
+
+    return jwt;
 }
 
 void validateJwtClaims(const std::string &jwtStr, bool verbose = false) {
@@ -211,6 +258,8 @@ std::vector<uint8_t> getSnpReportFromTPM() {
                   << std::endl;
         throw std::runtime_error("error parsing HCL report");
     }
+
+    return snpReport;
 }
 
 void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx,
