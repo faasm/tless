@@ -1,0 +1,9 @@
+---
+
+- hosts: trustee
+  gather_facts: yes
+  tasks:
+    - include_tasks: tasks/trustee/apt.yaml
+    - include_tasks: tasks/rust.yaml
+    - include_tasks: tasks/trustee/code.yaml
+    - include_tasks: tasks/trustee.yaml

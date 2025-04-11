@@ -16,7 +16,7 @@ export PS1="(tless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
 # alias tlessctl="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
-alias invrs="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
+alias invrs="cargo run --release --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
 
 # ----------------------------
 # Knative vars (TODO FIXME consider changing)

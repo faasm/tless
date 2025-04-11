@@ -1,0 +1,11 @@
+- name: "Download Azure Guest Attestation Package"
+  get_url:
+    url: "https://packages.microsoft.com/repos/azurecore/pool/main/a/azguestattestation1/azguestattestation1_1.0.5_amd64.deb"
+    dest: "/tmp/azguestattestation1_1.0.5_amd64.deb"
+    mode: '0644'
+
+- name: "Install it"
+  apt:
+    deb: "/tmp/azguestattestation1_1.0.5_amd64.deb"
+    state: present
+  become: yes

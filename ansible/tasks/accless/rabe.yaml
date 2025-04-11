@@ -1,0 +1,7 @@
+- name: "Build rabe (CP-ABE) library and C++ bindings"
+  shell: ./bin/inv_wrapper.sh rabe --native
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/examples"
+    executable: /bin/bash
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

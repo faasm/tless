@@ -1,0 +1,6 @@
+- name: "Install the pre-reqs"
+  become: yes
+  shell: bash pre-requisites.sh
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/azure-cvm-guest-attestation"
+    executable: /bin/bash

@@ -1,0 +1,43 @@
+---
+
+- name: "Create code dir"
+  file:
+    path: "/home/{{ ansible_user }}/git"
+    state: directory
+
+- name: "Clone TLess repos"
+  git:
+    repo: "https://www.github.com/faasm/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/faasm/{{ item }}"
+    update: yes
+    recursive: no
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "tless"
+
+- name: "Clone Trustee repos"
+  git:
+    repo: "https://www.github.com/confidential-containers/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/confidential-containers/{{ item }}"
+    update: yes
+    recursive: no
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "trustee"
+
+- name: "Clone virtee repos"
+  git:
+    repo: "https://www.github.com/virtee/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/virtee/{{ item }}"
+    update: yes
+    recursive: no
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "snphost"
+    - "snpguest"

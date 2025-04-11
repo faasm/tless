@@ -1,0 +1,21 @@
+users:
+  - name: tless
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+
+write_files:
+  - path: /home/tless/.vimrc
+    permissions: '0644'
+    owner: tless:tless
+    content: |
+        set tabstop=4
+        set softtabstop=4
+        set expandtab
+        set shiftwidth=4
+        set colorcolumn=80
+        set splitright
+        set splitbelow
+        set autoindent
+        set cindent
+        set relativenumber
+        syntax on

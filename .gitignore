@@ -5,3 +5,5 @@ venv
 
 build-native
 build-wasm
+
+ansible/inventory/vms.ini
