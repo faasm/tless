@@ -1,8 +1,7 @@
 - name: "Build demo"
   shell: mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja
   args:
-    # TODO: rename function!
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/functions/escrow-xput-tless"
+    chdir: "/home/{{ ansible_user }}/git/faasm/tless/ubench/escrow-xput"
     executable: /bin/bash
 
 - name: "Generate keys"
