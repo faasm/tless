@@ -1,5 +1,6 @@
 // List the different tasks here
 pub mod azure;
+pub mod color;
 pub mod dag;
 pub mod docker;
 pub mod eval;

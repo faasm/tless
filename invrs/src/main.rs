@@ -425,7 +425,7 @@ async fn main() {
                     }
                 }
                 AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/functions/escrow-xput-tless/build";
+                    let src_results_dir = "/home/tless/git/faasm/tless/ubench/escrow-xput/build";
                     let results_file = vec!["accless.csv", "accless-maa.csv"];
                     let result_path = "eval/escrow-xput/data/";
 
@@ -444,10 +444,14 @@ async fn main() {
                     }
                 }
                 AzureSubCommand::Ssh {} => {
+                    println!("client:");
                     Azure::build_ssh_command("accless-cvm");
+                    println!("attestation server:");
+                    Azure::build_ssh_command("accless-as");
                 }
                 AzureSubCommand::Delete {} => {
                     Azure::delete_snp_guest("accless-cvm");
+                    Azure::delete_snp_guest("accless-as");
                     Azure::delete_aa("accless");
                 }
             },

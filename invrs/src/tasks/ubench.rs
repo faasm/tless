@@ -1,4 +1,5 @@
 use crate::env::Env;
+use crate::tasks::color::{get_color_from_label, FONT_SIZE};
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
@@ -44,7 +45,8 @@ impl fmt::Display for MicroBenchmarks {
 pub enum EscrowBaseline {
     Trustee,
     ManagedHSM,
-    Tless,
+    AcclessMaa,
+    Accless,
 }
 
 impl fmt::Display for EscrowBaseline {
@@ -52,7 +54,8 @@ impl fmt::Display for EscrowBaseline {
         match self {
             EscrowBaseline::Trustee => write!(f, "trustee"),
             EscrowBaseline::ManagedHSM => write!(f, "managed-hsm"),
-            EscrowBaseline::Tless => write!(f, "tless"),
+            EscrowBaseline::AcclessMaa => write!(f, "accless-maa"),
+            EscrowBaseline::Accless => write!(f, "accless"),
         }
     }
 }
@@ -64,7 +67,8 @@ impl FromStr for EscrowBaseline {
         match input {
             "trustee" => Ok(EscrowBaseline::Trustee),
             "managed-hsm" => Ok(EscrowBaseline::ManagedHSM),
-            "tless" => Ok(EscrowBaseline::Tless),
+            "accless-maa" => Ok(EscrowBaseline::AcclessMaa),
+            "accless" => Ok(EscrowBaseline::Accless),
             _ => Err(()),
         }
     }
@@ -74,19 +78,21 @@ impl EscrowBaseline {
     const SNP_VM_CODE_DIR: &str = "/home/tless/git";
 
     pub fn iter_variants() -> std::slice::Iter<'static, EscrowBaseline> {
-        static VARIANTS: [EscrowBaseline; 3] = [
+        static VARIANTS: [EscrowBaseline; 4] = [
             EscrowBaseline::Trustee,
             EscrowBaseline::ManagedHSM,
-            EscrowBaseline::Tless,
+            EscrowBaseline::AcclessMaa,
+            EscrowBaseline::Accless,
         ];
         VARIANTS.iter()
     }
 
     pub fn get_color(&self) -> RGBColor {
         match self {
-            EscrowBaseline::Trustee => RGBColor(171, 222, 230),
-            EscrowBaseline::ManagedHSM => RGBColor(203, 170, 203),
-            EscrowBaseline::Tless => RGBColor(255, 255, 181),
+            EscrowBaseline::Trustee => get_color_from_label("dark-orange"),
+            EscrowBaseline::ManagedHSM => get_color_from_label("dark-green"),
+            EscrowBaseline::AcclessMaa => get_color_from_label("dark-blue"),
+            EscrowBaseline::Accless => get_color_from_label("accless"),
         }
     }
 
@@ -366,7 +372,9 @@ impl Ubench {
             .map(|_| match &baseline {
                 EscrowBaseline::Trustee => tokio::spawn(EscrowBaseline::get_trustee_resource()),
                 EscrowBaseline::ManagedHSM => tokio::spawn(EscrowBaseline::wrap_key_in_mhsm()),
-                EscrowBaseline::Tless => panic!("tless get_method not implemented!"),
+                EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+                    panic!("accless-based baselines must be run from different script")
+                }
             })
             .buffer_unordered(REQUEST_PARALLELISM)
             .for_each(|res| async {
@@ -403,14 +411,12 @@ impl Ubench {
             EscrowBaseline::generate_attestation_token().await?;
         }
 
-        if run_args.baseline == EscrowBaseline::Tless {
-            // TODO: for TLess we need to call directly into the C++ logic
-            return Ok(())
-        }
-
         let request_counts = match run_args.baseline {
-            EscrowBaseline::Trustee | EscrowBaseline::Tless => REQUEST_COUNTS_TRUSTEE,
+            EscrowBaseline::Trustee => REQUEST_COUNTS_TRUSTEE,
             EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
+            EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+                panic!("accless baselines must be run from different script")
+            }
         };
         for &num_req in request_counts {
             for _ in 0..run_args.num_repeats {
@@ -454,12 +460,13 @@ impl Ubench {
             data.insert(baseline.clone(), [0.0; REQUEST_COUNTS_TRUSTEE.len()]);
         }
 
-        let mut y_max: f64 = 0.0;
         for csv_file in data_files {
             let file_name = csv_file
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or_default();
+            debug!("file name: {file_name}");
+
             let file_name_len = file_name.len();
             let baseline: EscrowBaseline = file_name[0..file_name_len - 4].parse().unwrap();
 
@@ -479,7 +486,9 @@ impl Ubench {
                 count += 1;
                 let n_req = record.num_requests;
                 let request_counts = match baseline {
-                    EscrowBaseline::Trustee | EscrowBaseline::Tless => REQUEST_COUNTS_TRUSTEE,
+                    EscrowBaseline::Trustee
+                    | EscrowBaseline::Accless
+                    | EscrowBaseline::AcclessMaa => REQUEST_COUNTS_TRUSTEE,
                     EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
                 };
                 let idx = request_counts
@@ -494,10 +503,6 @@ impl Ubench {
             let average_times = data.get_mut(&baseline).unwrap();
             for i in 0..average_times.len() {
                 average_times[i] = average_times[i] / num_repeats;
-
-                if average_times[i] > y_max {
-                    y_max = average_times[i];
-                }
             }
         }
 
@@ -513,23 +518,97 @@ impl Ubench {
         root.fill(&WHITE).unwrap();
 
         let x_max = 1000;
+        let y_max: f64 = 20.0;
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .margin_left(40)
-            .margin_right(20)
+            .margin_left(50)
+            .margin_right(25)
+            .margin_bottom(20)
             .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
             .unwrap();
 
         chart
             .configure_mesh()
-            .x_label_style(("sans-serif", 20).into_font())
-            .y_label_style(("sans-serif", 20).into_font())
+            // .disable_mesh()
+            .light_line_style(&WHITE)
+            .x_labels(8)
+            .y_labels(6)
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
             .x_desc("")
             .draw()
             .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Latency [s]",
+            (5, 200),
+            ("sans-serif", FONT_SIZE)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "Throughput [RPS]",
+            (350, 275),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+        ))
+        .unwrap();
+
+        for (baseline, values) in data {
+            // Draw line
+            chart
+                .draw_series(LineSeries::new(
+                    (1..values.len())
+                        .zip(values[1..].iter())
+                        .filter(|(_, y)| **y <= y_max)
+                        .map(|(x, y)| {
+                            (
+                                match baseline {
+                                    EscrowBaseline::Trustee
+                                    | EscrowBaseline::Accless
+                                    | EscrowBaseline::AcclessMaa => {
+                                        REQUEST_COUNTS_TRUSTEE[x] as i32
+                                    }
+                                    EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
+                                },
+                                *y,
+                            )
+                        }),
+                    EscrowBaseline::get_color(&baseline).stroke_width(5),
+                ))
+                .unwrap();
+
+            // Draw data point on line
+            chart
+                .draw_series(
+                    (1..values.len())
+                        .zip(values[1..].iter())
+                        .filter(|(_, y)| **y <= y_max)
+                        .map(|(x, y)| {
+                            Circle::new(
+                                (
+                                    match baseline {
+                                        EscrowBaseline::Trustee
+                                        | EscrowBaseline::Accless
+                                        | EscrowBaseline::AcclessMaa => {
+                                            REQUEST_COUNTS_TRUSTEE[x] as i32
+                                        }
+                                        EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
+                                    },
+                                    *y,
+                                ),
+                                7,
+                                EscrowBaseline::get_color(&baseline).filled(),
+                            )
+                        }),
+                )
+                .unwrap();
+        }
 
         // Add solid frames
         chart
@@ -544,70 +623,15 @@ impl Ubench {
             ))
             .unwrap();
 
-        // Manually draw the X/Y-axis label with a custom font and size
-        root.draw(&Text::new(
-            "Latency [s]",
-            (5, 180),
-            ("sans-serif", 20)
-                .into_font()
-                .transform(FontTransform::Rotate270)
-                .color(&BLACK),
-        ))
-        .unwrap();
-        root.draw(&Text::new(
-            "Throughput [RPS]",
-            (400, 280),
-            ("sans-serif", 20).into_font().color(&BLACK),
-        ))
-        .unwrap();
-
-        for (baseline, values) in data {
-            // Draw line
-            chart
-                .draw_series(LineSeries::new(
-                    (1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
-                        (
-                            match baseline {
-                                EscrowBaseline::Trustee | EscrowBaseline::Tless => {
-                                    REQUEST_COUNTS_TRUSTEE[x] as i32
-                                }
-                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
-                            },
-                            *y,
-                        )
-                    }),
-                    EscrowBaseline::get_color(&baseline).stroke_width(3),
-                ))
-                .unwrap();
-
-            // Draw data point on line
-            chart
-                .draw_series((1..values.len()).zip(values[1..].iter()).map(|(x, y)| {
-                    Circle::new(
-                        (
-                            match baseline {
-                                EscrowBaseline::Trustee | EscrowBaseline::Tless => {
-                                    REQUEST_COUNTS_TRUSTEE[x] as i32
-                                }
-                                EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
-                            },
-                            *y,
-                        ),
-                        5,
-                        EscrowBaseline::get_color(&baseline).filled(),
-                    )
-                }))
-                .unwrap();
-        }
-
         fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
-            let legend_x_start = 100;
+            let legend_x_start = 120;
             let legend_y_pos = 6;
 
             match baseline {
                 EscrowBaseline::Trustee => (legend_x_start, legend_y_pos),
-                EscrowBaseline::ManagedHSM => (legend_x_start + 150, legend_y_pos),
-                EscrowBaseline::Tless => (legend_x_start + 350, legend_y_pos),
+                EscrowBaseline::ManagedHSM => (legend_x_start + 120, legend_y_pos),
+                EscrowBaseline::AcclessMaa => (legend_x_start + 320, legend_y_pos),
+                EscrowBaseline::Accless => (legend_x_start + 490, legend_y_pos),
             }
         }
 
@@ -616,18 +640,39 @@ impl Ubench {
             // Calculate position for each legend item
             let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
-            // Draw the color box (Rectangle)
+            // Draw the color box (Rectangle) + frame
+            let square_side = 20;
             root.draw(&Rectangle::new(
-                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
                 EscrowBaseline::get_color(&baseline).filled(),
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                &BLACK,
             ))
             .unwrap();
 
             // Draw the baseline label (Text)
             root.draw(&Text::new(
                 format!("{baseline}"),
-                (x_pos + 30, y_pos + 5), // Adjust text position
-                ("sans-serif", 20).into_font(),
+                (x_pos + 30, y_pos + 2), // Adjust text position
+                ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
         }
@@ -848,7 +893,7 @@ impl Ubench {
                 // Draw the baseline label (Text)
                 root.draw(&Text::new(
                     get_text_for_baseline(baselines[id_x], modes[id_y]),
-                    (x_pos + 30, y_pos + 5), // Adjust text position
+                    (x_pos + 30, y_pos - 4), // Adjust text position
                     ("sans-serif", 20).into_font(),
                 ))
                 .unwrap();
