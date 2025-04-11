@@ -2,4 +2,4 @@
 
 #include <string>
 
-std::string base64decode(const std::string& data);
+std::string base64decode(const std::string &data);
