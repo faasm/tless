@@ -87,20 +87,13 @@ async fn main() -> anyhow::Result<()> {
 
     loop {
         let (stream, _) = listener.as_ref().expect("error listening").accept().await?;
-        // let io = TokioIo::new(stream);
         let service = TowerToHyperService::new(app.clone());
         let tls_acceptor = tls_acceptor.clone();
 
         tokio::spawn(async move {
-            /*
-            if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                eprintln!("Server connection error: {:?}", err);
-            }
-            */
             match tls_acceptor.accept(stream).await {
                 Ok(tls_stream) => {
                     let io = TokioIo::new(tls_stream);
-                    // let service = TowerToHyperService::new(app);
                     if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
                         eprintln!("as: connection error: {:?}", err);
                     }

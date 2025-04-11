@@ -7,4 +7,5 @@ secret for all ACFs in Accless.
 To-Do:
 * Add attestation endpoint to attest the AS
     * Think about how to verify the measurement of the AS (hard-code pub key)
-* Add HTTPS
+* Add SGX attestation
+* Add secret wrapping

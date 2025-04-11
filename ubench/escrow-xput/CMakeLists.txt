@@ -23,10 +23,10 @@ FetchContent_MakeAvailable(AzGuestAttestation)
 # 2. The azure guest attestaion library to retrieve cVM attestation reports
 #    from a vTPM in an Azure cVM, and interact with an instance of the
 #    azure attestation service:
-#     - https://github.com/Azure/confidential-computing-cvm-guest-attestation
+#     - https://github.com/faasm/azure-cvm-guest-attestation
 #
-# We install them manually, before running this script, as part of an Ansible
-# provisioning script.
+# We install the former manually, before running this script, as part of an
+# Ansible provisioning script.
 # ------------------------------------------------------------------------------
 
 set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
