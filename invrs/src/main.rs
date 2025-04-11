@@ -381,30 +381,67 @@ async fn main() {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    // TODO: create one VM for the server too
                     Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
+                    Azure::create_snp_guest("accless-as", "Standard_DC8as_v5");
                     Azure::create_aa("accless");
 
                     Azure::open_vm_ports("accless-cvm", &[22]);
+                    Azure::open_vm_ports("accless-as", &[22, 8443]);
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("accless", "accless", None);
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless";
-                    let result_path = "eval/escrow-xput/data/managed-hsm.csv";
+                    let client_ip = Azure::get_vm_ip("accless-cvm");
+                    let server_ip = Azure::get_vm_ip("accless-as");
 
-                    let scp_cmd = format!(
-                        "{}:{src_results_dir}/{result_path} {}",
-                        Azure::build_scp_command("accless-cvm"),
-                        Env::proj_root().join(result_path).display(),
+                    Azure::provision_with_ansible(
+                        "accless",
+                        "accless",
+                        Some(format!("as_ip={server_ip}").as_str()),
                     );
 
-                    process::Command::new("sh")
-                        .arg("-c")
-                        .arg(scp_cmd)
-                        .status()
-                        .expect("invrs: error scp-ing results");
+                    // Copy the necessary stuff from the server to the client
+                    let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
+                    for file in ["cert.pem"] {
+                        let scp_cmd_in =
+                            format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");
+                        let status = process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd_in)
+                            .status()
+                            .expect("invrs: error scp-ing data (in)");
+                        if !status.success() {
+                            panic!("invrs: error scp-ing data (in)");
+                        }
+
+                        let scp_cmd_out =
+                            format!("scp /tmp/{file} tless@{client_ip}:{work_dir}/{file}");
+                        let status = process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd_out)
+                            .status()
+                            .expect("invrs: error scp-ing data (out)");
+                        if !status.success() {
+                            panic!("invrs: error scp-ing data (out)");
+                        }
+                    }
+                }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless/functions/escrow-xput-tless/build";
+                    let results_file = vec!["accless.csv", "accless-maa.csv"];
+                    let result_path = "eval/escrow-xput/data/";
+
+                    for result_file in results_file {
+                        let scp_cmd = format!(
+                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
+                            Azure::build_scp_command("accless-cvm"),
+                            Env::proj_root().join(result_path).display(),
+                        );
+
+                        process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd)
+                            .status()
+                            .expect("invrs: error scp-ing results");
+                    }
                 }
                 AzureSubCommand::Ssh {} => {
                     Azure::build_ssh_command("accless-cvm");
