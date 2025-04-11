@@ -9,8 +9,11 @@ axum = "0.7"
 bytes = "1"
 hyper = { version = "1.6.0", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "http1", "service"] }
+rustls = "0.23"
+rustls-pemfile = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 snpguest = { path = "/home/tless/git/faasm/snpguest" }
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26.2"
 ureq = { version = "2", features = ["json"] }

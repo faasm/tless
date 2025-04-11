@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cstdlib>
+#include <curl/curl.h>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -12,6 +14,7 @@
 #include "AttestationClient.h"
 #include "AttestationClientImpl.h"
 #include "AttestationParameters.h"
+#include "HclReportParser.h"
 #include "TpmCertOperations.h"
 
 #include "logger.h"
@@ -32,6 +35,12 @@ std::vector<std::string> split(const std::string &str, char delim) {
     }
 
     return result;
+}
+
+// Get the URL of our own attestation service (**not** MAA)
+std::string getAttestationServiceUrl() {
+    const char *val = std::getenv("AS_URL");
+    return val ? std::string(val) : "https://127.0.0.1:8443";
 }
 
 void tpmRenewAkCert() {
@@ -160,38 +169,50 @@ std::string maaGetJwtFromParams(AttestationClient *attestationClient,
     return jwtStr;
 }
 
+size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t totalSize = size * nmemb;
+    auto *response = static_cast<std::string *>(userdata);
+    response->append(ptr, totalSize);
+    return totalSize;
+}
+
 /*
  * This methodd gets a JWT from our own attestation service by POST-ing the
  * SNP report.
  */
-std::string asGetJwtFromReport(const std::string& asUrl,
-                               const std::vector<uint8_t>& snpReport)
-{
+std::string asGetJwtFromReport(const std::string &asUrl,
+                               const std::vector<uint8_t> &snpReport) {
     std::string jwt;
 
-    CURL* curl = curl_easy_init();
+    CURL *curl = curl_easy_init();
     if (!curl) {
         std::cerr << "accless: failed to initialize CURL" << std::endl;
         throw std::runtime_error("curl error");
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(
+        curl, CURLOPT_CAINFO,
+        "/home/tless/git/faasm/tless/attestation-service/certs/cert.pem");
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.data());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, data.size());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, snpReport.data());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, snpReport.size());
 
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
+    struct curl_slist *headers = nullptr;
+    headers =
+        curl_slist_append(headers, "Content-Type: application/octet-stream");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
     // Set write function and data
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &jwt);
 
     // Perform the request
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        std::cerr << "accless: CURL error: " << curl_easy_strerror(res) << std::endl;
+        std::cerr << "accless: CURL error: " << curl_easy_strerror(res)
+                  << std::endl;
         curl_easy_cleanup(curl);
         curl_slist_free_all(headers);
         throw std::runtime_error("curl error");
@@ -253,7 +274,7 @@ std::vector<uint8_t> getSnpReportFromTPM() {
 
     auto result = reportParser.ExtractSnpReportAndRuntimeDataFromHclReport(
         hclReport, snpReport, runtimeData);
-    if (reulst.code_ != AttestationResult::ErrorCode::SUCCESS) {
+    if (result.code_ != AttestationResult::ErrorCode::SUCCESS) {
         std::cerr << "accless: error parsing snp report from HCL report"
                   << std::endl;
         throw std::runtime_error("error parsing HCL report");
@@ -291,9 +312,9 @@ void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx,
 
 // TODO: do another benchmark where we query our attestation service instead,
 // and compare it with the MAA
-std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
-    // ---------------------- Set Up CP-ABE
-    // --------------------------------------
+std::chrono::duration<double> runRequests(int numRequests, int maxParallelism,
+                                          bool maa = false) {
+    // ---------------------- Set Up CP-ABE -----------------------------------
 
     // Initialize CP-ABE ctx and create a sample secret
     auto &ctx = tless::abe::CpAbeContextWrapper::get(
@@ -306,40 +327,40 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
     // Renew vTPM certificates if needed
     tpmRenewAkCert();
 
-    // ---------------------- Set Up MAA ---------------------------------------
-
-    std::string attestationUri = "https://accless.eus.attest.azure.net";
-
-    // TODO: attest MAA
-
-    // Initialize Azure Attestation client
-    AttestationClient *attestationClient = nullptr;
-    Logger *logHandle = new Logger();
-    if (!Initialize(logHandle, &attestationClient)) {
-        std::cerr << "accless: failed to create attestation client object"
-                  << std::endl;
-        Uninitialize();
-        throw std::runtime_error("failed to create attestation client object");
-    }
-
     // ----------------------- Benchmark  -------------------------------------
 
     std::counting_semaphore semaphore(maxParallelism);
     std::vector<std::thread> threads;
     auto start = std::chrono::steady_clock::now();
 
-    // Fetching the vTPM measurements is not thread-safe, but would happen
-    // in each client anyway, so we execute it only once, but still measure
-    // the time it takes
-    auto attParams = getAzureAttestationParameters(attestationClient);
+    if (maa) {
+        // FIXME: the MAA benchmark has some spurious race conditions
 
-    // In the loop, to measure scalability, we only send the HW report for
-    // validation with the attestation service (be it Azure or our own att.
-    // service)
-    for (int i = 1; i < numRequests; ++i) {
-        semaphore.acquire();
-        threads.emplace_back(
-            [&semaphore, attestationClient, &attParams, attestationUri]() {
+        std::string attestationUri = "https://accless.eus.attest.azure.net";
+
+        // Initialize Azure Attestation client
+        AttestationClient *attestationClient = nullptr;
+        Logger *logHandle = new Logger();
+        if (!Initialize(logHandle, &attestationClient)) {
+            std::cerr << "accless: failed to create attestation client object"
+                      << std::endl;
+            Uninitialize();
+            throw std::runtime_error(
+                "failed to create attestation client object");
+        }
+
+        // Fetching the vTPM measurements is not thread-safe, but would happen
+        // in each client anyway, so we execute it only once, but still measure
+        // the time it takes
+        auto attParams = getAzureAttestationParameters(attestationClient);
+
+        // In the loop, to measure scalability, we only send the HW report for
+        // validation with the attestation service (be it Azure or our own att.
+        // service)
+        for (int i = 1; i < numRequests; ++i) {
+            semaphore.acquire();
+            threads.emplace_back([&semaphore, attestationClient, &attParams,
+                                  attestationUri]() {
                 // Validate some of the claims in the JWT
                 auto jwtStr = maaGetJwtFromParams(attestationClient, attParams,
                                                   attestationUri);
@@ -352,69 +373,106 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
                 // Release semaphore
                 semaphore.release();
             });
-    }
-
-    // Do it once from the main thread to store the return value for decryption
-    auto jwtStr =
-        maaGetJwtFromParams(attestationClient, attParams, attestationUri);
-
-    for (auto &t : threads) {
-        if (t.joinable()) {
-            t.join();
         }
-    }
 
-    // Similarly, the decrypt stage is compute-bound, so by running many
-    // instances in parallel we are saturating the local CPU. This step is fully
-    // distributed, so no issue with running it just once
-    decrypt(jwtStr, ctx, cipherText);
+        // Do it once from the main thread to store the return value for
+        // decryption
+        auto jwtStr =
+            maaGetJwtFromParams(attestationClient, attParams, attestationUri);
+
+        for (auto &t : threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+
+        // Similarly, the decrypt stage is compute-bound, so by running many
+        // instances in parallel we are saturating the local CPU. This step is
+        // fully distributed, so no issue with running it just once
+        decrypt(jwtStr, ctx, cipherText);
+
+        Uninitialize();
+    } else {
+        std::string asUrl = getAttestationServiceUrl();
+
+        // Fetching the vTPM measurements is not thread-safe, but would happen
+        // in each client anyway, so we execute it only once, but still measure
+        // the time it takes
+        auto snpReport = getSnpReportFromTPM();
+
+        // In the loop, to measure scalability, we only send the HW report for
+        // validation with the attestation service (be it Azure or our own att.
+        // service)
+        for (int i = 1; i < numRequests; ++i) {
+            semaphore.acquire();
+            threads.emplace_back([&semaphore, &asUrl, &snpReport]() {
+                // Get a JWT from the attestation service if report valid
+                auto jwtStr =
+                    asGetJwtFromReport(asUrl + "/verify-snp-report", snpReport);
+
+                // TODO: somehow get the public key from the JWT
+                // TODO: validate some claims in the JWT
+
+                // Release semaphore
+                semaphore.release();
+            });
+        }
+
+        // Do it once from the main thread to store the return value for
+        // decryption
+        auto jwtStr =
+            asGetJwtFromReport(asUrl + "/verify-snp-report", snpReport);
+
+        for (auto &t : threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+
+        // Similarly, the decrypt stage is compute-bound, so by running many
+        // instances in parallel we are saturating the local CPU. This step is
+        // fully distributed, so no issue with running it just once
+        decrypt(jwtStr, ctx, cipherText);
+    }
 
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsedSecs = end - start;
     std::cout << "Elapsed time (" << numRequests << "): " << elapsedSecs.count()
               << " seconds\n";
 
-    Uninitialize();
-
     return elapsedSecs;
 }
 
-void doBenchmark() {
+void doBenchmark(bool maa = false) {
     // Write elapsed time to CSV
-    std::ofstream csvFile("results.csv", std::ios::out);
+    std::string fileName = maa ? "accless-maa.csv" : "accless.csv";
+    std::ofstream csvFile(fileName, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
 
     // WARNING: this is copied from invrs/src/tasks/ubench.rs and must be
     // kept in sync!
     std::vector<int> numRequests = {1, 10, 50, 100, 200, 400, 600, 800, 1000};
+    int numRepeats = maa ? 1 : 3;
     int maxParallelism = 100;
-    for (const auto &i : numRequests) {
-        auto elapsedTimeSecs = runRequests(i, maxParallelism);
-        csvFile << i << "," << elapsedTimeSecs.count() << '\n';
+    try {
+        for (const auto &i : numRequests) {
+            for (int j = 0; j < numRepeats; j++) {
+                auto elapsedTimeSecs = runRequests(i, maxParallelism, maa);
+                csvFile << i << "," << elapsedTimeSecs.count() << '\n';
+            }
+        }
+    } catch (...) {
+        std::cout << "accless: error running benchmark" << std::endl;
     }
 
     csvFile.close();
 }
 
-void runOnce() {
-    std::string attestationUri = "https://accless.eus.attest.azure.net";
-
-    // TODO: attest MAA
-
+void runOnce(bool maa = false) {
     // Renew TPM certificates if needed
     tpmRenewAkCert();
 
-    // Initialize Azure Attestation client
-    AttestationClient *attestationClient = nullptr;
-    Logger *logHandle = new Logger();
-    if (!Initialize(logHandle, &attestationClient)) {
-        std::cerr << "accless: failed to create attestation client object"
-                  << std::endl;
-        Uninitialize();
-        throw std::runtime_error("failed to create attestation client object");
-    }
-
-    // Initialize CP-ABE ctx (don't count time)
+    // Initialize CP-ABE ctx
     auto &ctx = tless::abe::CpAbeContextWrapper::get(
         tless::abe::ContextFetchMode::Create);
     std::string plainText =
@@ -422,14 +480,48 @@ void runOnce() {
     std::string policy = "\"foo\" and \"bar\"";
     auto cipherText = ctx.cpAbeEncrypt(policy, plainText);
 
-    auto attParams = getAzureAttestationParameters(attestationClient);
-    auto jwtStr =
-        maaGetJwtFromParams(attestationClient, attParams, attestationUri);
-    validateJwtClaims(jwtStr);
+    std::string jwtStr;
+    if (maa) {
+        // TODO: attest MAA
+        std::string attestationUri = "https://accless.eus.attest.azure.net";
+
+        // Initialize Azure Attestation client
+        AttestationClient *attestationClient = nullptr;
+        Logger *logHandle = new Logger();
+        if (!Initialize(logHandle, &attestationClient)) {
+            std::cerr << "accless: failed to create attestation client object"
+                      << std::endl;
+            Uninitialize();
+            throw std::runtime_error(
+                "failed to create attestation client object");
+        }
+
+        auto attParams = getAzureAttestationParameters(attestationClient);
+        jwtStr =
+            maaGetJwtFromParams(attestationClient, attParams, attestationUri);
+        validateJwtClaims(jwtStr);
+
+        Uninitialize();
+    } else {
+        std::string asUrl = getAttestationServiceUrl();
+
+        // TODO: attest AS
+
+        auto snpReport = getSnpReportFromTPM();
+        jwtStr = asGetJwtFromReport(asUrl + "/verify-snp-report", snpReport);
+        std::cout << "out: " << jwtStr << std::endl;
+    }
+
     decrypt(jwtStr, ctx, cipherText);
 }
 
-int main() {
-    doBenchmark();
-    // runOnce();
+int main(int argc, char **argv) {
+    bool maa = ((argc == 2) && (std::string(argv[1]) == "--maa"));
+    bool once = ((argc == 2) && (std::string(argv[1]) == "--once"));
+
+    if (once) {
+        runOnce();
+    } else {
+        doBenchmark(maa);
+    }
 }
