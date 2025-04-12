@@ -1,5 +1,12 @@
+---
+
 - name: "Deploy Faasm cluster"
   shell: rm -rf ./venv-bm && source ./bin/workon.sh && faasmctl deploy.compose --mount-source . --workers=4
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash
+
+- name: "Fetch the cross-compilation toolchain image"
+  shell: docker pull ghcr.io/faasm/tless-experiments:{{ accless_version}}
+  args:
     executable: /bin/bash

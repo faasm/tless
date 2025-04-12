@@ -1,5 +1,6 @@
-include (ExternalProject)
+set(CMAKE_PROJECT_TARGET accless_s3)
 
+include (ExternalProject)
 # -------
 # Install external deps
 # -------
@@ -45,6 +46,6 @@ add_library(AWS::s3 ALIAS aws_ext_s3_lib)
 # Library set-up
 # -------
 
-add_library(s3_wrapper_lib S3Wrapper.cpp)
-target_link_libraries(s3_wrapper_lib PUBLIC AWS::s3)
-add_library(TLess::s3 ALIAS s3_wrapper_lib)
+add_library(${CMAKE_PROJECT_TARGET} S3Wrapper.cpp)
+target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC AWS::s3)
+add_library(accless::s3 ALIAS ${CMAKE_PROJECT_TARGET})

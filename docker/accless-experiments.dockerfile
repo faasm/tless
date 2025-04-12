@@ -39,5 +39,5 @@ ENV PATH=${PATH}:/root/.cargo/bin
 RUN cd /code/faasm-examples \
     # Install faasmtools
     && ./bin/create_venv.sh \
-    && source ./venv/bin/activate \
-    && python3 ./workflows/build.py
+    && source ./venv/bin/activate
+    # && python3 ./workflows/build.py

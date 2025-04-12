@@ -500,7 +500,12 @@ async fn main() {
                     Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3");
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", None);
+                    let version = Env::get_version().unwrap();
+                    Azure::provision_with_ansible(
+                        "sgx-faasm",
+                        "sgxfaasm",
+                        Some(format!("accless_version={version}").as_str()),
+                    );
                 }
                 AzureSubCommand::ScpResults {} => {
                     todo!("finish");
