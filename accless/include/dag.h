@@ -22,11 +22,13 @@ struct Dag {
     DagChains chains;
 };
 
-Dag deserialize(const std::vector<uint8_t>& data);
+Dag deserialize(const std::vector<uint8_t> &data);
 
 // Given a function name, return the expected call chain according to the DAG
-std::vector<std::string> getCallChain(const Dag& dag, const std::string& func);
+std::vector<std::string> getCallChain(const Dag &dag, const std::string &func);
 
-std::vector<std::string> getFuncChainFromCertChain(const std::vector<uint8_t>& certChain);
-std::vector<std::string> getFuncChainFromCertChain(const std::string& certChain);
-}
+std::vector<std::string>
+getFuncChainFromCertChain(const std::vector<uint8_t> &certChain);
+std::vector<std::string>
+getFuncChainFromCertChain(const std::string &certChain);
+} // namespace tless::dag
