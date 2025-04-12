@@ -1,0 +1,5 @@
+- name: "Deploy Faasm cluster"
+  shell: ./bin/inv_wrapper.sh faasmctl deploy.compose --mount-source . --workers=4
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash

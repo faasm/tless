@@ -9,8 +9,11 @@ const AZURE_RESOURCE_GROUP: &str = "faasm";
 const AZURE_USERNAME: &str = "tless";
 const AZURE_LOCATION: &str = "eastus";
 
+// TODO: re-factor w/ out SNP
 const AZURE_SNP_VM_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
 const AZURE_SNP_VM_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
+
+const AZURE_SGX_VM_IMAGE: &str = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202301140";
 
 //  Specifies order in which to delete resource types
 const RESOURCE_TYPE_PRECEDENCE: [&str; 4] = [
@@ -263,8 +266,36 @@ impl Azure {
     // Create/Delete Azure Resources
     // -------------------------------------------------------------------------
 
+    // ------------------------------ SGX VMs ---------------------------------
+
+    // SGXv2 VMs in Azure are in the DCdsv3 family:
+    // https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dcdsv3-series
+    pub fn create_sgx_vm(vm_name: &str, vm_sku: &str) {
+        info!("creating sgx vm: {vm_name} (sku: {vm_sku})");
+        let az_cmd = format!(
+            "az vm create --resource-group {AZURE_RESOURCE_GROUP} \
+            --name {vm_name} --admin-username {AZURE_USERNAME} --location \
+            {AZURE_LOCATION} --ssh-key-value {AZURE_SNP_VM_SSH_PUB_KEY} \
+            --image {AZURE_SGX_VM_IMAGE} --size {vm_sku} --os-disk-size-gb 63 \
+            --public-ip-sku Standard --os-disk-delete-option delete \
+            --data-disk-delete-option delete --nic-delete-option delete"
+        );
+        Self::run_cmd(&az_cmd, "error deploying sgx vm");
+    }
+
+    pub fn delete_sgx_vm(vm_name: &str) {
+        // First delete VM
+        Self::vm_op("delete", vm_name, &["--yes"]);
+
+        // Then delete all attached resources
+        let all_resources = Self::list_all_resources("resource", Some(vm_name));
+        Self::delete_resources(all_resources);
+    }
+
     // ------------------------------ SNP cVMs ---------------------------------
 
+    // Readily-available cVMs (i.e. SNP guests) in Azure are in the DCasv5 series:
+    // https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dcasv5-series
     pub fn create_snp_guest(vm_name: &str, vm_sku: &str) {
         info!("creating snp guest: {vm_name} (sku: {vm_sku})");
 
@@ -415,6 +446,8 @@ impl Azure {
 
     // WARNING: this method assumes that the VM names are prefixed with the
     // VM deployment group name
+    // WARNING: this method assumes that the inventory name is the same than
+    // the yaml file containing the tasks
     pub fn provision_with_ansible(
         vm_deployment: &str,
         inventory_name: &str,

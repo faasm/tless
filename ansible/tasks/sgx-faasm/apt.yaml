@@ -1,0 +1,28 @@
+- name: "Add Intel SGX apt key"
+  apt_key:
+    url: "https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key"
+    keyring: "/usr/share/keyrings/intel-sgx-archive-keyring.gpg"
+    state: present
+  become: yes
+
+- name: "Add Intel SGX repository"
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-archive-keyring.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu jammy main"
+    filename: intel-sgx
+    state: present
+  become: yes
+
+- name: "Update apt cache"
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: "Install APT depdencencies"
+  become: yes
+  apt:
+    name:
+      - build-essential
+      - libsgx-dcap-quote-verify-dev
+      - ninja-build
+      - python3-venv
+    update_cache: yes

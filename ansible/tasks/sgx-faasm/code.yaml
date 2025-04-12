@@ -1,0 +1,30 @@
+---
+
+- name: "Create code dir"
+  file:
+    path: "/home/{{ ansible_user }}/git"
+    state: directory
+
+- name: "Clone Faasm repos"
+  git:
+    repo: "https://www.github.com/faasm/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/faasm/{{ item }}"
+    update: yes
+    recursive: yes
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "examples"
+    - "faasm"
+    - "rabe"
+    - "tless-jwt"
+    - "tless"
+
+# TODO: delete me before merge
+- name: Clone snpguest from your fork, on custom branch
+  git:
+    repo: "https://www.github.com/faasm/tless.git"
+    dest: "/home/{{ ansible_user }}/git/faasm/tless"
+    version: ansible
+    force: yes

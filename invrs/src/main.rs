@@ -497,19 +497,19 @@ async fn main() {
             },
             AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    todo!("finish");
+                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3");
                 }
                 AzureSubCommand::Provision {} => {
-                    todo!("finish");
+                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", None);
                 }
                 AzureSubCommand::ScpResults {} => {
                     todo!("finish");
                 }
                 AzureSubCommand::Ssh {} => {
-                    todo!("finish");
+                    Azure::build_ssh_command("sgx-faasm-vm");
                 }
                 AzureSubCommand::Delete {} => {
-                    todo!("finish");
+                    Azure::delete_sgx_vm("sgx-faasm-vm");
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
