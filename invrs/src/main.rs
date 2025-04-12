@@ -82,6 +82,8 @@ enum DockerCommand {
         #[arg(long)]
         nocache: bool,
     },
+    /// Get a CLI interface to the experiments container
+    Cli {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -280,6 +282,21 @@ async fn main() {
                     } else {
                         Docker::build(ctr, *push, *nocache);
                     }
+                }
+            }
+            DockerCommand::Cli {} => {
+                let docker_cmd = format!(
+                    "docker run -v {}:/code/tless --rm -it {} bash",
+                    Env::proj_root().display(),
+                    Docker::get_docker_tag(&DockerContainer::Experiments)
+                );
+                let status = process::Command::new("sh")
+                    .arg("-c")
+                    .arg(docker_cmd)
+                    .status()
+                    .expect("invrs: error spawning docker command");
+                if !status.success() {
+                    panic!("invrs: error getting CLI into experiments container");
                 }
             }
         },

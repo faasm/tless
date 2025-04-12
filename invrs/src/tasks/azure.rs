@@ -13,7 +13,8 @@ const AZURE_LOCATION: &str = "eastus";
 const AZURE_SNP_VM_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
 const AZURE_SNP_VM_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
 
-const AZURE_SGX_VM_IMAGE: &str = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202301140";
+const AZURE_SGX_VM_IMAGE: &str =
+    "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202301140";
 
 //  Specifies order in which to delete resource types
 const RESOURCE_TYPE_PRECEDENCE: [&str; 4] = [

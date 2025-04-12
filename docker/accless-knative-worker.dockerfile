@@ -1,6 +1,6 @@
 # Ligthweight container image to use as worker runtime in CC-Knative
 ARG TLESS_VERSION
-FROM ghcr.io/coco-serverless/tless-experiments:${TLESS_VERSION:-d34d} AS build
+FROM ghcr.io/faasm/accless:${TLESS_VERSION:-d34d} AS build
 
 FROM ubuntu:22.04
 LABEL org.opencontainers.image.source=https://github.com/faasm/experiment-tless
