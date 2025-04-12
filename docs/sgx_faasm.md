@@ -11,6 +11,8 @@ invrs azure sgx-faasm create
 invrs azure sgx-faasm provision
 ```
 
+
+
 ### Faasm Baselines
 
 To deploy the Faasm-based baselines - Faasm, Sgx-Faasm, and TLess-Faasm -

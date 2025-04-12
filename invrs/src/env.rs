@@ -6,8 +6,8 @@ use std::path::PathBuf;
 pub struct Env {}
 
 impl Env {
-    pub const CONTAINER_REGISTRY_URL: &'static str = "ghcr.io/coco-serverless";
-    pub const SYS_NAME: &'static str = "tlessctl";
+    pub const CONTAINER_REGISTRY_URL: &'static str = "ghcr.io/faasm";
+    pub const SYS_NAME: &'static str = "invrs";
 
     pub fn proj_root() -> PathBuf {
         env::current_dir().expect("invrs: failed to get current directory")

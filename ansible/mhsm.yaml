@@ -5,6 +5,6 @@
   tasks:
     - include_tasks: tasks/mhsm/apt.yaml
     - include_tasks: tasks/util/az_guest_attestation.yaml
-    - include_tasks: tasks/rust.yaml
+    - include_tasks: tasks/util/rust.yaml
     - include_tasks: tasks/mhsm/code.yaml
     - include_tasks: tasks/mhsm.yaml

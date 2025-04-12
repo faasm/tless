@@ -26,5 +26,5 @@
   git:
     repo: "https://www.github.com/faasm/tless.git"
     dest: "/home/{{ ansible_user }}/git/faasm/tless"
-    version: ansible
+    version: cold-starts
     force: yes
