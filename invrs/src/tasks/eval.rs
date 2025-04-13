@@ -134,6 +134,9 @@ impl Eval {
         baseline: &EvalBaseline,
         scale_up_factor: u32,
     ) -> String {
+        if *exp == EvalExperiment::ColdStart {
+            return format!("{}/{exp}/data/{baseline}.csv", Self::get_root().display());
+        }
         if scale_up_factor == 0 {
             format!(
                 "{}/{exp}/data/{baseline}_{workflow}.csv",
@@ -782,12 +785,13 @@ impl Eval {
             }
             let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, &workflow_str);
 
+            // TODO: consider if this is the output format we want
             let mut faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
             );
             if *exp == EvalExperiment::ColdStart {
                 faasmctl_cmd =
-                    "invoke accless ubench-cold-start --output-format start-end-ts".to_string();
+                    "invoke accless ubench-cold-start --output-format cold-start".to_string();
             }
 
             // Do warm-up rounds
@@ -800,12 +804,29 @@ impl Eval {
             for i in 0..args.num_repeats {
                 let mut output = Self::run_faasmctl_cmd(&faasmctl_cmd);
                 output = output.strip_suffix("\n").unwrap().to_string();
+                let result = match exp {
+                    // The cold-start experiment needs ms-scale resolution
+                    // for fine-grained measurement
+                    EvalExperiment::ColdStart => {
+                        let now = Utc::now();
+                        let time_f64: f64 = output.parse().expect("Invalid float");
+                        let chrono_duration =
+                            chrono::Duration::microseconds((time_f64 * 1000.0).round() as i64);
 
-                let ts = output.split(",").collect::<Vec<&str>>();
-                let result = ExecutionResult {
-                    start_time: Self::epoch_ts_to_datetime(ts[0]),
-                    end_time: Self::epoch_ts_to_datetime(ts[1]),
-                    iter: i,
+                        ExecutionResult {
+                            start_time: now,
+                            end_time: now + chrono_duration,
+                            iter: i,
+                        }
+                    }
+                    _ => {
+                        let ts = output.split(",").collect::<Vec<&str>>();
+                        ExecutionResult {
+                            start_time: Self::epoch_ts_to_datetime(ts[0]),
+                            end_time: Self::epoch_ts_to_datetime(ts[1]),
+                            iter: i,
+                        }
+                    }
                 };
 
                 Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
@@ -1315,6 +1336,8 @@ impl Eval {
     }
 
     pub async fn upload_state(eval: &EvalExperiment) -> anyhow::Result<()> {
+        // TODO: must know the AS_URL here somehow
+
         // Work-out the workflows to execute for each experiment
         let workflow_iter = match eval {
             // For the scale-up latency, we only run the FINRA workflow
@@ -1353,7 +1376,8 @@ impl Eval {
                 let ctr_path = format!("/code/tless/ubench/build-wasm/accless-ubench-cold-start");
 
                 Self::run_faasmctl_cmd(
-                    &format!("upload ubench {docker_tag}:{ctr_path}").to_string(),
+                    &format!("upload accless ubench-cold-start {docker_tag}:{ctr_path}")
+                        .to_string(),
                 );
             }
             EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {

@@ -32,6 +32,7 @@ impl Azure {
     // Misc Helpers
     // -------------------------------------------------------------------------
 
+    #[warn(unused_imports)]
     fn create_self_signed_cert(key_out_path: &str, cert_out_path: &str) {
         let openssl_cmd = format!(
             "openssl req -newkey rsa:2048 -nodes -keyout {key_out_path} \
@@ -81,6 +82,7 @@ impl Azure {
 
     /// Activate a managed HSM by providing three certificates for the security
     /// domain
+    #[warn(dead_code)]
     fn activate_managed_hsm(mhsm_name: &str) {
         let key_dir = Env::proj_root().join("azure").join("keys");
         fs::create_dir_all(&key_dir).expect("invrs: failed to create key directory");

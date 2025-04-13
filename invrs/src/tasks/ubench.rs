@@ -4,7 +4,6 @@ use anyhow::Result;
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
 use futures::stream::{self, StreamExt};
-use indicatif::{ProgressBar, ProgressStyle};
 use log::debug;
 use plotters::prelude::*;
 use serde::Deserialize;
@@ -19,9 +18,6 @@ use std::{
     str::FromStr,
     time::Instant,
 };
-
-// eDAG Verify constants
-static MAX_NUM_CHAINS: u32 = 10;
 
 const REQUEST_COUNTS_MHSM: &[usize] = &[1, 5, 10, 15, 20, 40, 60, 80, 100];
 const REQUEST_COUNTS_TRUSTEE: &[usize] = &[1, 10, 50, 100, 200, 400, 600, 800, 1000];
@@ -264,23 +260,6 @@ pub struct UbenchRunArgs {
 pub struct Ubench {}
 
 impl Ubench {
-    fn get_progress_bar(
-        num_repeats: u32,
-        exp: &MicroBenchmarks,
-        baseline: &str,
-        mode: &str,
-    ) -> ProgressBar {
-        let pb = ProgressBar::new(num_repeats.into());
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} ({percent}%)")
-                .expect("invrs(eval): error creating progress bar")
-                .progress_chars("#>-"),
-        );
-        pb.set_message(format!("{exp}/{baseline}/{mode}"));
-        pb
-    }
-
     async fn measure_requests_latency(
         baseline: &EscrowBaseline,
         num_requests: usize,
