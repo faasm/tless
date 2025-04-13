@@ -17,7 +17,7 @@ RUN rm -rf /code \
     && git checkout 9797ec398f242cb7b37def798748f392cb170998 \
     && git submodule update --init -f cpp \
     && git clone https://github.com/faasm/tless /code/tless \
-    # TODO: why do we need this? for faasmtools?
+    # TODO: why do we need this? for faasmtools? we don't actually
     && cp -r /code/tless/workflows /code/faasm-examples/
 
 # Build specific libraries we need

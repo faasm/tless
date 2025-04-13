@@ -6,6 +6,13 @@
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
     executable: /bin/bash
 
+# For the time being, we mount the source, so we must rebuild all targets
+- name: "Deploy Faasm cluster"
+  shell: source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Hardware"
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash
+
 - name: "Fetch the cross-compilation toolchain image"
   shell: docker pull ghcr.io/faasm/tless-experiments:{{ accless_version}}
   args:

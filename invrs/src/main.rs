@@ -123,11 +123,6 @@ enum UbenchCommand {
         #[command(subcommand)]
         ubench_sub_command: UbenchSubCommand,
     },
-    /// Microbenchmark to measure the time to verify an eDAG
-    VerifyEdag {
-        #[command(subcommand)]
-        ubench_sub_command: UbenchSubCommand,
-    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -287,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
             }
             DockerCommand::Cli {} => {
                 let docker_cmd = format!(
-                    "docker run -v {}:/code/tless --rm -it {} bash",
+                    "docker run -v {}:/code/tless --rm -it -w /code/tless {} bash",
                     Env::proj_root().display(),
                     Docker::get_docker_tag(&DockerContainer::Experiments)
                 );
@@ -334,14 +329,6 @@ async fn main() -> anyhow::Result<()> {
                 }
                 UbenchSubCommand::Plot {} => {
                     Ubench::plot(&MicroBenchmarks::EscrowXput);
-                }
-            },
-            UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
-                UbenchSubCommand::Run(_) => {
-                    panic!("verify-edag not supported anymore!");
-                }
-                UbenchSubCommand::Plot {} => {
-                    Ubench::plot(&MicroBenchmarks::VerifyEDag);
                 }
             },
         },
