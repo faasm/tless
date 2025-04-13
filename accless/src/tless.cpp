@@ -13,7 +13,7 @@
 #ifdef __faasm
 #include <faasm/core.h>
 #else
-#include "../s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
 #include <iostream>

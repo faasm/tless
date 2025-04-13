@@ -608,7 +608,7 @@ impl Eval {
         args: &EvalRunArgs,
         args_offset: usize,
         scale_up_factor: u32,
-    ) {
+    ) -> anyhow::Result<()> {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
@@ -639,7 +639,7 @@ impl Eval {
             "state",
         );
         for workflow in workflow_iter.clone() {
-            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await?;
             pb.inc(1);
         }
         pb.finish();
@@ -700,6 +700,8 @@ impl Eval {
         let mut k8s_common_path = Workflows::get_root();
         k8s_common_path.push("k8s_common.yaml");
         Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
+
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
@@ -753,7 +755,7 @@ impl Eval {
         args: &EvalRunArgs,
         args_offset: usize,
         scale_up_factor: u32,
-    ) {
+    ) -> anyhow::Result<()> {
         let baseline = args.baseline[args_offset].clone();
 
         // First, work out the WASM VM we need
@@ -816,7 +818,7 @@ impl Eval {
             "state",
         );
         for workflow in workflow_iter.clone() {
-            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await;
+            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await?;
             pb.inc(1);
         }
         pb.finish();
@@ -874,33 +876,37 @@ impl Eval {
             // Finish progress bar
             pb.finish();
         }
+
+        Ok(())
     }
 
-    pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) {
+    pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) -> anyhow::Result<()> {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
                 EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
-                                Self::run_knative_experiment(exp, args, i, scale_up_factor).await;
+                                Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
-                        _ => Self::run_knative_experiment(exp, args, i, 0).await,
+                        _ => Self::run_knative_experiment(exp, args, i, 0).await?,
                     }
                 }
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
-                                Self::run_faasm_experiment(exp, args, i, scale_up_factor).await;
+                                Self::run_faasm_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
-                        _ => Self::run_faasm_experiment(exp, args, i, 0).await,
+                        _ => Self::run_faasm_experiment(exp, args, i, 0).await?,
                     }
                 }
             }
         }
+
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
@@ -914,7 +920,7 @@ impl Eval {
         }
     }
 
-    fn plot_e2e_latency(exp: &EvalExperiment, data_files: &Vec<PathBuf>) {
+    fn plot_e2e_latency(exp: &EvalExperiment, data_files: &Vec<PathBuf>) -> anyhow::Result<()> {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -1166,7 +1172,9 @@ impl Eval {
             .unwrap();
         }
 
-        root.present().unwrap();
+        root.present()?;
+
+        Ok(())
     }
 
     fn plot_scale_up_latency(data_files: &Vec<PathBuf>) {
@@ -1348,20 +1356,23 @@ impl Eval {
         root.present().unwrap();
     }
 
-    pub fn plot(exp: &EvalExperiment) {
+    pub fn plot(exp: &EvalExperiment) -> anyhow::Result<()> {
         // First, get all the data files
         let data_files = Self::get_all_data_files(exp);
 
         match exp {
             EvalExperiment::E2eLatency => {
-                Self::plot_e2e_latency(&exp, &data_files);
+                Self::plot_e2e_latency(&exp, &data_files)?;
             }
             EvalExperiment::E2eLatencyCold => {
-                Self::plot_e2e_latency(&exp, &data_files);
+                Self::plot_e2e_latency(&exp, &data_files)?;
+
             }
             EvalExperiment::ScaleUpLatency => {
                 Self::plot_scale_up_latency(&data_files);
             }
         }
+
+        Ok(())
     }
 }

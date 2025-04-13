@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use env_logger;
 use std::process;
 
+pub mod attestation_service;
 pub mod env;
 pub mod tasks;
 
@@ -248,7 +249,7 @@ enum AzureSubCommand {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Initialize the logger based on the debug flag
@@ -265,7 +266,7 @@ async fn main() {
     match &cli.task {
         Command::Dag { dag_command } => match dag_command {
             DagCommand::Upload { name, yaml_path } => {
-                Dag::upload(name, yaml_path).await;
+                Dag::upload(name, yaml_path).await?;
             }
         },
         Command::Docker { docker_command } => match docker_command {
@@ -303,26 +304,26 @@ async fn main() {
         Command::Eval { eval_command } => match eval_command {
             EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatency, run_args).await;
+                    Eval::run(&EvalExperiment::E2eLatency, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatency);
+                    Eval::plot(&EvalExperiment::E2eLatency)?;
                 }
             },
             EvalCommand::E2eLatencyCold { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await;
+                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatencyCold);
+                    Eval::plot(&EvalExperiment::E2eLatencyCold)?;
                 }
             },
             EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await;
+                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::ScaleUpLatency);
+                    Eval::plot(&EvalExperiment::ScaleUpLatency)?;
                 }
             },
         },
@@ -611,4 +612,6 @@ async fn main() {
             },
         },
     }
+
+    Ok(())
 }

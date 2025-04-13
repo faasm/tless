@@ -33,10 +33,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
         tless-jwt
     )
 
-    set(ACCLESS_HEADERS ./include)
+    set(ACCLESS_HEADERS ${CMAKE_CURRENT_LIST_DIR}/include)
 else ()
-    set(CMAKE_CXX_FLAGS "-g ${CMAKE_CXX_FLAGS} -O3")
-
     add_subdirectory(./libs/s3)
 
     set(ACCLESS_LIBRARIES
@@ -46,18 +44,19 @@ else ()
         "/usr/local/lib/rabe/librabe.a"
     )
     set(ACCLESS_HEADERS
-        ./include
+        ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/libs
         "/usr/include/rabe"
     )
 endif()
 
-target_include_directories(accless PUBLIC "/usr/include/rabe")
-target_link_libraries(tless PUBLIC ${TLESS_LIBRARIES})
+target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${ACCLESS_HEADERS})
+target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC ${ACCLESS_LIBRARIES})
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # Manually install the .imports file so that we can link against it
     add_custom_command(
-        TARGET tless
+        TARGET ${CMAKE_PROJECT_TARGET}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/libaccless.imports ${CMAKE_CURRENT_BINARY_DIR}/libaccless.imports
         COMMENT "Created ${PROJECT_BINARY_DIR}/libaccless.imports"
