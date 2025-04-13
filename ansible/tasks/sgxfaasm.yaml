@@ -5,6 +5,8 @@
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
     executable: /bin/bash
+  environment:
+    FAASM_WASM_VM: sgx
 
 # For the time being, we mount the source, so we must rebuild all targets
 - name: "Deploy Faasm cluster"
@@ -12,8 +14,12 @@
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
     executable: /bin/bash
+  environment:
+    FAASM_WASM_VM: sgx
 
 - name: "Fetch the cross-compilation toolchain image"
-  shell: docker pull ghcr.io/faasm/tless-experiments:{{ accless_version}}
+  shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
   args:
     executable: /bin/bash
+
+# TODO: build workflows here, and patch with the right certificate for the AS

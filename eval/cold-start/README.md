@@ -23,30 +23,35 @@ cd /code/tless/ubench
 python3 build.py
 ```
 
-you may exit the container, and copy the WASM file into the Faasm sysroot:
+you may exit the container, and upload the WASM file to the Faasm cluster:
 
 ```bash
-sudo mkdir -p ~/git/faasm/faasm/dev/faasm-local/wasm/accless/ubench-cold-start
-sudo cp ~/git/faasm/tless/ubench/build-wasm/accless-ubench-cold-start ~/git/faasm/faasm/dev/faasm-local/wasm/accless/ubench-cold-start/function.wasm
+faasmctl upload accless ubench-cold-start  ~/git/faasm/tless/ubench/build-wasm/accless-ubench-cold-start
 ```
 
-lastly, you may generate the machine code, and run the function from the Faasm
-CLI. Before, running with `ACCLES_ENABLED=on`, however, you will have to
-upload the workflow DAG used in the example:
+as well as the demo workflow DAG,
 
 ```bash
 invrs dag upload word-count ./workflows/word-count/accless.yaml
 ```
 
-then, do:
+and you may invoke it with:
 
 ```bash
-faasmctli cli.faasm
-inv codegen accless ubench-cold-start
-[TLESS_ENABLED=on] inv run accless ubench-cold-start
+faasmctl invoke accless ubench-cold-start
 ```
 
-you should see a series of print messages that correspond to the times that
-we include in the Table in the evaluation.
+To reproduce the number in the table you will have to re-compile the function:
+
+```bash
+invrs docker cli
+cd /code/tless/ubench
+# TODO: pass CMake falg to WASM
+python3 build.py --time
+```
+
+then flush (`faasmctl flush.hosts`), re-upload and re-invoke. You should see a
+series of print messages that correspond to the times that we include in the
+Table in the evaluation.
 
 TODO: automate, and take averages?

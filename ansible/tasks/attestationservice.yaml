@@ -1,0 +1,20 @@
+- name: "Generate keys"
+  shell: ./bin/gen_keys.sh
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
+    executable: /bin/bash
+  environment:
+    AS_URL: "{{ as_ip }}"
+
+- name: "Build Attestation Service"
+  shell: cargo build --release
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
+    executable: /bin/bash
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: "Set AS_URL env. variable"
+  shell: "echo 'export AS_URL=${AS_URL}' >> /home/{{ ansible_user }}/.bash_aliases"
+  environment:
+    AS_URL: "{{ as_ip }}"

@@ -1,14 +1,4 @@
 - name: "Populate vimrc"
-  shell: echo "set tabstop=4
-        set softtabstop=4
-        set expandtab
-        set shiftwidth=4
-        set colorcolumn=80
-        set splitright
-        set splitbelow
-        set autoindent
-        set cindent
-        set relativenumber
-        syntax on" > /home/{{ ansible_user }}/.vimrc
+  shell: printf "set tabstop=4\nset softtabstop=4\nset expandtab\nset shiftwidth=4\nset colorcolumn=80\nset splitright\nset splitbelow\nset autoindent\nset cindent\nset relativenumber\nsyntax on" > /home/{{ ansible_user }}/.vimrc
   args:
     executable: /bin/bash

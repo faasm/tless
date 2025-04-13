@@ -5,7 +5,7 @@
     path: "/home/{{ ansible_user }}/git"
     state: directory
 
-- name: "Clone Faasm repos"
+- name: "Clone TLess repos"
   git:
     repo: "https://www.github.com/faasm/{{ item }}.git"
     dest: "/home/{{ ansible_user }}/git/faasm/{{ item }}"
@@ -15,10 +15,6 @@
     force: yes
     accept_hostkey: yes
   with_items:
-    - "examples"
-    - "faasm"
-    - "rabe"
-    - "tless-jwt"
     - "tless"
 
 # TODO: delete me before merge
@@ -27,12 +23,4 @@
     repo: "https://www.github.com/faasm/tless.git"
     dest: "/home/{{ ansible_user }}/git/faasm/tless"
     version: cold-starts
-    force: yes
-
-# TODO: delete me before merge
-- name: "Clone faasm branch"
-  git:
-    repo: "https://www.github.com/faasm/faasm.git"
-    dest: "/home/{{ ansible_user }}/git/faasm/faasm"
-    version: att-move-to-as
     force: yes

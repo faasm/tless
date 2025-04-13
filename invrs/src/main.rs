@@ -203,8 +203,14 @@ enum S3Command {
 #[derive(Debug, Subcommand)]
 enum AzureCommand {
     /// Deploy an environment witn an SNP cVM and our CP-ABE based secret-
-    /// release logic
+    /// release logic, an instance of our attestation service, and
+    /// an instance of microsft's attestation service
     Accless {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
+    /// Deploy an instance of Accless' attestation service
+    AttestationService {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
@@ -458,6 +464,30 @@ async fn main() -> anyhow::Result<()> {
                     Azure::delete_snp_guest("accless-cvm");
                     Azure::delete_snp_guest("accless-as");
                     Azure::delete_aa("accless");
+                }
+            },
+            AzureCommand::AttestationService { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_guest("attestation-service", "Standard_DC8as_v5");
+                    Azure::open_vm_ports("attestation-service", &[22, 8443]);
+                }
+                AzureSubCommand::Provision {} => {
+                    let service_ip = Azure::get_vm_ip("attestation-service");
+
+                    Azure::provision_with_ansible(
+                        "attestation-service",
+                        "attestationservice",
+                        Some(format!("as_ip={service_ip}").as_str()),
+                    );
+                }
+                AzureSubCommand::ScpResults {} => {
+                    println!("scp-results does not apply");
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("attestation-service");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_snp_guest("attestation-service");
                 }
             },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {

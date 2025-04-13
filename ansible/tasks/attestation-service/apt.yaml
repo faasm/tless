@@ -1,0 +1,9 @@
+- name: "Install APT depdencencies"
+  become: yes
+  apt:
+    name:
+      - build-essential
+      - cmake
+      - ninja-build
+      - python3-venv
+    update_cache: yes
