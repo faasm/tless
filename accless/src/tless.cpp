@@ -59,13 +59,6 @@ void prettyPrintTimePoints() {
 
 #endif
 
-// FIXME(tless-prod): this symmetric key is shared by all TEEs, and would be
-// provided by the MAA upon succesful attestation
-std::vector<uint8_t> DEMO_SYM_KEY = {
-    0xf0, 0x0d, 0x48, 0x2e, 0xca, 0x21, 0xfb, 0x13, 0xec, 0xf0, 0x01,
-    0x48, 0xba, 0x60, 0x01, 0x76, 0x6e, 0x56, 0xbb, 0xa5, 0xff, 0x9b,
-    0x11, 0x9d, 0xd6, 0xfa, 0x96, 0x39, 0x2b, 0x7c, 0x1a, 0x0d};
-
 namespace tless {
 bool on() {
 #ifdef __faasm
@@ -91,7 +84,7 @@ bool on() {
 //
 // In both cases, we get an attestation report and send it to the MAA for
 // validation.
-static bool validHardwareAttestation() {
+static bool validHardwareAttestation(std::string& jwtStrOut) {
 #ifdef __faasm
     // Get SGX quote and send it to MAA, get JWT in return
 #ifdef TLESS_UBENCH
@@ -110,13 +103,19 @@ static bool validHardwareAttestation() {
     // TODO: verify should happen for both Faasm and Knative
     bool valid = tless::jwt::verify(jwtStr);
     if (!valid) {
+        std::cout << "accless: error: failed to verify the signature in the JWT" << std::endl;
         return false;
     }
 
-    // Check signed JWT comes from the expected attestation service and has
-    // the same MRENCLAVE we do
-    if (!tless::jwt::checkProperty(jwt, "jku", ATT_PROVIDER_JKU)) {
-        std::cout << "tless: error: failed to validate JWT JKU" << std::endl;
+    // Check signed JWT comes from the expected attestation service
+    if (!tless::jwt::checkProperty(jwt, "aud", ATT_PROVIDER_AUD)) {
+        std::cout << "tless: error: failed to validate JWT AUD" << std::endl;
+        return false;
+    } else if (!tless::jwt::checkProperty(jwt, "sub", ATT_PROVIDER_SUB)) {
+        std::cout << "tless: error: failed to validate JWT AUD" << std::endl;
+        return false;
+    } else if (!tless::jwt::checkProperty(jwt, "tee", "sgx")) {
+        std::cout << "tless: error: failed to validate tee" << std::endl;
         return false;
     }
 
@@ -128,10 +127,12 @@ static bool validHardwareAttestation() {
     __tless_get_mrenclave(mrEnclave.data(), mrEnclave.size());
     std::string mrEnclaveHex =
         tless::utils::byteArrayToHexString(mrEnclave.data(), mrEnclave.size());
+    /* TODO: attestation-service still cannot parse SGX reports
     if (!tless::jwt::checkProperty(jwt, "sgx-mrenclave", mrEnclaveHex)) {
         std::cout << "tless: error: failed to validate MrEnclave" << std::endl;
         return false;
     }
+    */
 #else
     // For SNP, will we run on bare metal or in the cloud?
 #endif
@@ -144,6 +145,8 @@ static bool validHardwareAttestation() {
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("hw-att-validate-end", NOW));
 #endif
+
+    jwtStrOut = jwtStr;
 
     return true;
 }
@@ -197,32 +200,33 @@ bool checkChain(const std::string &workflow, const std::string &function,
     // -----------------------------------------------------------------------
     // 1. Get TEE certificate
     // 1.1. Generate HW quote w/ public key
-    // 1.2. Send quote to MAA for validation
-    // 1.3. Receive quote and valiate signature MAA signature and claims
+    // 1.2. Send quote to attestation-service (AA) for validation
+    // 1.3. Receive quote and valiate signature AA signature and claims
     //
-    // Note that the MAA can validate both SGX and SNP quotes, so we take
+    // Note that the AA can validate both SGX and SNP quotes, so we take
     // advantage of that
     // -----------------------------------------------------------------------
 
-    if (!validHardwareAttestation()) {
+    std::string jwtStr;
+    if (!validHardwareAttestation(jwtStr)) {
+        std::cout << "accless: error validating hw attestation" << std::endl;
         return false;
     }
 
-    // FIXME(tless-prod): this value would be returned by the MAA upon a
-    // succesful attestation, encrypted with the public key we provided as
-    // part of the original attestation bundle
-    std::string teeIdentity = "G4NU1N3TL3SST33";
+    std::string teeIdentity = tless::jwt::getProperty(jwtStr, "tee_identity");
 
     // -----------------------------------------------------------------------
     // 2. Bootstrap CP-ABE context
     // 2.1. Fetch encrypted context
-    // 2.2. Decrypt it with the TEE identity that we obtained from the previous
-    //      step
+    // 2.2. Decrypt it with the TEE key that we obtained after attestation
     // -----------------------------------------------------------------------
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("begin-fetch-dec-cpabe", NOW));
 #endif
+
+    std::string teeSymKeyBase64 = tless::jwt::getProperty(jwtStr, "aes_key_b64");
+    auto teeSymKey = tless::utils::base64Decode(teeSymKeyBase64);
 
     // Fetch the (encrypted) CP-ABE context from S3
     std::vector<uint8_t> ctCtx;
@@ -240,7 +244,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
     std::vector<uint8_t> ctCtxTrimmed(ctCtx.begin() + AES256CM_NONCE_SIZE,
                                       ctCtx.end());
     auto ptCtx =
-        tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceCtx, ctCtxTrimmed);
+        tless::aes256gcm::decrypt(teeSymKey, nonceCtx, ctCtxTrimmed);
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-dec-cpabe", NOW));
@@ -269,7 +273,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
     std::vector<uint8_t> ctCertChain(
         ctAesCertChain.begin() + AES256CM_NONCE_SIZE, ctAesCertChain.end());
     auto ptAesCertChain =
-        tless::aes256gcm::decrypt(DEMO_SYM_KEY, nonceCertChain, ctCertChain);
+        tless::aes256gcm::decrypt(teeSymKey, nonceCertChain, ctCertChain);
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-dec-cert-chain", NOW));
@@ -347,45 +351,6 @@ bool checkChain(const std::string &workflow, const std::string &function,
     */
 
     std::cout << "tless: certificate chain validated!" << std::endl;
-
-    // -----------------------------------------------------------------------
-    // 3. Get execution token
-    // 3.1. Fetch execution token from storage
-    // 3.2. Decrypt function code
-    // -----------------------------------------------------------------------
-
-#ifdef TLESS_UBENCH
-    timePoints.push_back(std::make_pair("begin-fetch-exec-token", NOW));
-#endif
-
-    // Attempt to get the exec-token (tolerate missing)
-    std::vector<uint8_t> execToken;
-    std::string execTokenKey =
-        workflow + "/exec-tokens/" + function + "-" + std::to_string(id);
-#ifdef __faasm
-    execToken = tless::utils::doGetKeyBytes("tless", execTokenKey, true);
-#else
-    execToken = s3cli.getKeyBytes("tless", execTokenKey, true);
-#endif
-
-    // Check there are no bytes
-    if (!execToken.empty()) {
-        std::cerr << "tless: error: exec token already taken" << std::endl;
-        return false;
-    }
-
-    // TODO: consider encrypting/signing?
-    std::string tokenBytes = "exec-token";
-#ifdef __faasm
-    tless::utils::doAddKeyBytes("tless", execTokenKey, tokenBytes);
-#else
-    s3cli.addKeyStr("tless", execTokenKey, tokenBytes);
-    // NOTE: deliberately not shutdown s3 here, as it may be used after
-#endif
-
-#ifdef TLESS_UBENCH
-    timePoints.push_back(std::make_pair("end-fetch-exec-token", NOW));
-#endif
 
 #ifdef TLESS_UBENCH
     timePoints.push_back(std::make_pair("end", NOW));
