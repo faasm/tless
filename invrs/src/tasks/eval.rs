@@ -1,4 +1,5 @@
 use crate::env::Env;
+use crate::tasks::color::{get_color_from_label, FONT_SIZE};
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
@@ -71,12 +72,12 @@ impl EvalBaseline {
 
     pub fn get_color(&self) -> RGBColor {
         match self {
-            EvalBaseline::Faasm => RGBColor(171, 222, 230),
-            EvalBaseline::SgxFaasm => RGBColor(203, 170, 203),
-            EvalBaseline::AcclessFaasm => RGBColor(255, 255, 181),
-            EvalBaseline::Knative => RGBColor(255, 204, 182),
-            EvalBaseline::CcKnative => RGBColor(243, 176, 195),
-            EvalBaseline::AcclessKnative => RGBColor(151, 193, 169),
+            EvalBaseline::Faasm => get_color_from_label("dark-orange"),
+            EvalBaseline::SgxFaasm => get_color_from_label("dark-green"),
+            EvalBaseline::AcclessFaasm => get_color_from_label("accless"),
+            EvalBaseline::Knative => get_color_from_label("dark-blue"),
+            EvalBaseline::CcKnative => get_color_from_label("dark-yellow"),
+            EvalBaseline::AcclessKnative => get_color_from_label("accless"),
         }
     }
 }
@@ -1313,13 +1314,214 @@ impl Eval {
         root.present().unwrap();
     }
 
+    fn compute_cdf(samples: &Vec<u64>) -> Vec<(f64, f64)> {
+        let mut sorted = samples.clone();
+        sorted.sort_unstable(); // more efficient for simple types like u64
+
+        let n = sorted.len() as f64;
+        sorted
+            .iter()
+            .enumerate()
+            .map(|(i, &x)| {
+                let cdf = (i + 1) as f64 / n;
+                (x as f64, cdf)
+            })
+            .collect()
+    }
+
+    fn plot_cold_start_cdf(plot_version: &str, data_files: &Vec<PathBuf>) {
+        #[derive(Debug, Deserialize)]
+        #[serde(rename_all = "PascalCase")]
+        struct Record {
+            #[allow(dead_code)]
+            run: usize,
+            time_ms: u64,
+        }
+
+        let baselines = match plot_version {
+            "faasm" => {vec![EvalBaseline::Faasm, EvalBaseline::SgxFaasm, EvalBaseline::AcclessFaasm]},
+            "knative" => {vec![EvalBaseline::Knative, EvalBaseline::CcKnative, EvalBaseline::AcclessKnative]},
+            _ => { unreachable!{} },
+        };
+
+        // Collect data
+        let mut data = BTreeMap::<EvalBaseline, Vec<u64>>::new();
+        for baseline in &baselines {
+            data.insert(baseline.clone(), vec![]);
+        }
+
+        for csv_file in data_files {
+            let file_name = csv_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            debug!("file name: {file_name}");
+
+            let file_name_len = file_name.len();
+            let baseline: EvalBaseline = file_name[0..file_name_len - 4].parse().unwrap();
+
+            // Open the CSV and deserialize records
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .from_path(csv_file)
+                .unwrap();
+
+            for result in reader.deserialize() {
+                debug!("{baseline}: {csv_file:?}");
+                let record: Record = result.unwrap();
+                data.get_mut(&baseline).unwrap().push(record.time_ms);
+            }
+        }
+
+        let mut plot_path = Env::proj_root();
+        plot_path.push("eval");
+        plot_path.push(format!("{}", EvalExperiment::ColdStart));
+        plot_path.push("plots");
+        fs::create_dir_all(plot_path.clone()).unwrap();
+        plot_path.push(format!("{plot_version}.svg"));
+
+        // Plot data
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        // X axis in ms
+        let x_max = 2000;
+        let y_max: f64 = 100.0;
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .margin_top(50)
+            .margin_left(40)
+            .margin_right(25)
+            .margin_bottom(20)
+            .build_cartesian_2d((0..x_max).log_scale(), 0f64..y_max as f64)
+            .unwrap();
+
+        chart
+            .configure_mesh()
+            .light_line_style(&WHITE)
+            .x_labels(8)
+            .y_labels(6)
+            .y_label_formatter(&|v| format!("{:.0}", v))
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
+            .x_desc("")
+            .draw()
+            .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "CDF [%]",
+            (5, 200),
+            ("sans-serif", FONT_SIZE)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "Latency [ms]",
+            (175, 275),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+        ))
+        .unwrap();
+
+        for (baseline, values) in data {
+            // Draw line
+            let values_cdf = Self::compute_cdf(&values);
+            chart
+                .draw_series(LineSeries::new(
+                    values_cdf.into_iter().map(|(x, y)| {
+                        (x as i32, y * 100.0)
+                    }),
+                    EvalBaseline::get_color(&baseline).stroke_width(5),
+                ))
+                .unwrap();
+        }
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_max, 0.0), (x_max, y_max)],
+                &BLACK,
+            ))
+            .unwrap();
+
+        fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
+            let legend_x_start = 10;
+            let legend_y_pos = 6;
+
+            match baseline {
+                EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 110, legend_y_pos),
+                EvalBaseline::AcclessFaasm => (legend_x_start + 270, legend_y_pos),
+                _ => todo!(),
+            }
+        }
+
+        // for id_x in 0..EscrowBaseline::iter_variants().len() {
+        for baseline in &baselines {
+            // Calculate position for each legend item
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+            // Draw the color box (Rectangle) + frame
+            let square_side = 20;
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
+                EvalBaseline::get_color(&baseline).filled(),
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                match baseline {
+                    EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => format!("accless"),
+                    _ => format!("{baseline}"),
+                },
+                (x_pos + 30, y_pos + 2), // Adjust text position
+                ("sans-serif", FONT_SIZE).into_font(),
+            ))
+            .unwrap();
+        }
+
+        root.present().unwrap();
+        println!("invrs: generated plot at: {}", plot_path.display());
+    }
+
     pub fn plot(exp: &EvalExperiment) -> anyhow::Result<()> {
         // First, get all the data files
         let data_files = Self::get_all_data_files(exp);
 
         match exp {
             EvalExperiment::ColdStart => {
-                todo!("implement me!");
+                Self::plot_cold_start_cdf("faasm", &data_files);
+                // Self::plot_cold_start_cdf("knative", &data_files);
             }
             EvalExperiment::E2eLatency => {
                 Self::plot_e2e_latency(&exp, &data_files)?;

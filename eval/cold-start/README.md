@@ -56,13 +56,19 @@ exit
 
 ### Run
 
-To run the experiment, first upload the corresponding WASM files, and run it:
+To run the experiment, first upload the corresponding WASM files and state:
 
 ```bash
 cd ~/git/faasm/tless
 source ./bin/workon.sh
+invrs eval cold-start upload-state
 invrs eval cold-start upload-wasm
-invrs eval cold-start run
+```
+
+then you may run the experiment with
+
+```bash
+invrs eval cold-start run --baseline [faasm,sgx-faasm,accless-faasm] --num-repeats 20
 ```
 
 ## Reproduce measurments in table

@@ -582,7 +582,23 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
-                    todo!("finish");
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
+                    let result_path = "eval/cold-start/data";
+
+                    for result_file in results_file {
+                        let scp_cmd = format!(
+                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
+                            Azure::build_scp_command("sgx-faasm-vm"),
+                            Env::proj_root().join(result_path).display(),
+                        );
+
+                        process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd)
+                            .status()
+                            .expect("invrs: error scp-ing results");
+                    }
                 }
                 AzureSubCommand::Ssh {} => {
                     Azure::build_ssh_command("sgx-faasm-vm");
