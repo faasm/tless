@@ -21,10 +21,10 @@ static EVAL_BUCKET_NAME: &str = "tless";
 pub enum EvalBaseline {
     Faasm,
     SgxFaasm,
-    TlessFaasm,
+    AcclessFaasm,
     Knative,
     CcKnative,
-    TlessKnative,
+    AcclessKnative,
 }
 
 impl fmt::Display for EvalBaseline {
@@ -32,10 +32,10 @@ impl fmt::Display for EvalBaseline {
         match self {
             EvalBaseline::Faasm => write!(f, "faasm"),
             EvalBaseline::SgxFaasm => write!(f, "sgx-faasm"),
-            EvalBaseline::TlessFaasm => write!(f, "tless-faasm"),
+            EvalBaseline::AcclessFaasm => write!(f, "accless-faasm"),
             EvalBaseline::Knative => write!(f, "knative"),
             EvalBaseline::CcKnative => write!(f, "cc-knative"),
-            EvalBaseline::TlessKnative => write!(f, "tless-knative"),
+            EvalBaseline::AcclessKnative => write!(f, "accless-knative"),
         }
     }
 }
@@ -47,10 +47,10 @@ impl FromStr for EvalBaseline {
         match input {
             "faasm" => Ok(EvalBaseline::Faasm),
             "sgx-faasm" => Ok(EvalBaseline::SgxFaasm),
-            "tless-faasm" => Ok(EvalBaseline::TlessFaasm),
+            "accless-faasm" => Ok(EvalBaseline::AcclessFaasm),
             "knative" => Ok(EvalBaseline::Knative),
             "cc-knative" => Ok(EvalBaseline::CcKnative),
-            "tless-knative" => Ok(EvalBaseline::TlessKnative),
+            "accless-knative" => Ok(EvalBaseline::AcclessKnative),
             _ => Err(()),
         }
     }
@@ -61,10 +61,10 @@ impl EvalBaseline {
         static VARIANTS: [EvalBaseline; 6] = [
             EvalBaseline::Faasm,
             EvalBaseline::SgxFaasm,
-            EvalBaseline::TlessFaasm,
+            EvalBaseline::AcclessFaasm,
             EvalBaseline::Knative,
             EvalBaseline::CcKnative,
-            EvalBaseline::TlessKnative,
+            EvalBaseline::AcclessKnative,
         ];
         VARIANTS.iter()
     }
@@ -73,16 +73,17 @@ impl EvalBaseline {
         match self {
             EvalBaseline::Faasm => RGBColor(171, 222, 230),
             EvalBaseline::SgxFaasm => RGBColor(203, 170, 203),
-            EvalBaseline::TlessFaasm => RGBColor(255, 255, 181),
+            EvalBaseline::AcclessFaasm => RGBColor(255, 255, 181),
             EvalBaseline::Knative => RGBColor(255, 204, 182),
             EvalBaseline::CcKnative => RGBColor(243, 176, 195),
-            EvalBaseline::TlessKnative => RGBColor(151, 193, 169),
+            EvalBaseline::AcclessKnative => RGBColor(151, 193, 169),
         }
     }
 }
 
 #[derive(PartialEq)]
 pub enum EvalExperiment {
+    ColdStart,
     E2eLatency,
     E2eLatencyCold,
     ScaleUpLatency,
@@ -91,6 +92,7 @@ pub enum EvalExperiment {
 impl fmt::Display for EvalExperiment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EvalExperiment::ColdStart => write!(f, "cold-start"),
             EvalExperiment::E2eLatency => write!(f, "e2e-latency"),
             EvalExperiment::E2eLatencyCold => write!(f, "e2e-latency-cold"),
             EvalExperiment::ScaleUpLatency => write!(f, "scale-up-latency"),
@@ -165,7 +167,8 @@ impl Eval {
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency
+            EvalExperiment::ColdStart
+            | EvalExperiment::E2eLatency
             | EvalExperiment::E2eLatencyCold
             | EvalExperiment::ScaleUpLatency => {
                 writeln!(file, "Run,TimeMs").expect("invrs(eval): failed to write to file");
@@ -193,7 +196,8 @@ impl Eval {
             .expect("invrs(eval): failed to write to file");
 
         match exp {
-            EvalExperiment::E2eLatency
+            EvalExperiment::ColdStart
+            | EvalExperiment::E2eLatency
             | EvalExperiment::E2eLatencyCold
             | EvalExperiment::ScaleUpLatency => {
                 let duration: Duration = result.end_time - result.start_time;
@@ -337,7 +341,7 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
+                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
                         _ => panic!("woops"),
                     },
                 ),
@@ -346,7 +350,7 @@ impl Eval {
                     "TLESS_MODE",
                     match baseline {
                         EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
-                        EvalBaseline::TlessKnative => "on",
+                        EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
                 ),
@@ -410,7 +414,7 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::TlessKnative => "kata-qemu-sev",
+                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
                         _ => panic!("woops"),
                     },
                 ),
@@ -419,7 +423,7 @@ impl Eval {
                     "TLESS_MODE",
                     match baseline {
                         EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
-                        EvalBaseline::TlessKnative => "on",
+                        EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
                 ),
@@ -453,7 +457,7 @@ impl Eval {
     async fn wait_for_scale_to_zero() {
         loop {
             let output = Self::run_kubectl_cmd(&format!("-n tless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
-            debug!("tlessctl: waiting for a scale-down: out: {output}");
+            debug!("invrs: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
             if values.len() == 1 {
@@ -485,10 +489,10 @@ impl Eval {
             EvalExperiment::ScaleUpLatency => Command::new(trigger_cmd.clone())
                 .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
                 .output()
-                .expect("tlessctl(eval): failed to execute trigger command"),
+                .expect("invrs(eval): failed to execute trigger command"),
             _ => Command::new(trigger_cmd.clone())
                 .output()
-                .expect("tlessctl(eval): failed to execute trigger command"),
+                .expect("invrs(eval): failed to execute trigger command"),
         };
 
         match output.status.code() {
@@ -496,13 +500,13 @@ impl Eval {
                 debug!("{trigger_cmd:?}: executed succesfully");
             }
             Some(code) => {
-                let stderr = str::from_utf8(&output.stderr)
-                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                let stderr =
+                    str::from_utf8(&output.stderr).unwrap_or("invrs(eval): failed to get stderr");
                 panic!("{trigger_cmd:?}: exited with error (code: {code}): {stderr}");
             }
             None => {
-                let stderr = str::from_utf8(&output.stderr)
-                    .unwrap_or("tlessctl(eval): failed to get stderr");
+                let stderr =
+                    str::from_utf8(&output.stderr).unwrap_or("invrs(eval): failed to get stderr");
                 panic!("{trigger_cmd:?}: failed: {stderr}");
             }
         };
@@ -591,10 +595,10 @@ impl Eval {
         // Per-experiment, per-workflow clean-up
         match exp {
             EvalExperiment::E2eLatencyCold => {
-                debug!("tlesssctl: {exp}: waiting for scale-to-zero...");
+                debug!("invrs: {exp}: waiting for scale-to-zero...");
                 Self::wait_for_scale_to_zero().await;
             }
-            _ => debug!("tlessctl: {exp}: noting to clean-up after single execution"),
+            _ => debug!("invrs: {exp}: noting to clean-up after single execution"),
         }
 
         // Cautionary sleep between runs
@@ -629,20 +633,9 @@ impl Eval {
         let workflow_iter = match exp {
             // For the scale-up latency, we only run the FINRA workflow
             EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
             _ => AvailableWorkflow::iter_variants(),
         };
-        // Workflows::upload_workflow_state(&AvailableWorkflow::MlInference, EVAL_BUCKET_NAME, true).await;
-        let pb = Self::get_progress_bar(
-            workflow_iter.len().try_into().unwrap(),
-            exp,
-            &baseline,
-            "state",
-        );
-        for workflow in workflow_iter.clone() {
-            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await?;
-            pb.inc(1);
-        }
-        pb.finish();
 
         // Execute each workload individually
         // for workflow in vec![&AvailableWorkflow::MlInference] {
@@ -710,7 +703,6 @@ impl Eval {
 
     fn run_faasmctl_cmd(cmd: &str) -> String {
         debug!("invrs(eval): executing faasmctl command: {cmd}");
-        // let args: Vec<&str> = cmd.split_whitespace().collect();
         // Need to use shell_words to properly preserve double quotes
         let args = shell_words::split(cmd).unwrap();
 
@@ -729,19 +721,6 @@ impl Eval {
         stdout
     }
 
-    fn upload_wasm() {
-        // Upload state for different workflows from the experiments container
-        let docker_tag = Docker::get_docker_tag(&DockerContainer::Experiments);
-
-        for workflow in AvailableWorkflow::iter_variants() {
-            let ctr_path = format!("/usr/local/faasm/wasm/{workflow}");
-
-            Self::run_faasmctl_cmd(
-                &format!("upload.workflow {workflow} {docker_tag}:{ctr_path}").to_string(),
-            );
-        }
-    }
-
     fn epoch_ts_to_datetime(epoch_str: &str) -> DateTime<Utc> {
         let epoch_seconds: f64 = epoch_str.parse().unwrap();
         let secs = epoch_seconds as i64;
@@ -758,40 +737,14 @@ impl Eval {
     ) -> anyhow::Result<()> {
         let baseline = args.baseline[args_offset].clone();
 
-        // First, work out the WASM VM we need
-        let wasm_vm = match baseline {
-            EvalBaseline::Faasm => "wamr",
-            EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => "sgx",
-            _ => panic!("invrs(eval): should not be here"),
-        };
-
-        let tless_enabled = match baseline {
-            EvalBaseline::Faasm | EvalBaseline::SgxFaasm => "off",
-            EvalBaseline::TlessFaasm => "on",
-            _ => panic!("invrs(eval): should not be here"),
-        };
-
-        unsafe {
-            env::set_var("FAASM_WASM_VM", wasm_vm);
-            env::set_var("TLESS_ENABLED", tless_enabled);
-        }
-        // TODO: uncomment when deploying on k8s
-        // Self::run_faasmctl_cmd("deploy.k8s --workers=4");
-
-        // Second, work-out the MinIO URL
+        // Work-out the MinIO URL
         let mut minio_url = Self::run_faasmctl_cmd("s3.get-url");
         minio_url = minio_url.strip_suffix("\n").unwrap().to_string();
         unsafe {
             env::set_var("MINIO_URL", minio_url);
         }
 
-        async fn cleanup_single_execution(workflow: &AvailableWorkflow, exp: &EvalExperiment) {
-            S3::clear_dir(
-                EVAL_BUCKET_NAME.to_string(),
-                format!("{workflow}/exec-tokens"),
-            )
-            .await;
-
+        async fn cleanup_single_execution(exp: &EvalExperiment) {
             match exp {
                 EvalExperiment::E2eLatencyCold => {
                     debug!("Flushing Faasm workers and sleeping...");
@@ -806,26 +759,11 @@ impl Eval {
         let workflow_iter = match exp {
             // For the scale-up latency, we only run the FINRA workflow
             EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            // For the cold-start experiment, we only run part of the
+            // word count workflow
+            EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
             _ => AvailableWorkflow::iter_variants(),
         };
-
-        // Upload the state for all workflows
-        // TODO: undo me
-        let pb = Self::get_progress_bar(
-            workflow_iter.len().try_into().unwrap(),
-            exp,
-            &baseline,
-            "state",
-        );
-        for workflow in workflow_iter.clone() {
-            Workflows::upload_workflow_state(workflow, EVAL_BUCKET_NAME, true).await?;
-            pb.inc(1);
-        }
-        pb.finish();
-
-        // Upload the WASM files for all workflows
-        // TODO: add progress bar
-        // Self::upload_wasm();
 
         // Invoke each workflow
         for workflow in workflow_iter.clone() {
@@ -844,13 +782,18 @@ impl Eval {
             }
             let pb = Self::get_progress_bar(args.num_repeats.into(), exp, &baseline, &workflow_str);
 
-            let faasmctl_cmd = format!(
+            let mut faasmctl_cmd = format!(
                 "invoke {workflow} driver --cmdline \"{faasm_cmdline}\" --output-format start-end-ts"
             );
+            if *exp == EvalExperiment::ColdStart {
+                faasmctl_cmd =
+                    "invoke accless ubench-cold-start --output-format start-end-ts".to_string();
+            }
+
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_faasmctl_cmd(&faasmctl_cmd);
-                cleanup_single_execution(workflow, exp).await;
+                cleanup_single_execution(exp).await;
             }
 
             // Do actual experiment
@@ -868,7 +811,7 @@ impl Eval {
                 Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
                 // Clean-up
-                cleanup_single_execution(workflow, exp).await;
+                cleanup_single_execution(exp).await;
 
                 pb.inc(1);
             }
@@ -883,7 +826,7 @@ impl Eval {
     pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) -> anyhow::Result<()> {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
-                EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => {
+                EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
@@ -893,7 +836,7 @@ impl Eval {
                         _ => Self::run_knative_experiment(exp, args, i, 0).await?,
                     }
                 }
-                EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => {
+                EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
@@ -915,8 +858,8 @@ impl Eval {
 
     fn is_faasm_baseline(baseline: &EvalBaseline) -> bool {
         match baseline {
-            EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::TlessKnative => false,
-            EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::TlessFaasm => true,
+            EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => false,
+            EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => true,
         }
     }
 
@@ -1224,16 +1167,9 @@ impl Eval {
             }
 
             avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
-
-            /*
-            let y_val : f64 = avg_times[scale_up_factor - 1] as f64 / 1000.0;
-            if y_val > y_max {
-                y_max = y_val;
-            }
-            */
         }
 
-        let mut y_max: f64 = 200.0;
+        let y_max: f64 = 200.0;
         let mut plot_path = Env::proj_root();
         plot_path.push("eval");
         plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
@@ -1321,10 +1257,10 @@ impl Eval {
             match baseline {
                 EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
                 EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
-                EvalBaseline::TlessFaasm => (legend_x_start + 220, legend_y_pos),
+                EvalBaseline::AcclessFaasm => (legend_x_start + 220, legend_y_pos),
                 EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
                 EvalBaseline::CcKnative => (legend_x_start + 450, legend_y_pos),
-                EvalBaseline::TlessKnative => (legend_x_start + 580, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 580, legend_y_pos),
             }
         }
 
@@ -1361,15 +1297,76 @@ impl Eval {
         let data_files = Self::get_all_data_files(exp);
 
         match exp {
+            EvalExperiment::ColdStart => {
+                todo!("implement me!");
+            }
             EvalExperiment::E2eLatency => {
                 Self::plot_e2e_latency(&exp, &data_files)?;
             }
             EvalExperiment::E2eLatencyCold => {
                 Self::plot_e2e_latency(&exp, &data_files)?;
-
             }
             EvalExperiment::ScaleUpLatency => {
                 Self::plot_scale_up_latency(&data_files);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn upload_state(eval: &EvalExperiment) -> anyhow::Result<()> {
+        // Work-out the workflows to execute for each experiment
+        let workflow_iter = match eval {
+            // For the scale-up latency, we only run the FINRA workflow
+            EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
+            // For the cold-start experiment, we only run part of the
+            // word count workflow, but we don't need any state
+            EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
+            _ => AvailableWorkflow::iter_variants(),
+        };
+
+        // Upload the state for all workflows
+        for workflow in workflow_iter.clone() {
+            println!("uploading state for workflow: {workflow}");
+            Workflows::upload_workflow_state(
+                workflow,
+                EVAL_BUCKET_NAME,
+                true,
+                // For cold start, we only need to upload the DAG
+                match eval {
+                    EvalExperiment::ColdStart => true,
+                    _ => false,
+                },
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    pub fn upload_wasm(eval: &EvalExperiment) -> anyhow::Result<()> {
+        // Upload state for different workflows from the experiments container
+        let docker_tag = Docker::get_docker_tag(&DockerContainer::Experiments);
+
+        match eval {
+            EvalExperiment::ColdStart => {
+                let ctr_path = format!("/code/tless/ubench/build-wasm/accless-ubench-cold-start");
+
+                Self::run_faasmctl_cmd(
+                    &format!("upload ubench {docker_tag}:{ctr_path}").to_string(),
+                );
+            }
+            EvalExperiment::E2eLatency | EvalExperiment::E2eLatencyCold => {
+                for workflow in AvailableWorkflow::iter_variants() {
+                    let ctr_path = format!("/usr/local/faasm/wasm/{workflow}");
+
+                    Self::run_faasmctl_cmd(
+                        &format!("upload.workflow {workflow} {docker_tag}:{ctr_path}").to_string(),
+                    );
+                }
+            }
+            EvalExperiment::ScaleUpLatency => {
+                todo!();
             }
         }
 

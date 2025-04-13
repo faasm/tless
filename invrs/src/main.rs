@@ -93,10 +93,17 @@ enum EvalSubCommand {
     Run(EvalRunArgs),
     /// Plot
     Plot {},
+    UploadState {},
+    UploadWasm {},
 }
 
 #[derive(Debug, Subcommand)]
 enum EvalCommand {
+    /// Measure the CDF of cold-starts with or w/out our access control
+    ColdStart {
+        #[command(subcommand)]
+        eval_sub_command: EvalSubCommand,
+    },
     /// Evaluate end-to-end execution latency for different workflows
     E2eLatency {
         #[command(subcommand)]
@@ -303,12 +310,32 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Eval { eval_command } => match eval_command {
+            EvalCommand::ColdStart { eval_sub_command } => match eval_sub_command {
+                EvalSubCommand::Run(run_args) => {
+                    Eval::run(&EvalExperiment::ColdStart, run_args).await?;
+                }
+                EvalSubCommand::Plot {} => {
+                    Eval::plot(&EvalExperiment::ColdStart)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::ColdStart).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::ColdStart)?;
+                }
+            },
             EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
                     Eval::run(&EvalExperiment::E2eLatency, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatency)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::E2eLatency).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::E2eLatency)?;
                 }
             },
             EvalCommand::E2eLatencyCold { eval_sub_command } => match eval_sub_command {
@@ -318,6 +345,12 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatencyCold)?;
                 }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::E2eLatencyCold).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::E2eLatencyCold)?;
+                }
             },
             EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
@@ -325,6 +358,12 @@ async fn main() -> anyhow::Result<()> {
                 }
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::ScaleUpLatency)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::ScaleUpLatency).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::ScaleUpLatency)?;
                 }
             },
         },
