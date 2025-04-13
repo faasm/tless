@@ -71,6 +71,12 @@ then you may run the experiment with
 invrs eval cold-start run --baseline [faasm,sgx-faasm,accless-faasm] --num-repeats 20
 ```
 
+finally, you can plot it with
+
+```bash
+invrs eval cold-start plot
+```
+
 ## Reproduce measurments in table
 
 ### SGX-Faasm
