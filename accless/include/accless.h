@@ -18,9 +18,9 @@
 // of WASM. For correct WASM linkage, these symbols also need to be listed in
 // workflows/libs/tless/libtless.imports
 extern "C" {
-int32_t __tless_is_enabled();
-void __tless_get_attestation_jwt(char **jwt, int32_t *jwtSize);
-void __tless_get_mrenclave(uint8_t *buf, int32_t bufSize);
+int32_t __accless_is_enabled();
+void __accless_get_attestation_jwt(char **jwt, int32_t *jwtSize);
+void __accless_get_mrenclave(uint8_t *buf, int32_t bufSize);
 }
 #endif
 
@@ -30,7 +30,7 @@ void __tless_get_mrenclave(uint8_t *buf, int32_t bufSize);
  * - Decrypt/Encrypt function input/output
  * - Decrypt/Encrypt S3 input/output
  */
-namespace tless {
+namespace accless {
 // Return whether we must use TLess chaining protection mechanisms or not
 bool on();
 

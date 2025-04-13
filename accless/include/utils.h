@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace tless::utils {
+namespace accless::utils {
 std::string byteArrayToHexString(const uint8_t *data, int dataSize);
 
 std::vector<uint8_t> base64Decode(const std::string& input);
@@ -19,4 +19,4 @@ void doAddKeyBytes(const std::string &bucketName, const std::string &key,
 void doAddKeyBytes(const std::string &bucketName, const std::string &key,
                    const std::vector<uint8_t> &bytes);
 #endif
-} // namespace tless::utils
+} // namespace accless::utils

@@ -14,11 +14,10 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 9797ec398f242cb7b37def798748f392cb170998 \
+    && git checkout b3beb98403ddf2a21255e03a1c894d9c60a287a8 \
     && git submodule update --init -f cpp \
-    && git clone https://github.com/faasm/tless /code/tless \
-    # TODO: why do we need this? for faasmtools? we don't actually
-    && cp -r /code/tless/workflows /code/faasm-examples/
+    && pip3 install /code/faasm-examples/cpp \
+    && git clone https://github.com/faasm/tless /code/tless
 
 # Build specific libraries we need
 RUN cd /code/faasm-examples/cpp \
@@ -37,8 +36,6 @@ RUN cd /code/faasm-examples/cpp \
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
-RUN cd /code/faasm-examples \
-    # Install faasmtools
-    && ./bin/create_venv.sh \
-    && source ./venv/bin/activate
+RUN cd /code/tless \
+    && python3 ./ubench/build.py
     # && python3 ./workflows/build.py

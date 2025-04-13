@@ -17,10 +17,17 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(${CMAKE_PROJECT_TARGET}
-    ./src/tless.cpp
+    ./src/accless.cpp
     ./src/dag.cpp
     ./src/utils.cpp
 )
+
+# TODO: for the time being we need to comment this if out if we want UBENCH
+# in WASM because there is  no easy way to pass CMake vars to `wasm_cmake` in
+# faasmtools
+if (ACCLESS_UBENCH)
+    target_compile_definitions(${CMAKE_PROJECT_TARGET} PUBLIC ACCLESS_UBENCH)
+endif ()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # The WASM version of the library relies on a pre-populated sysroot as part

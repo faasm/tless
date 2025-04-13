@@ -4,9 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#define TLESS_CHAIN_GENESIS "G3N0SY5"
-
-namespace tless::dag {
+namespace accless::dag {
 
 struct DagNode {
     // We assume function names in the DAG are unique

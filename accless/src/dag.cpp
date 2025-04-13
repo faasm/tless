@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace tless::dag {
+namespace accless::dag {
 static DagChains parseChains(const std::vector<DagNode> &funcs) {
     std::unordered_map<std::string, std::vector<std::string>> chains;
 
@@ -21,10 +21,10 @@ static DagChains parseChains(const std::vector<DagNode> &funcs) {
                 }
             }
             if (!validChain) {
-                std::cerr << "tless(dag): invalid chainsTo reference: "
+                std::cerr << "accless(dag): invalid chainsTo reference: "
                           << func.chainsTo << std::endl;
                 throw std::runtime_error(
-                    "tless(dag): invalid chainsTo reference: " + func.chainsTo);
+                    "accless(dag): invalid chainsTo reference: " + func.chainsTo);
             }
 
             chains[func.name].push_back(func.chainsTo);
@@ -35,7 +35,7 @@ static DagChains parseChains(const std::vector<DagNode> &funcs) {
 }
 
 // Implements the de-serialization protocol complementary to the serialization
-// one that we implement in tlessctl/src/tasks/dag.rs
+// one that we implement in invrs/src/tasks/dag.rs
 Dag deserialize(const std::vector<uint8_t> &data) {
     Dag dag;
     std::istringstream stream(std::string(data.begin(), data.end()));
@@ -119,4 +119,4 @@ getFuncChainFromCertChain(const std::string &certChain) {
 
     return funcChain;
 }
-} // namespace tless::dag
+} // namespace accless::dag

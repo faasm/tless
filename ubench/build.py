@@ -11,7 +11,7 @@ UBENCHS = {
 }
 
 
-def compile(wasm=False, native=False, debug=False):
+def compile(wasm=False, native=False, debug=False, time=False):
     """
     Compile the different microbenchmarks
     """
@@ -23,6 +23,7 @@ def compile(wasm=False, native=False, debug=False):
     for ubench in UBENCHS:
         code_dir = join(UBENCH_ROOT, ubench)
         if wasm:
+            # TODO: cannot set -DACCLESS_UBENCH easily
             wasm_cmake(
                 code_dir,
                 build_dir,
@@ -36,6 +37,7 @@ def compile(wasm=False, native=False, debug=False):
             cmake_cmd = [
                 "cmake",
                 "-GNinja",
+                "-DACCLESS_UBENCH" if time else "",
                 "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
                 "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
                 "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
@@ -54,7 +56,8 @@ if __name__ == "__main__":
     elif len(argv) == 2 and argv[1] == "--clean":
         rmtree(join(UBENCH_ROOT, "build-native"), ignore_errors=True)
         rmtree(join(UBENCH_ROOT, "build-wasm"), ignore_errors=True)
+    time = len(argv) == 2 and argv[1] == "--time"
 
     # Build the microbenchmarks
-    compile(wasm=True, debug=debug)
-    compile(native=True, debug=debug)
+    compile(wasm=True, debug=debug, time=time)
+# compile(native=True, debug=debug, time=time)

@@ -11,7 +11,7 @@ extern "C" {
 #include <string>
 #include <vector>
 
-namespace tless::utils {
+namespace accless::utils {
 std::string byteArrayToHexString(const uint8_t *data, int dataSize) {
     std::stringstream ss;
     ss << std::hex;
@@ -58,7 +58,7 @@ std::vector<uint8_t> doGetKeyBytes(const std::string &bucketName,
                                    bool tolerateMissing) {
     uint8_t *ptr;
     int32_t len;
-    int ret = __faasm_s3_get_key_bytes("tless", key.c_str(), &ptr, &len,
+    int ret = __faasm_s3_get_key_bytes(bucketName.c_str(), key.c_str(), &ptr, &len,
                                        tolerateMissing);
 
     if (len == 0 && tolerateMissing) {
@@ -74,14 +74,14 @@ std::vector<uint8_t> doGetKeyBytes(const std::string &bucketName,
 
 void doAddKeyBytes(const std::string &bucketName, const std::string &key,
                    const std::string &bytes) {
-    __faasm_s3_add_key_bytes("tless", key.c_str(), (void *)bytes.c_str(),
+    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(), (void *)bytes.c_str(),
                              bytes.size(), true);
 }
 
 void doAddKeyBytes(const std::string &bucketName, const std::string &key,
                    const std::vector<uint8_t> &bytes) {
-    __faasm_s3_add_key_bytes("tless", key.c_str(), (void *)bytes.data(),
+    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(), (void *)bytes.data(),
                              bytes.size(), true);
 }
 #endif
-} // namespace tless::utils
+} // namespace accless::utils
