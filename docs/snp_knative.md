@@ -43,3 +43,6 @@ index aefa1ffdf..448d2264c 100644
 we also need to re-build our `nydus-image` binary, as it links with the wrong
 GLIBC version. This is because the gallery image we use is based on 22.04.
 We can follow the instructions in `sc2-sys/deploy/docker/nydus.dockerfile`.
+
+Lastly, we need to update the kata-agent to mount the vTPM device, by default,
+to all containers.

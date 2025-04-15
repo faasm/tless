@@ -35,7 +35,7 @@ RUN wget https://www.openssl.org/source/openssl-3.3.2.tar.gz \
     && apt update \
     && apt install -y \
         autoconf-archive \
-        libformat-dev \
+        libfmt-dev \
         libgcrypt-dev \
         libjson-c-dev \
         uuid-dev \
@@ -58,10 +58,11 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout b3beb98403ddf2a21255e03a1c894d9c60a287a8 \
+    && git checkout 9f157aa06131c6af9a102531edcf39893322908a \
     && git submodule update --init -f cpp \
     && pip3 install /code/faasm-examples/cpp \
-    && git clone https://github.com/faasm/tless /code/tless
+    # TODO: remove branch before merge
+    && git clone -b snp-knative https://github.com/faasm/tless /code/tless
 
 # Build specific libraries we need
 RUN cd /code/faasm-examples/cpp \
