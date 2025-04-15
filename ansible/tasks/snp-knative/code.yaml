@@ -1,0 +1,63 @@
+---
+
+- name: "Create code dir"
+  file:
+    path: "/home/{{ ansible_user }}/git"
+    state: directory
+
+- name: "Clone Faasm repos"
+  git:
+    repo: "https://www.github.com/faasm/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/faasm/{{ item }}"
+    update: yes
+    recursive: yes
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "examples"
+    - "rabe"
+    - "tless-jwt"
+    - "tless"
+
+- name: "Clone SC2 repos"
+  git:
+    repo: "https://www.github.com/sc2-sys/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/sc2-sys/{{ item }}"
+    depth: 1
+    update: yes
+    recursive: no
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "deploy"
+
+- name: "Clone virtee repos"
+  git:
+    repo: "https://www.github.com/virtee/{{ item }}.git"
+    dest: "/home/{{ ansible_user }}/git/virtee/{{ item }}"
+    depth: 1
+    update: yes
+    recursive: no
+    clone: yes
+    force: yes
+    accept_hostkey: yes
+  with_items:
+    - "snphost"
+
+# TODO: delete me before merge
+- name: "Clone Accless branch"
+  git:
+    repo: "https://www.github.com/faasm/tless.git"
+    dest: "/home/{{ ansible_user }}/git/faasm/tless"
+    version: snp-knative
+    force: yes
+
+# TODO: delete me before merge
+- name: "Clone SC2 branch"
+  git:
+    repo: "https://www.github.com/sc2-sys/deploy.git"
+    dest: "/home/{{ ansible_user }}/git/sc2-sys/deploy"
+    version: az-tests
+    force: yes

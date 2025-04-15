@@ -12,7 +12,7 @@ pushd ${PROJ_ROOT}>>/dev/null
 
 export PROJ_ROOT=${PROJ_ROOT}
 export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
-export PS1="(tless) $PS1"
+export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
 # alias tlessctl="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
@@ -64,7 +64,7 @@ source ${VENV_PATH}/bin/activate
 
 echo ""
 echo "----------------------------------"
-echo "TLess Experiments CLI"
+echo "Accless CLI"
 echo "Version: ${TLESS_VERSION}"
 echo "Project root: ${PROJ_ROOT}"
 echo "----------------------------------"
