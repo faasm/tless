@@ -16,11 +16,3 @@
     accept_hostkey: yes
   with_items:
     - "tless"
-
-# TODO: delete me before merge
-- name: "Clone tless branch"
-  git:
-    repo: "https://www.github.com/faasm/tless.git"
-    dest: "/home/{{ ansible_user }}/git/faasm/tless"
-    version: cold-starts
-    force: yes

@@ -22,14 +22,6 @@
     - "tless"
 
 # TODO: delete me before merge
-- name: "Clone tless branch"
-  git:
-    repo: "https://www.github.com/faasm/tless.git"
-    dest: "/home/{{ ansible_user }}/git/faasm/tless"
-    version: cold-starts
-    force: yes
-
-# TODO: delete me before merge
 - name: "Clone faasm branch"
   git:
     repo: "https://www.github.com/faasm/faasm.git"
