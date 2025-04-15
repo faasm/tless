@@ -16,7 +16,8 @@
 
 using namespace attest;
 
-#define SNP_GET_REPORT _IOC(_IOC_READ | _IOC_WRITE, 0x53, 0, sizeof(SnpReportRequest))
+#define SNP_GET_REPORT                                                         \
+    _IOC(_IOC_READ | _IOC_WRITE, 0x53, 0, sizeof(SnpReportRequest))
 
 namespace accless::attestation {
 void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
@@ -91,12 +92,13 @@ void tpmRenewAkCert() {
 /******************************************************************************/
 
 // This method fetches the SNP attestation report from /dev/sev-guest:
-// - message_version is not used in this simple example, but is kept for interface compatibility.
+// - message_version is not used in this simple example, but is kept for
+// interface compatibility.
 // - unique_data: Optional 64-byte data to be included in the report.
 // - vmpl: Optional VMPL level.
-std::vector<uint8_t> getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> unique_data,
-                                         std::optional<uint32_t> vmpl)
-{
+std::vector<uint8_t>
+getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> unique_data,
+                    std::optional<uint32_t> vmpl) {
     // Open the SEV-SNP guest device.
     int fd = open("/dev/sev-guest", O_RDONLY);
     if (fd < 0) {
@@ -124,7 +126,8 @@ std::vector<uint8_t> getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> 
 
     // Check firmware status.
     if (req.status != 0) {
-        std::cerr << "accless(att): firmware reported error: " << req.status << std::endl;
+        std::cerr << "accless(att): firmware reported error: " << req.status
+                  << std::endl;
         throw std::runtime_error("firmware reported error");
     }
 
@@ -132,8 +135,8 @@ std::vector<uint8_t> getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> 
     return report;
 }
 
-std::vector<uint8_t> getSnpReport(std::optional<std::array<uint8_t, 64>> reportData)
-{
+std::vector<uint8_t>
+getSnpReport(std::optional<std::array<uint8_t, 64>> reportData) {
     if (std::filesystem::exists("/dev/sev-guest")) {
         return getSnpReportFromDev(reportData, std::nullopt);
     }
@@ -142,7 +145,8 @@ std::vector<uint8_t> getSnpReport(std::optional<std::array<uint8_t, 64>> reportD
         return getSnpReportFromTPM();
     }
 
-    std::cerr << "accless(att): no known SNP device found for attestation" << std::endl;
+    std::cerr << "accless(att): no known SNP device found for attestation"
+              << std::endl;
     throw std::runtime_error("No known SNP device found!");
 }
 
@@ -206,4 +210,4 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
 
     return jwt;
 }
-} // namespace accless::azure_cvm_attestation
+} // namespace accless::attestation
