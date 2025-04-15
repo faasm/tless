@@ -170,6 +170,10 @@ enum S3Command {
         #[arg(long)]
         key: String,
     },
+    GetUrl {
+        /// Whereas we are using S3 with 'faasm' or 'knative'
+        system: String,
+    },
     /// List all buckets in an S3 server
     ListBuckets {},
     /// List all keys in an S3 bucket
@@ -403,6 +407,10 @@ async fn main() -> anyhow::Result<()> {
             S3Command::GetKey { bucket_name, key } => {
                 let key_contents = S3::get_key(bucket_name, key).await;
                 println!("{key_contents}");
+            }
+            S3Command::GetUrl { system } => {
+                let url = S3::get_url(system);
+                println!("{url}");
             }
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;

@@ -880,7 +880,9 @@ impl Eval {
 
     fn is_faasm_baseline(baseline: &EvalBaseline) -> bool {
         match baseline {
-            EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => false,
+            EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
+                false
+            }
             EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => true,
         }
     }

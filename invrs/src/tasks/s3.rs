@@ -10,10 +10,11 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::{S3Api, ToStream};
-use std::path::{Path, PathBuf};
 use std::{
     env, fs,
     io::{Read, Write},
+    path::{Path, PathBuf},
+    process::Command,
     thread, time,
 };
 
@@ -284,6 +285,36 @@ impl S3 {
 
             debug!("invrs(s3): waiting for key ({key_name})...");
             thread::sleep(time::Duration::from_secs(2));
+        }
+    }
+
+    pub fn get_url(system: &str) -> String {
+        match system {
+            "faasm" => {
+                let output = Command::new("faasmctl")
+                    .arg("s3.get-url")
+                    .output()
+                    .expect("invrs(s3): failed to execute faasmctl command");
+
+                String::from_utf8(output.stdout)
+                    .expect("invrs(eval): failed to convert faasmctl command output to string")
+                    .strip_suffix("\n")
+                    .unwrap()
+                    .to_string()
+            }
+            "knative" => {
+                let cmd = "-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}";
+                let args: Vec<&str> = cmd.split_whitespace().collect();
+
+                let output = Command::new("kubectl")
+                    .args(&args[0..])
+                    .output()
+                    .expect("invrs(s3): failed to execute kubectl command");
+
+                String::from_utf8(output.stdout)
+                    .expect("invrs(s3): failed to convert kube command output to string")
+            }
+            _ => panic!("invrs(s3): error getting S3 url, unrecognized system: {system}"),
         }
     }
 
