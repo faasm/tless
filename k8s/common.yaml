@@ -5,16 +5,16 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: tless
+  name: accless
 ---
 # All workflows share a common storage backend with MinIO
 apiVersion: v1
 kind: Pod
 metadata:
   name: minio
-  namespace: tless
+  namespace: accless
   labels:
-    tless.workflows/name: minio
+    accless.workflows/name: minio
 spec:
   containers:
     - name: minio-main
@@ -39,11 +39,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: tless
+  namespace: accless
 spec:
   type: NodePort
   ports:
     - port: 9000
       targetPort: 9000
   selector:
-    tless.workflows/name: minio
+    accless.workflows/name: minio
