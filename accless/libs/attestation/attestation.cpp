@@ -1,16 +1,24 @@
-#include "azure_cvm_attestation.h"
+#include "attestation.h"
 
 // Includes from Azure Guest Attestation library
 #include "AttestationLogger.h"
 #include "HclReportParser.h"
 #include "TpmCertOperations.h"
 
+#include <array>
 #include <curl/curl.h>
+#include <fcntl.h>
+#include <filesystem>
+#include <optional>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <vector>
 
 using namespace attest;
 
-namespace accless::azure_cvm_attestation {
+#define SNP_GET_REPORT _IOC(_IOC_READ | _IOC_WRITE, 0x53, 0, sizeof(SnpReportRequest))
+
+namespace accless::attestation {
 void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
                  const char *function, const int line, const char *fmt, ...) {
     va_list args;
@@ -77,6 +85,70 @@ void tpmRenewAkCert() {
         }
     }
 }
+
+/******************************************************************************/
+/* SNP Related Methods                                                */
+/******************************************************************************/
+
+// This method fetches the SNP attestation report from /dev/sev-guest:
+// - message_version is not used in this simple example, but is kept for interface compatibility.
+// - unique_data: Optional 64-byte data to be included in the report.
+// - vmpl: Optional VMPL level.
+std::vector<uint8_t> getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> unique_data,
+                                         std::optional<uint32_t> vmpl)
+{
+    // Open the SEV-SNP guest device.
+    int fd = open("/dev/sev-guest", O_RDONLY);
+    if (fd < 0) {
+        std::cerr << "accless(att): failed to open /dev/sev-guest" << std::endl;
+        throw std::runtime_error("Failed to open /dev/sev-guest");
+    }
+
+    // Prepare the request structure.
+    SnpReportRequest req;
+    std::memset(&req, 0, sizeof(req));
+    req.size = sizeof(req);
+    req.vmpl = vmpl.value_or(0); // Use provided vmpl or default to 0.
+    if (unique_data.has_value()) {
+        std::memcpy(req.data, unique_data->data(), unique_data->size());
+    }
+    // Note: message_version is not directly used here.
+
+    // Perform the IOCTL call to fetch the report.
+    if (ioctl(fd, SNP_GET_REPORT, &req) < 0) {
+        close(fd);
+        std::cerr << "accless(att): ioctl SNP_GET_REPORT failed" << std::endl;
+        throw std::runtime_error("ioctl SNP_GET_REPORT failed");
+    }
+    close(fd);
+
+    // Check firmware status.
+    if (req.status != 0) {
+        std::cerr << "accless(att): firmware reported error: " << req.status << std::endl;
+        throw std::runtime_error("firmware reported error");
+    }
+
+    std::vector<uint8_t> report(req.report, req.report + REPORT_BUFFER_SIZE);
+    return report;
+}
+
+std::vector<uint8_t> getSnpReport(std::optional<std::array<uint8_t, 64>> reportData)
+{
+    if (std::filesystem::exists("/dev/sev-guest")) {
+        return getSnpReportFromDev(reportData, std::nullopt);
+    }
+
+    if (std::filesystem::exists("/dev/tpmrm0")) {
+        return getSnpReportFromTPM();
+    }
+
+    std::cerr << "accless(att): no known SNP device found for attestation" << std::endl;
+    throw std::runtime_error("No known SNP device found!");
+}
+
+/******************************************************************************/
+/* Attestation Service Methods                                                */
+/******************************************************************************/
 
 // Get the URL of our own attestation service (**not** MAA)
 std::string getAttestationServiceUrl() {

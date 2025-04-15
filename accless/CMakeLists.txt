@@ -52,12 +52,12 @@ else ()
         /usr/local/attestationssl/lib64
     )
 
-    add_subdirectory(./libs/azure-cvm-attestation)
+    add_subdirectory(./libs/attestation)
     add_subdirectory(./libs/s3)
 
     set(ACCLESS_LIBRARIES
         accless::s3
-        accless::azure-cvm-attestation
+        accless::attestation
         # We use the installed curl as part of azure-cvm-attestation
         /usr/local/attestationcurl/lib/libcurl.a
         # Order matters: librabe-cpp must preceede librabe

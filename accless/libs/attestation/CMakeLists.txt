@@ -1,4 +1,4 @@
-set(CMAKE_PROJECT_TARGET accless_azure_cvm_attestation)
+set(CMAKE_PROJECT_TARGET attestation)
 
 include(FetchContent)
 
@@ -16,8 +16,8 @@ set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
     ${azguestattestation_SOURCE_DIR}/external/jsoncpp-0.10.7/include
 )
 
-add_library(${CMAKE_PROJECT_TARGET} azure_cvm_attestation.cpp)
+add_library(${CMAKE_PROJECT_TARGET} attestation.cpp)
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC azguestattestation curl)
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${AZ_GUEST_ATTESTATION_INCLUDE_DIRS})
 
-add_library(accless::azure-cvm-attestation ALIAS ${CMAKE_PROJECT_TARGET})
+add_library(accless::attestation ALIAS ${CMAKE_PROJECT_TARGET})

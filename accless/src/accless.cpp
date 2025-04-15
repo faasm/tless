@@ -10,7 +10,7 @@
 // Faasm includes
 #include <faasm/core.h>
 #else
-#include "azure-cvm-attestation/azure_cvm_attestation.h"
+#include "attestation/attestation.h"
 #include "s3/S3Wrapper.hpp"
 #endif
 
@@ -93,11 +93,9 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
     __accless_get_attestation_jwt(&jwt, &jwtSize);
     std::string jwtStr(jwt);
 #else
-    // Renew TPM certs if needed
-    accless::azure_cvm_attestation::tpmRenewAkCert();
-    auto snpReport = accless::azure_cvm_attestation::getSnpReportFromTPM();
-    std::string jwtStr =
-        accless::azure_cvm_attestation::asGetJwtFromReport(snpReport);
+    // TODO: instead of a nullopt we can pass a public key here
+    auto snpReport = accless::attestation::getSnpReport(std::nullopt);
+    std::string jwtStr = accless::attestation::asGetJwtFromReport(snpReport);
 #endif
 
 #ifdef ACCLESS_UBENCH

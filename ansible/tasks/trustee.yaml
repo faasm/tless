@@ -1,5 +1,5 @@
 - name: "Build KBS"
-  shell: make cli CLI_FEATURES=sample_only,az-snp-vtpm-attester
+  shell: make cli CLI_FEATURES=sample_only,az-snp-vtpm-attester,sgx-attester
   args:
     chdir: "/home/{{ ansible_user }}/git/confidential-containers/trustee/kbs"
     executable: /bin/bash

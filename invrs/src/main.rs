@@ -664,11 +664,13 @@ async fn main() -> anyhow::Result<()> {
                     // DC2 is 62.78$/month
                     // DC4 is DC2 * 2
                     // DC8 is DC2 * 4
-                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");
+                    Azure::create_snp_guest("tless-trustee-client-snp", "Standard_DC2as_v5");
+                    Azure::create_sgx_vm("tless-trustee-client-sgx", "Standard_DC2as_v5");
                     Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5");
 
                     // Open port 8080 on the server VM
-                    Azure::open_vm_ports("tless-trustee-client", &[22]);
+                    Azure::open_vm_ports("tless-trustee-client-snp", &[22]);
+                    Azure::open_vm_ports("tless-trustee-client-sgx", &[22]);
                     Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
                 }
                 AzureSubCommand::Provision {} => {
@@ -730,7 +732,8 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("tless-trustee-server");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-trustee-client");
+                    Azure::delete_snp_guest("tless-trustee-client-snp");
+                    Azure::delete_sgx_vm("tless-trustee-client-sgx");
                     Azure::delete_snp_guest("tless-trustee-server");
                 }
             },
