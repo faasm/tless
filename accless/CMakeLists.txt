@@ -42,18 +42,36 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
 
     set(ACCLESS_HEADERS ${CMAKE_CURRENT_LIST_DIR}/include)
 else ()
+    # This lines do not suppress the warning
+    set(MY_CUSTOM_RPATH "/usr/local/attestationcurl/lib;/usr/local/attestationssl/lib64")
+    set(CMAKE_BUILD_RPATH "${MY_CUSTOM_RPATH}")
+    set(CMAKE_INSTALL_RPATH "${MY_CUSTOM_RPATH}")
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+    target_link_directories(${CMAKE_PROJECT_TARGET} PRIVATE BEFORE
+        /usr/local/attestationcurl/lib
+        /usr/local/attestationssl/lib64
+    )
+
+    add_subdirectory(./libs/azure-cvm-attestation)
     add_subdirectory(./libs/s3)
 
     set(ACCLESS_LIBRARIES
         accless::s3
+        accless::azure-cvm-attestation
+        # We use the installed curl as part of azure-cvm-attestation
+        /usr/local/attestationcurl/lib/libcurl.a
         # Order matters: librabe-cpp must preceede librabe
         "/usr/local/lib/rabe/librabe-cpp.a"
         "/usr/local/lib/rabe/librabe.a"
+        # Same for JWT
+        "/usr/local/lib/tless-jwt/libtless-jwt-cpp.a"
+        "/usr/local/lib/tless-jwt/libtless_jwt.a"
     )
     set(ACCLESS_HEADERS
         ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/libs
         "/usr/include/rabe"
+        "/usr/include/tless-jwt"
     )
 endif()
 

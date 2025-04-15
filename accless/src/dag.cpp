@@ -24,7 +24,8 @@ static DagChains parseChains(const std::vector<DagNode> &funcs) {
                 std::cerr << "accless(dag): invalid chainsTo reference: "
                           << func.chainsTo << std::endl;
                 throw std::runtime_error(
-                    "accless(dag): invalid chainsTo reference: " + func.chainsTo);
+                    "accless(dag): invalid chainsTo reference: " +
+                    func.chainsTo);
             }
 
             chains[func.name].push_back(func.chainsTo);

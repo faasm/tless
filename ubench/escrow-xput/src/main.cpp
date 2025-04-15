@@ -512,6 +512,8 @@ void runOnce(bool maa = false) {
         std::cout << "out: " << jwtStr << std::endl;
     }
 
+    // TODO: jwtStr is now a JWE, so we must decrypt it
+
     decrypt(jwtStr, ctx, cipherText);
 }
 

@@ -356,7 +356,7 @@ impl Azure {
             "az vm create --resource-group {AZURE_RESOURCE_GROUP} \
             --name {vm_name} --admin-username {AZURE_USERNAME} --location \
             {AZURE_LOCATION} --ssh-key-value {AZURE_SSH_PUB_KEY} \
-            --image {AZURE_SNP_CC_VM_SIZE} --size {vm_sku} --os-disk-size-gb 64 \
+            --image {AZURE_SNP_CC_VM_SIZE} --size {vm_sku} --os-disk-size-gb 128 \
             --accelerated-networking true --accept-term"
         );
         Self::run_cmd(&az_cmd, "error deploying snp cc-vm");

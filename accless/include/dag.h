@@ -29,4 +29,4 @@ std::vector<std::string>
 getFuncChainFromCertChain(const std::vector<uint8_t> &certChain);
 std::vector<std::string>
 getFuncChainFromCertChain(const std::string &certChain);
-} // namespace tless::dag
+} // namespace accless::dag

@@ -59,5 +59,5 @@ if __name__ == "__main__":
     time = len(argv) == 2 and argv[1] == "--time"
 
     # Build the microbenchmarks
-    compile(wasm=True, debug=debug, time=time)
-# compile(native=True, debug=debug, time=time)
+    # compile(wasm=True, debug=debug, time=time)
+    compile(native=True, debug=debug, time=time)

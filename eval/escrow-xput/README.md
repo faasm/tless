@@ -26,7 +26,7 @@ As a consequence, when running the [Trustee](#trustee) and [Managed HSM](
 This experiment deliberately ignores phases involved in the set-up, like
 generating key material inside the cVM, or attesting the Trustee, Managed HSM,
 or Azure Attestation service. A full breakdown of the overheads of access
-control can be found in TODO WHICH EXPERIMENT.
+control can be found in the [cold-start](../../eval/cold-start/README.md).
 
 ## Accless
 

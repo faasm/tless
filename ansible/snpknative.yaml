@@ -8,6 +8,7 @@
     # latter also means we can use docker without sudo (which also requires a
     # reboot)
     - include_tasks: tasks/util/docker.yaml
+    - include_tasks: tasks/util/vim.yaml
     - include_tasks: tasks/snp-knative/update_host_kernel.yaml
     - include_tasks: tasks/snp-knative/qemu.yaml
     - include_tasks: tasks/util/rust.yaml

@@ -1,5 +1,7 @@
 # SGX-Faasm
 
+TODO(docs): explain SGX-Faasm design
+
 ## Deploy
 
 For the time being, we deploy SGX-Faasm on an SGXv2 VM on Azure, and deploy

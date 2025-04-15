@@ -23,11 +23,10 @@ std::string byteArrayToHexString(const uint8_t *data, int dataSize) {
     return ss.str();
 }
 
-std::vector<uint8_t> base64Decode(const std::string& input) {
-    const std::string base64Chars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz"
-        "0123456789+/";
+std::vector<uint8_t> base64Decode(const std::string &input) {
+    const std::string base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                    "abcdefghijklmnopqrstuvwxyz"
+                                    "0123456789+/";
 
     auto isBase64 = [](unsigned char c) {
         return (isalnum(c) || (c == '+') || (c == '/'));
@@ -38,7 +37,8 @@ std::vector<uint8_t> base64Decode(const std::string& input) {
     int valb = -8;
 
     for (unsigned char c : input) {
-        if (!isBase64(c)) break;
+        if (!isBase64(c))
+            break;
 
         val = (val << 6) + base64Chars.find(c);
         valb += 6;
@@ -58,8 +58,8 @@ std::vector<uint8_t> doGetKeyBytes(const std::string &bucketName,
                                    bool tolerateMissing) {
     uint8_t *ptr;
     int32_t len;
-    int ret = __faasm_s3_get_key_bytes(bucketName.c_str(), key.c_str(), &ptr, &len,
-                                       tolerateMissing);
+    int ret = __faasm_s3_get_key_bytes(bucketName.c_str(), key.c_str(), &ptr,
+                                       &len, tolerateMissing);
 
     if (len == 0 && tolerateMissing) {
         return std::vector<uint8_t>();
@@ -74,14 +74,14 @@ std::vector<uint8_t> doGetKeyBytes(const std::string &bucketName,
 
 void doAddKeyBytes(const std::string &bucketName, const std::string &key,
                    const std::string &bytes) {
-    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(), (void *)bytes.c_str(),
-                             bytes.size(), true);
+    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(),
+                             (void *)bytes.c_str(), bytes.size(), true);
 }
 
 void doAddKeyBytes(const std::string &bucketName, const std::string &key,
                    const std::vector<uint8_t> &bytes) {
-    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(), (void *)bytes.data(),
-                             bytes.size(), true);
+    __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(),
+                             (void *)bytes.data(), bytes.size(), true);
 }
 #endif
 } // namespace accless::utils

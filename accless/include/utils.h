@@ -7,7 +7,7 @@
 namespace accless::utils {
 std::string byteArrayToHexString(const uint8_t *data, int dataSize);
 
-std::vector<uint8_t> base64Decode(const std::string& input);
+std::vector<uint8_t> base64Decode(const std::string &input);
 
 #ifdef __faasm
 std::vector<uint8_t> doGetKeyBytes(const std::string &bucketName,

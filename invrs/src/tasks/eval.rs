@@ -24,7 +24,7 @@ pub enum EvalBaseline {
     SgxFaasm,
     AcclessFaasm,
     Knative,
-    CcKnative,
+    SnpKnative,
     AcclessKnative,
 }
 
@@ -35,7 +35,7 @@ impl fmt::Display for EvalBaseline {
             EvalBaseline::SgxFaasm => write!(f, "sgx-faasm"),
             EvalBaseline::AcclessFaasm => write!(f, "accless-faasm"),
             EvalBaseline::Knative => write!(f, "knative"),
-            EvalBaseline::CcKnative => write!(f, "cc-knative"),
+            EvalBaseline::SnpKnative => write!(f, "snp-knative"),
             EvalBaseline::AcclessKnative => write!(f, "accless-knative"),
         }
     }
@@ -50,7 +50,7 @@ impl FromStr for EvalBaseline {
             "sgx-faasm" => Ok(EvalBaseline::SgxFaasm),
             "accless-faasm" => Ok(EvalBaseline::AcclessFaasm),
             "knative" => Ok(EvalBaseline::Knative),
-            "cc-knative" => Ok(EvalBaseline::CcKnative),
+            "snp-knative" => Ok(EvalBaseline::SnpKnative),
             "accless-knative" => Ok(EvalBaseline::AcclessKnative),
             _ => Err(()),
         }
@@ -64,7 +64,7 @@ impl EvalBaseline {
             EvalBaseline::SgxFaasm,
             EvalBaseline::AcclessFaasm,
             EvalBaseline::Knative,
-            EvalBaseline::CcKnative,
+            EvalBaseline::SnpKnative,
             EvalBaseline::AcclessKnative,
         ];
         VARIANTS.iter()
@@ -76,7 +76,7 @@ impl EvalBaseline {
             EvalBaseline::SgxFaasm => get_color_from_label("dark-green"),
             EvalBaseline::AcclessFaasm => get_color_from_label("accless"),
             EvalBaseline::Knative => get_color_from_label("dark-blue"),
-            EvalBaseline::CcKnative => get_color_from_label("dark-yellow"),
+            EvalBaseline::SnpKnative => get_color_from_label("dark-yellow"),
             EvalBaseline::AcclessKnative => get_color_from_label("accless"),
         }
     }
@@ -345,7 +345,7 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
                         _ => panic!("woops"),
                     },
                 ),
@@ -353,7 +353,7 @@ impl Eval {
                 (
                     "TLESS_MODE",
                     match baseline {
-                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
@@ -418,7 +418,7 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
                         _ => panic!("woops"),
                     },
                 ),
@@ -426,7 +426,7 @@ impl Eval {
                 (
                     "TLESS_MODE",
                     match baseline {
-                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
@@ -848,7 +848,7 @@ impl Eval {
     pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) -> anyhow::Result<()> {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
-                EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => {
+                EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             for scale_up_factor in 1..(args.scale_up_range + 1) {
@@ -880,7 +880,7 @@ impl Eval {
 
     fn is_faasm_baseline(baseline: &EvalBaseline) -> bool {
         match baseline {
-            EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => false,
+            EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => false,
             EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => true,
         }
     }
@@ -1124,7 +1124,7 @@ impl Eval {
             .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::CcKnative {
+            if baseline == &EvalBaseline::SnpKnative {
                 label = "sev-knative".to_string();
             }
 
@@ -1281,7 +1281,7 @@ impl Eval {
                 EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
                 EvalBaseline::AcclessFaasm => (legend_x_start + 220, legend_y_pos),
                 EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
-                EvalBaseline::CcKnative => (legend_x_start + 450, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 450, legend_y_pos),
                 EvalBaseline::AcclessKnative => (legend_x_start + 580, legend_y_pos),
             }
         }
@@ -1298,7 +1298,7 @@ impl Eval {
             .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::CcKnative {
+            if baseline == &EvalBaseline::SnpKnative {
                 label = "sev-knative".to_string();
             }
 
@@ -1349,7 +1349,7 @@ impl Eval {
             "knative" => {
                 vec![
                     EvalBaseline::Knative,
-                    EvalBaseline::CcKnative,
+                    EvalBaseline::SnpKnative,
                     EvalBaseline::AcclessKnative,
                 ]
             }
