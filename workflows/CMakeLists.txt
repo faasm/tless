@@ -18,21 +18,6 @@ endif ()
 # Build TLess C++ library
 add_subdirectory(../accless)
 
-# Test executable for debugging purposes
-# Un-comment to enable U-Bench
-# target_compile_definitions(tless PUBLIC TLESS_UBENCH)
-# TODO: rename to ubench (WASM)
-#     add_executable(tless_test test.cpp)
-#     target_compile_definitions(tless_test PUBLIC TLESS_UBENCH)
-#     target_link_libraries(tless_test ${TLESS_WORKFLOW_LIBS})
-#     target_include_directories(tless_test PUBLIC ${TLESS_WORKFLOW_HEADERS})
-
-# Test executable for debugging purposes
-# TODO: re-purpose as ubench (native)
-# add_executable(tless_test_native test.cpp)
-# target_link_libraries(tless_test_native ${TLESS_WORKFLOW_LIBS})
-# target_include_directories(tless_test_native PUBLIC ${TLESS_WORKFLOW_HEADERS})
-
 # Prepare variables for workflow compilation
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     set(TLESS_WORKFLOW_HEADERS ${CMAKE_CURRENT_LIST_DIR}../accless/include)
