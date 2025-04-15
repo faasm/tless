@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use env_logger;
 use std::process;
 
+pub mod attestation_service;
 pub mod env;
 pub mod tasks;
 
@@ -82,6 +83,8 @@ enum DockerCommand {
         #[arg(long)]
         nocache: bool,
     },
+    /// Get a CLI interface to the experiments container
+    Cli {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -90,10 +93,17 @@ enum EvalSubCommand {
     Run(EvalRunArgs),
     /// Plot
     Plot {},
+    UploadState {},
+    UploadWasm {},
 }
 
 #[derive(Debug, Subcommand)]
 enum EvalCommand {
+    /// Measure the CDF of cold-starts with or w/out our access control
+    ColdStart {
+        #[command(subcommand)]
+        eval_sub_command: EvalSubCommand,
+    },
     /// Evaluate end-to-end execution latency for different workflows
     E2eLatency {
         #[command(subcommand)]
@@ -117,11 +127,6 @@ enum UbenchCommand {
     /// Measure the throughput of the trusted escrow as we increase the number
     /// of parallel authorization requests
     EscrowXput {
-        #[command(subcommand)]
-        ubench_sub_command: UbenchSubCommand,
-    },
-    /// Microbenchmark to measure the time to verify an eDAG
-    VerifyEdag {
         #[command(subcommand)]
         ubench_sub_command: UbenchSubCommand,
     },
@@ -205,8 +210,14 @@ enum S3Command {
 #[derive(Debug, Subcommand)]
 enum AzureCommand {
     /// Deploy an environment witn an SNP cVM and our CP-ABE based secret-
-    /// release logic
+    /// release logic, an instance of our attestation service, and
+    /// an instance of microsft's attestation service
     Accless {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
+    /// Deploy an instance of Accless' attestation service
+    AttestationService {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
@@ -246,7 +257,7 @@ enum AzureSubCommand {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Initialize the logger based on the debug flag
@@ -263,7 +274,7 @@ async fn main() {
     match &cli.task {
         Command::Dag { dag_command } => match dag_command {
             DagCommand::Upload { name, yaml_path } => {
-                Dag::upload(name, yaml_path).await;
+                Dag::upload(name, yaml_path).await?;
             }
         },
         Command::Docker { docker_command } => match docker_command {
@@ -282,30 +293,77 @@ async fn main() {
                     }
                 }
             }
+            DockerCommand::Cli {} => {
+                let docker_cmd = format!(
+                    "docker run -v {}:/code/tless --rm -it -w /code/tless {} bash",
+                    Env::proj_root().display(),
+                    Docker::get_docker_tag(&DockerContainer::Experiments)
+                );
+                let status = process::Command::new("sh")
+                    .arg("-c")
+                    .arg(docker_cmd)
+                    .status()
+                    .expect("invrs: error spawning docker command");
+                if !status.success() {
+                    panic!("invrs: error getting CLI into experiments container");
+                }
+            }
         },
         Command::Eval { eval_command } => match eval_command {
-            EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
+            EvalCommand::ColdStart { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatency, run_args).await;
+                    Eval::run(&EvalExperiment::ColdStart, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatency);
+                    Eval::plot(&EvalExperiment::ColdStart)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::ColdStart).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::ColdStart)?;
+                }
+            },
+            EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
+                EvalSubCommand::Run(run_args) => {
+                    Eval::run(&EvalExperiment::E2eLatency, run_args).await?;
+                }
+                EvalSubCommand::Plot {} => {
+                    Eval::plot(&EvalExperiment::E2eLatency)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::E2eLatency).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::E2eLatency)?;
                 }
             },
             EvalCommand::E2eLatencyCold { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await;
+                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatencyCold);
+                    Eval::plot(&EvalExperiment::E2eLatencyCold)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::E2eLatencyCold).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::E2eLatencyCold)?;
                 }
             },
             EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
                 EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await;
+                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await?;
                 }
                 EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::ScaleUpLatency);
+                    Eval::plot(&EvalExperiment::ScaleUpLatency)?;
+                }
+                EvalSubCommand::UploadState {} => {
+                    Eval::upload_state(&EvalExperiment::ScaleUpLatency).await?;
+                }
+                EvalSubCommand::UploadWasm {} => {
+                    Eval::upload_wasm(&EvalExperiment::ScaleUpLatency)?;
                 }
             },
         },
@@ -316,14 +374,6 @@ async fn main() {
                 }
                 UbenchSubCommand::Plot {} => {
                     Ubench::plot(&MicroBenchmarks::EscrowXput);
-                }
-            },
-            UbenchCommand::VerifyEdag { ubench_sub_command } => match ubench_sub_command {
-                UbenchSubCommand::Run(_) => {
-                    panic!("verify-edag not supported anymore!");
-                }
-                UbenchSubCommand::Plot {} => {
-                    Ubench::plot(&MicroBenchmarks::VerifyEDag);
                 }
             },
         },
@@ -455,6 +505,30 @@ async fn main() {
                     Azure::delete_aa("accless");
                 }
             },
+            AzureCommand::AttestationService { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_guest("attestation-service", "Standard_DC8as_v5");
+                    Azure::open_vm_ports("attestation-service", &[22, 8443]);
+                }
+                AzureSubCommand::Provision {} => {
+                    let service_ip = Azure::get_vm_ip("attestation-service");
+
+                    Azure::provision_with_ansible(
+                        "attestation-service",
+                        "attestationservice",
+                        Some(format!("as_ip={service_ip}").as_str()),
+                    );
+                }
+                AzureSubCommand::ScpResults {} => {
+                    println!("scp-results does not apply");
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("attestation-service");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_snp_guest("attestation-service");
+                }
+            },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
                     Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5");
@@ -497,19 +571,40 @@ async fn main() {
             },
             AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    todo!("finish");
+                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3");
                 }
                 AzureSubCommand::Provision {} => {
-                    todo!("finish");
+                    let version = Env::get_version().unwrap();
+                    Azure::provision_with_ansible(
+                        "sgx-faasm",
+                        "sgxfaasm",
+                        Some(format!("accless_version={version}").as_str()),
+                    );
                 }
                 AzureSubCommand::ScpResults {} => {
-                    todo!("finish");
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
+                    let result_path = "eval/cold-start/data";
+
+                    for result_file in results_file {
+                        let scp_cmd = format!(
+                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
+                            Azure::build_scp_command("sgx-faasm-vm"),
+                            Env::proj_root().join(result_path).display(),
+                        );
+
+                        process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd)
+                            .status()
+                            .expect("invrs: error scp-ing results");
+                    }
                 }
                 AzureSubCommand::Ssh {} => {
-                    todo!("finish");
+                    Azure::build_ssh_command("sgx-faasm-vm");
                 }
                 AzureSubCommand::Delete {} => {
-                    todo!("finish");
+                    Azure::delete_sgx_vm("sgx-faasm-vm");
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
@@ -589,4 +684,6 @@ async fn main() {
             },
         },
     }
+
+    Ok(())
 }

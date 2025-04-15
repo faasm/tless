@@ -14,8 +14,8 @@ pub enum DockerContainer {
 impl fmt::Display for DockerContainer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DockerContainer::Experiments => write!(f, "tless-experiments"),
-            DockerContainer::Worker => write!(f, "tless-knative-worker"),
+            DockerContainer::Experiments => write!(f, "accless-experiments"),
+            DockerContainer::Worker => write!(f, "accless-knative-worker"),
         }
     }
 }
@@ -25,8 +25,8 @@ impl FromStr for DockerContainer {
 
     fn from_str(input: &str) -> Result<DockerContainer, Self::Err> {
         match input {
-            "tless-experiments" => Ok(DockerContainer::Experiments),
-            "tless-knative-worker" => Ok(DockerContainer::Worker),
+            "accless-experiments" => Ok(DockerContainer::Experiments),
+            "accless-knative-worker" => Ok(DockerContainer::Worker),
             _ => Err(()),
         }
     }

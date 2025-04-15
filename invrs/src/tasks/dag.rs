@@ -1,3 +1,4 @@
+use crate::attestation_service;
 use crate::tasks::s3::S3;
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key};
@@ -7,13 +8,6 @@ use serde_yaml;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::Read;
-
-// FIXME(tless-prod): symmetric key is currently hardcoded. In production it
-// would be given to the user upon registration
-static DEMO_SYM_KEY: [u8; 32] = [
-    0xf0, 0x0d, 0x48, 0x2e, 0xca, 0x21, 0xfb, 0x13, 0xec, 0xf0, 0x01, 0x48, 0xba, 0x60, 0x01, 0x76,
-    0x6e, 0x56, 0xbb, 0xa5, 0xff, 0x9b, 0x11, 0x9d, 0xd6, 0xfa, 0x96, 0x39, 0x2b, 0x7c, 0x1a, 0x0d,
-];
 
 // Struct a node in our workflow DAG
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,7 +72,7 @@ impl Dag {
         hex::encode(result)
     }
 
-    pub async fn upload(wflow_name: &str, yaml_path: &str) {
+    pub async fn upload(wflow_name: &str, yaml_path: &str) -> anyhow::Result<()> {
         // Load the given DAG to a byte array, and upload it to storage
         let serialized_dag = Self::read_yaml_and_serialize(yaml_path);
         S3::upload_bytes("tless", &format!("{wflow_name}/dag"), &serialized_dag).await;
@@ -104,9 +98,12 @@ impl Dag {
             )
         };
 
+        // Get the key from the attestation service
+        let tee_sym_key = attestation_service::get_tee_shared_key().await?;
+
         // Encrypt it with the shared symmetric key, so that any TEE can use
         // the CP-ABE encryption/decryption context
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&DEMO_SYM_KEY));
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&tee_sym_key));
         let ctx_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ctx_ct = cipher.encrypt(&ctx_nonce, serial_ctx).unwrap();
         let mut encrypted_ctx = ctx_nonce.to_vec();
@@ -120,17 +117,12 @@ impl Dag {
         )
         .await;
 
-        // FIXME(tless-prod): here we define a few values that are crucial in
-        // the bootstrapping of the CP-ABE context. This should be set by the
-        // user and, the tee_identity_magic, shared with the attestation service
-        // in the cloud. Of course, these values should not be version
-        // controlled
-
         // Genesis text for our certificate chains
+        // TODO: why do we need this again?
         let plain_text_origin_cert_chain = "G3N0SY5";
 
         // Base attributes for our policy
-        let tee_identity_magic = "G4NU1N3TL3SST33";
+        let tee_identity_magic = attestation_service::get_tee_identity().await?;
 
         // Encrypt the certificate chain using the adequate policy
         // WARNING: be very careful with the values in the policy. rabe does
@@ -146,7 +138,7 @@ impl Dag {
 
         let abe_ct_str = match serde_json::to_string(&ct) {
             Ok(ct_str) => ct_str,
-            Err(_) => panic!("tlessctl(dag): error serializing certificate chain"),
+            Err(_) => anyhow::bail!("error serializing certificate chain"),
         };
 
         // Encapsulate the cipher-text in a symmetric encryption payload
@@ -170,5 +162,7 @@ impl Dag {
         // TODO(encrypted-functions): to support encrypted functions, here we
         // would have to keep generating new policies, and encrypting each
         // function body with the new policy
+
+        Ok(())
     }
 }

@@ -1,0 +1,9 @@
+---
+
+- hosts: accless
+  gather_facts: yes
+  tasks:
+    - include_tasks: tasks/attestation-service/apt.yaml
+    - include_tasks: tasks/util/rust.yaml
+    - include_tasks: tasks/attestation-service/code.yaml
+    - include_tasks: tasks/attestationservice.yaml

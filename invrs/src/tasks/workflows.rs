@@ -64,10 +64,11 @@ impl Workflows {
         workflow: &AvailableWorkflow,
         bucket_name: &str,
         clean: bool,
-    ) {
+        dag_only: bool,
+    ) -> anyhow::Result<()> {
         // Note that cleaning here means cleaning the outputs of previous runs
         if clean {
-            for key_dir in vec!["outputs", "exec-tokens", "cert-chains"] {
+            for key_dir in vec!["outputs", "cert-chains"] {
                 S3::clear_dir(
                     bucket_name.to_string(),
                     format!("{workflow}/{key_dir}").to_string(),
@@ -79,8 +80,12 @@ impl Workflows {
         // First, upload the DAG
         let mut yaml_path = Self::get_root();
         yaml_path.push(format!("{workflow}"));
-        yaml_path.push("tless.yaml");
-        Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await;
+        yaml_path.push("accless.yaml");
+        Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await?;
+
+        if dag_only {
+            return Ok(());
+        }
 
         // Then, upload the respective state
         match workflow {
@@ -130,17 +135,25 @@ impl Workflows {
                 .await;
             }
         };
+
+        Ok(())
     }
 
-    pub async fn upload_state(bucket_name: &str, clean: bool) {
+    pub async fn upload_state(
+        bucket_name: &str,
+        clean: bool,
+        dag_only: bool,
+    ) -> anyhow::Result<()> {
         if clean {
             S3::clear_bucket(bucket_name.to_string()).await;
         }
 
         // Upload state for different workflows
         for workflow in AvailableWorkflow::iter_variants() {
-            Self::upload_workflow_state(&workflow, bucket_name, clean).await;
+            Self::upload_workflow_state(&workflow, bucket_name, clean, dag_only).await?;
         }
+
+        Ok(())
     }
 
     pub fn get_faasm_cmdline(workflow: &AvailableWorkflow) -> &str {

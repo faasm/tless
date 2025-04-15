@@ -1,0 +1,27 @@
+---
+
+- name: "Deploy Faasm cluster"
+  shell: rm -rf ./venv-bm && source ./bin/workon.sh && faasmctl deploy.compose --mount-source . --workers=4
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash
+  environment:
+    FAASM_ACCLESS_ENABLED: on
+    FAASM_ATTESTATION_SERVICE_URL: {{ as_ip }}
+    FAASM_WASM_VM: sgx
+
+# For the time being, we mount the source, so we must rebuild all targets
+- name: "Deploy Faasm cluster"
+  shell: source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Hardware"
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash
+  environment:
+    FAASM_WASM_VM: sgx
+
+- name: "Fetch the cross-compilation toolchain image"
+  shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
+  args:
+    executable: /bin/bash
+
+# TODO: build workflows here, and patch with the right certificate for the AS
