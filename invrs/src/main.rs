@@ -234,6 +234,11 @@ enum AzureCommand {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
+    /// Deploy our port of Knative that can run KServices inside SNP cVMs
+    SnpKnative {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
     /// Deploy an environment with two SNP cVMs, one running Trustee as a
     /// relying party, and the other one requesting a secure key release (SKR)
     Trustee {
@@ -605,6 +610,45 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Delete {} => {
                     Azure::delete_sgx_vm("sgx-faasm-vm");
+                }
+            },
+            AzureCommand::SnpKnative { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5");
+                }
+                AzureSubCommand::Provision {} => {
+                    let version = Env::get_version().unwrap();
+                    Azure::provision_with_ansible(
+                        "snp-knative",
+                        "snpknative",
+                        Some(format!("accless_version={version}").as_str()),
+                    );
+                }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let results_file =
+                        vec!["knative.csv", "snp-knative.csv", "accless-knative.csv"];
+                    let result_path = "eval/cold-start/data";
+
+                    for result_file in results_file {
+                        let scp_cmd = format!(
+                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
+                            Azure::build_scp_command("snp-knative-vm"),
+                            Env::proj_root().join(result_path).display(),
+                        );
+
+                        process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd)
+                            .status()
+                            .expect("invrs: error scp-ing results");
+                    }
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("snp-knative-vm");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_sgx_vm("snp-knative-vm");
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
