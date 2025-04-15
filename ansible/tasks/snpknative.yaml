@@ -8,9 +8,5 @@
   environment:
     PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-- name: "Fetch the cross-compilation toolchain image"
-  shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
-  args:
-    executable: /bin/bash
-
 # TODO: build workflows here, and patch with the right certificate for the AS
+# we just need to pack the container image, so we can do it locally?

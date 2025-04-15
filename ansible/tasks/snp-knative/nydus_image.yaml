@@ -1,0 +1,61 @@
+- name: "Install APT depdencencies"
+  become: yes
+  apt:
+    name:
+      - cmake
+
+- name: "Create temporary directory for Go download"
+  file:
+    path: /tmp/go
+    state: directory
+    mode: '0755'
+
+- name: "Download Go tarball"
+  get_url:
+    url: "https://go.dev/dl/go1.24.2.linux-amd64.tar.gz"
+    dest: /tmp/go/go1.24.2.linux-amd64.tar.gz
+    mode: '0644'
+
+- name: "Remove any existing Go installation"
+  become: yes
+  file:
+    path: /usr/local/go
+    state: absent
+
+- name: "Unarchive Go tarball into /usr/local"
+  become: yes
+  unarchive:
+    src: /tmp/go/go1.24.2.linux-amd64.tar.gz
+    dest: /usr/local
+    remote_src: yes
+
+- name: "Create code directory for nydus repository"
+  file:
+    path: /home/{{ ansible_user }}/git/sc2-sys/nydus
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: "Clone the nydus repository from GitHub"
+  git:
+    repo: "https://github.com/sc2-sys/nydus.git"
+    dest: /home/{{ ansible_user }}/git/sc2-sys/nydus
+    version: "sc2-main"
+    force: yes
+
+- name: "Install required Rust toolchain"
+  command: "rustup toolchain install 1.75.0-x86_64-unknown-linux-gnu"
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  args:
+    chdir: /home/{{ ansible_user }}/git/sc2-sys/nydus
+
+- name: "Build the nydus-image tool"
+  command: "make all-release"
+  environment:
+    DOCKER: "false"
+    GOPROXY: "https://proxy.golang.org"
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  args:
+    chdir: /home/{{ ansible_user }}/git/sc2-sys/nydus
+

@@ -13,4 +13,8 @@
     - include_tasks: tasks/snp-knative/qemu.yaml
     - include_tasks: tasks/util/rust.yaml
     - include_tasks: tasks/snp-knative/code.yaml
+    # The gallery image we use is based on 22.04, but the nydus-image built in
+    # the SC2 container is based on 24.04, resulting in a linking error, at
+    # runtime, with glibc. Instead, we build nydus_image again from source.
+    - include_tasks: tasks/snp-knative/nydus_image.yaml
       # - include_tasks: tasks/snpknative.yml
