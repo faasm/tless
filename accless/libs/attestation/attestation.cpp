@@ -16,8 +16,8 @@
 
 using namespace attest;
 
-#define SNP_GET_REPORT                                                         \
-    _IOC(_IOC_READ | _IOC_WRITE, 0x53, 0, sizeof(SnpReportRequest))
+#define SNP_GUEST_REQ_IOC_TYPE 'S'
+#define SNP_GET_REPORT _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_request_ioctl)
 
 namespace accless::attestation {
 void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
@@ -94,44 +94,54 @@ void tpmRenewAkCert() {
 // This method fetches the SNP attestation report from /dev/sev-guest:
 // - message_version is not used in this simple example, but is kept for
 // interface compatibility.
-// - unique_data: Optional 64-byte data to be included in the report.
+// - userData: Optional 64-byte data to be included in the report.
 // - vmpl: Optional VMPL level.
 std::vector<uint8_t>
-getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> unique_data,
+getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> userData,
                     std::optional<uint32_t> vmpl) {
-    // Open the SEV-SNP guest device.
-    int fd = open("/dev/sev-guest", O_RDONLY);
+    int fd = open("/dev/sev-guest", O_RDWR);
     if (fd < 0) {
         std::cerr << "accless(att): failed to open /dev/sev-guest" << std::endl;
         throw std::runtime_error("Failed to open /dev/sev-guest");
     }
 
-    // Prepare the request structure.
-    SnpReportRequest req;
-    std::memset(&req, 0, sizeof(req));
-    req.size = sizeof(req);
-    req.vmpl = vmpl.value_or(0); // Use provided vmpl or default to 0.
-    if (unique_data.has_value()) {
-        std::memcpy(req.data, unique_data->data(), unique_data->size());
+    // Prepare the request payload.
+    snp_report_req reqPayload;
+    std::memset(&reqPayload, 0, sizeof(reqPayload));
+    reqPayload.vmpl = vmpl.value_or(0);
+    if (userData.has_value()) {
+        std::memcpy(reqPayload.user_data, userData->data(), userData->size());
     }
-    // Note: message_version is not directly used here.
 
-    // Perform the IOCTL call to fetch the report.
-    if (ioctl(fd, SNP_GET_REPORT, &req) < 0) {
+    // Prepare the response buffer.
+    snp_report_resp respPayload;
+    std::memset(&respPayload, 0, sizeof(respPayload));
+
+    // Prepare the ioctl wrapper.
+    snp_guest_request_ioctl guestReq;
+    std::memset(&guestReq, 0, sizeof(guestReq));
+    guestReq.msg_version = 1;  // Must be non-zero.
+    guestReq.req_data = reinterpret_cast<uint64_t>(&reqPayload);
+    guestReq.resp_data = reinterpret_cast<uint64_t>(&respPayload);
+
+    // Issue the ioctl.
+    if (ioctl(fd, SNP_GET_REPORT, &guestReq) < 0) {
+        int err = errno;
         close(fd);
-        std::cerr << "accless(att): ioctl SNP_GET_REPORT failed" << std::endl;
+        std::cerr << "accless(att): ioctl SNP_GET_REPORT failed: " << strerror(err) << std::endl;
         throw std::runtime_error("ioctl SNP_GET_REPORT failed");
     }
     close(fd);
 
-    // Check firmware status.
-    if (req.status != 0) {
-        std::cerr << "accless(att): firmware reported error: " << req.status
-                  << std::endl;
-        throw std::runtime_error("firmware reported error");
+    // Check for firmware or VMM errors.
+    if (guestReq.fw_error != 0 || guestReq.vmm_error != 0) {
+        std::cerr << "accless(att): firmware error: " << guestReq.fw_error
+                  << " vmm error: " << guestReq.vmm_error << std::endl;
+        throw std::runtime_error("Firmware reported error");
     }
 
-    std::vector<uint8_t> report(req.report, req.report + REPORT_BUFFER_SIZE);
+    // Convert the response to a vector.
+    std::vector<uint8_t> report(respPayload.data, respPayload.data + SNP_REPORT_RESP_SIZE);
     return report;
 }
 

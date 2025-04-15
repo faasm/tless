@@ -10,16 +10,33 @@
 
 namespace accless::attestation {
 
-constexpr size_t REPORT_BUFFER_SIZE = 4096;
+// We copy this structures from:
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/sev-guest.h#L80
+constexpr size_t SNP_REPORT_USER_DATA_SIZE = 64;
+constexpr size_t SNP_REPORT_RESP_SIZE = 4000;
 
-struct SnpReportRequest {
-    uint32_t size;
+struct snp_report_req {
+    uint8_t user_data[SNP_REPORT_USER_DATA_SIZE];
     uint32_t vmpl;
-    uint8_t data[64];
-    uint32_t status;
-    uint8_t report[REPORT_BUFFER_SIZE];
+    uint8_t rsvd[28];
 };
-typedef struct SnpReportRequest SnpReportRequest;
+
+struct snp_report_resp {
+    uint8_t data[SNP_REPORT_RESP_SIZE];
+};
+
+struct snp_guest_request_ioctl {
+    uint8_t msg_version;
+    uint64_t req_data;
+    uint64_t resp_data;
+    union {
+        uint64_t exitinfo2;
+        struct {
+            uint32_t fw_error;
+            uint32_t vmm_error;
+        };
+    };
+};
 
 // Utility methods
 class Logger : public attest::AttestationLogger {
