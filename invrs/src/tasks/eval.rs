@@ -1339,9 +1339,23 @@ impl Eval {
         }
 
         let baselines = match plot_version {
-            "faasm" => {vec![EvalBaseline::Faasm, EvalBaseline::SgxFaasm, EvalBaseline::AcclessFaasm]},
-            "knative" => {vec![EvalBaseline::Knative, EvalBaseline::CcKnative, EvalBaseline::AcclessKnative]},
-            _ => { unreachable!{} },
+            "faasm" => {
+                vec![
+                    EvalBaseline::Faasm,
+                    EvalBaseline::SgxFaasm,
+                    EvalBaseline::AcclessFaasm,
+                ]
+            }
+            "knative" => {
+                vec![
+                    EvalBaseline::Knative,
+                    EvalBaseline::CcKnative,
+                    EvalBaseline::AcclessKnative,
+                ]
+            }
+            _ => {
+                unreachable! {}
+            }
         };
 
         // Collect data
@@ -1432,9 +1446,7 @@ impl Eval {
             let values_cdf = Self::compute_cdf(&values);
             chart
                 .draw_series(LineSeries::new(
-                    values_cdf.into_iter().map(|(x, y)| {
-                        (x as i32, y * 100.0)
-                    }),
+                    values_cdf.into_iter().map(|(x, y)| (x as i32, y * 100.0)),
                     EvalBaseline::get_color(&baseline).stroke_width(5),
                 ))
                 .unwrap();
