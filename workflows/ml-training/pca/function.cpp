@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
         std::string pcaInput = std::to_string(id) + ":" + std::to_string(i) + ":" + dataKey + ":" + labelsKey;
 #ifdef __faasm
         // int pcaId = faasmChainNamed("rf", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-        int pcaId = tless::chain("ml-training", "pca", id, "rf", i, pcaInput);
+        int pcaId = accless::chain("ml-training", "pca", id, "rf", i, pcaInput);
         trainFuncIds.push_back(std::to_string(pcaId));
 #endif
     }

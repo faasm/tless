@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", revision = "bf45f01602e8216d49461accdde62787c74dbab6", features = ["reqwest", "warp"] }
+cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", revision = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b", features = ["reqwest", "warp"] }
 once_cell = "^1.19.0"
 rand = { version = "^0.9.0-alpha.2" }
 reqwest = { version = "^0.12" }

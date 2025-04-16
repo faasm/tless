@@ -57,15 +57,11 @@ spec:
           workingDir: /workflows/word-count/knative
           command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
       labels:
         accless.workflows/name: word-count-splitter
-      annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 # JobSink guarantees one Job per CloudEvent, satisfying our dynamic scale-up
 # requirements. However, JobSink's propagate CloudEvents through a volume
@@ -93,7 +89,7 @@ spec:
               # in a tag's digest. So, while we are heavily developing, we
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
-              image: sc2cr.io/accless-knative-worker@sha256:
+              image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
               ports:
                 - containerPort: 8080
               workingDir: /workflows/word-count/knative
@@ -101,15 +97,11 @@ spec:
               env:
                 - name: CE_FROM_FILE
                   value: "on"
-                - name: TLESS_MODE
-                  value: "${TLESS_MODE}"
+                - name: ACCLESS_MODE
+                  value: "${ACCLESS_MODE}"
         metadata:
           labels:
             accless.workflows/name: word-count-mapper
-          annotations:
-            # NOTE: we may have to enable this annotation in Kata's config file
-            # under hypervisor.qemu.enable_annotations (add 'default_memory')
-            io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 # For this last service, we want to give it a high-grace period to make sure
 # that the same instance processes all of the events
@@ -129,16 +121,13 @@ spec:
           workingDir: /workflows/word-count/knative
           command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
       labels:
         accless.workflows/name: word-count-reducer
       annotations:
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
