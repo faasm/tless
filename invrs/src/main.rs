@@ -598,9 +598,11 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
-                    let result_path = "eval/cold-start/data";
+                    // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/scale-up-latency/data";
+                    // let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
+                    let results_file = vec!["accless-faasm.csv"];
+                    let result_path = "eval/scale-up-latency/data";
 
                     for result_file in results_file {
                         let scp_cmd = format!(

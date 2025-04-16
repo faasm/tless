@@ -31,9 +31,9 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 # Faasm vars
 # ----------------------------
 
-export FAASM_INI_FILE=${PROJ_ROOT}/faasm.ini
+export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
 # TODO: update me
-export FAASM_VERSION=0.28.0
+export FAASM_VERSION=0.29.0
 
 # ----------------------------
 # APT deps

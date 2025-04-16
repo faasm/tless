@@ -2,7 +2,7 @@ use crate::env::Env;
 use crate::tasks::dag::Dag;
 use crate::tasks::s3::S3;
 use clap::ValueEnum;
-use log::{debug, error};
+use log::debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{env, fmt};

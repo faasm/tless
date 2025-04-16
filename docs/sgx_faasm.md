@@ -39,6 +39,7 @@ exit
 ```bash
 export FAASM_ACCLESS_ENABLED=on
 export FAASM_WASM_VM=sgx
+export FAASM_ATTESTATION_SERVICE_URL=...
 faasmctl deploy.compose --mount-source . --workers=1
 faasmctl cli.faasm
 inv dev.tools --build Release --sgx Hardware

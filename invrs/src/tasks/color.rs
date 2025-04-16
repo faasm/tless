@@ -1,6 +1,7 @@
 use plotters::prelude::*;
 
 pub static FONT_SIZE: i32 = 28;
+pub static STROKE_WIDTH: u32 = 5;
 
 // TODO: make colors really stand out
 pub fn get_color_from_label(label: &str) -> RGBColor {

@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::tasks::color::{get_color_from_label, FONT_SIZE};
+use crate::tasks::color::{get_color_from_label, FONT_SIZE, STROKE_WIDTH};
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
@@ -270,6 +270,7 @@ impl Eval {
             .expect("invrs(eval): failed to convert kube command output to string")
     }
 
+    #[allow(dead_code)]
     fn wait_for_pods(namespace: &str, label: &str, num_expected: usize) {
         loop {
             thread::sleep(time::Duration::from_secs(2));
@@ -299,6 +300,7 @@ impl Eval {
         }
     }
 
+    #[allow(dead_code)]
     fn wait_for_pod(namespace: &str, label: &str) {
         Self::wait_for_pods(namespace, label, 1);
     }
@@ -597,7 +599,7 @@ impl Eval {
                 debug!("invrs: {exp}: waiting for scale-to-zero...");
                 Self::wait_for_scale_to_zero().await;
             }
-            _ => debug!("invrs: {exp}: noting to clean-up after single execution"),
+            _ => debug!("invrs: {exp}: nothing to clean-up after single execution"),
         }
 
         // Cautionary sleep between runs
@@ -614,27 +616,18 @@ impl Eval {
     ) -> anyhow::Result<()> {
         let baseline = args.baseline[args_offset].clone();
 
-        // First, deploy the common services
-        /*
-        let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
-        // k8s_common_path.push("common.yaml");
-        Self::run_kubectl_cmd(&format!("apply -f {}", k8s_common_path.display()));
-
-        // Wait for the MinIO pod to be ready
-        Self::wait_for_pod("accless", "accless.workflows/name=minio");
-        */
-
         // Get the MinIO URL
         let minio_url = Self::run_kubectl_cmd("-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
         unsafe {
             env::set_var("MINIO_URL", minio_url);
         }
 
-        // Upload the state for all workflows for the experiment
         let workflow_iter = match exp {
             // For the scale-up latency, we only run the FINRA workflow
             EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
             EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
+            // TODO: remove me
+            // EvalExperiment::E2eLatency => [AvailableWorkflow::MlTraining].iter(),
             _ => AvailableWorkflow::iter_variants(),
         };
 
@@ -1129,7 +1122,7 @@ impl Eval {
         Ok(())
     }
 
-    fn plot_scale_up_latency(data_files: &Vec<PathBuf>) {
+    fn plot_scale_up_latency(plot_version: &str, data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -1138,12 +1131,37 @@ impl Eval {
             time_ms: u64,
         }
 
-        const NUM_MAX_FUNCS: usize = 10;
+        const NUM_POINTS: usize = 10;
+        let num_parallel_funcs = match plot_version {
+            "knative" => vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "faasm" => vec![1, 10, 20, 40, 50, 60, 70, 80, 90, 100],
+            _ => panic!(),
+        };
+
+        let baselines = match plot_version {
+            "faasm" => {
+                vec![
+                    // EvalBaseline::Faasm,
+                    // EvalBaseline::SgxFaasm,
+                    EvalBaseline::AcclessFaasm,
+                ]
+            }
+            "knative" => {
+                vec![
+                    EvalBaseline::Knative,
+                    EvalBaseline::SnpKnative,
+                    EvalBaseline::AcclessKnative,
+                ]
+            }
+            _ => {
+                unreachable! {}
+            }
+        };
 
         // Collect data
-        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_MAX_FUNCS]>::new();
-        for baseline in EvalBaseline::iter_variants() {
-            data.insert(baseline.clone(), [0; NUM_MAX_FUNCS]);
+        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_POINTS]>::new();
+        for baseline in &baselines {
+            data.insert(baseline.clone(), [0; NUM_POINTS]);
         }
 
         for csv_file in data_files {
@@ -1151,14 +1169,24 @@ impl Eval {
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or_default();
+            debug!("file name: {file_name}");
+
             let file_name_len = file_name.len();
             let file_name_no_ext = &file_name[0..file_name_len - 4];
             let parts: Vec<&str> = file_name_no_ext.split("_").collect();
             let workload_parts: Vec<&str> = parts[1].split("-").collect();
 
             let baseline: EvalBaseline = parts[0].parse().unwrap();
+            if !baselines.contains(&baseline) {
+                continue;
+            }
+
             let _workload: &str = workload_parts[0];
             let scale_up_factor: usize = workload_parts[1].parse().unwrap();
+
+            if !num_parallel_funcs.contains(&scale_up_factor) {
+                continue;
+            }
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -1168,64 +1196,56 @@ impl Eval {
             let mut count = 0;
             let avg_times = data.get_mut(&baseline).unwrap();
 
+            let idx = num_parallel_funcs.iter().position(|&x| x == scale_up_factor).unwrap();
             for result in reader.deserialize() {
                 let record: Record = result.unwrap();
 
-                avg_times[scale_up_factor - 1] += record.time_ms;
+                avg_times[idx] += record.time_ms;
                 count += 1;
             }
 
-            avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
+            avg_times[idx] = avg_times[idx] / count;
         }
 
-        let y_max: f64 = 200.0;
+        let y_max: f64 = 125.0;
         let mut plot_path = Env::proj_root();
         plot_path.push("eval");
         plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
         plot_path.push("plots");
         fs::create_dir_all(plot_path.clone()).unwrap();
-        plot_path.push(format!(
-            "{}.svg",
-            EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")
-        ));
+        plot_path.push(format!("{plot_version}.svg"));
 
         // Plot data
-        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
+        let x_max = num_parallel_funcs[num_parallel_funcs.len() - 1];
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
             .margin_left(40)
-            .build_cartesian_2d(0..(NUM_MAX_FUNCS) as u32, 0f64..y_max as f64)
+            .build_cartesian_2d(0..(x_max) as u32, 0f64..y_max as f64)
             .unwrap();
 
         chart
             .configure_mesh()
-            .x_label_style(("sans-serif", 20).into_font())
-            .y_label_style(("sans-serif", 20).into_font())
+            .light_line_style(&WHITE)
+            .x_labels(8)
+            .y_labels(6)
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
             .x_desc("")
             .y_label_formatter(&|y| format!("{:.0}", y))
             .draw()
             .unwrap();
 
-        // Add solid frames
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
-            .unwrap();
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
-            .unwrap();
-
         // Manually draw the X/Y-axis label with a custom font and size
         root.draw(&Text::new(
             "Execution time [s]",
-            (5, 220),
-            ("sans-serif", 20)
+            (5, 245),
+            ("sans-serif", FONT_SIZE)
                 .into_font()
                 .transform(FontTransform::Rotate270)
                 .color(&BLACK),
@@ -1233,8 +1253,8 @@ impl Eval {
         .unwrap();
         root.draw(&Text::new(
             "# of audit functions",
-            (400, 280),
-            ("sans-serif", 20).into_font().color(&BLACK),
+            (120, 280),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
         ))
         .unwrap();
 
@@ -1244,7 +1264,7 @@ impl Eval {
                     (0..values.len())
                         .zip(values.iter())
                         .map(|(x, y)| ((x + 1) as u32, *y as f64 / 1000.0)),
-                    baseline.get_color().stroke_width(3),
+                    baseline.get_color().stroke_width(STROKE_WIDTH),
                 ))
                 .unwrap();
 
@@ -1259,21 +1279,31 @@ impl Eval {
                 .unwrap();
         }
 
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
+            .unwrap();
+
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
-            let legend_x_start = 70;
+            let legend_x_start = 10;
             let legend_y_pos = 6;
 
             match baseline {
                 EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
-                EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
-                EvalBaseline::AcclessFaasm => (legend_x_start + 220, legend_y_pos),
-                EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
-                EvalBaseline::SnpKnative => (legend_x_start + 450, legend_y_pos),
-                EvalBaseline::AcclessKnative => (legend_x_start + 580, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 160, legend_y_pos),
+                EvalBaseline::AcclessFaasm => (legend_x_start + 320, legend_y_pos),
+                EvalBaseline::Knative => (legend_x_start, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 120, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 280, legend_y_pos),
             }
         }
 
-        for baseline in EvalBaseline::iter_variants() {
+        for baseline in &baselines {
             // Calculate position for each legend item
             let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
@@ -1283,22 +1313,43 @@ impl Eval {
                 baseline.get_color().filled(),
             ))
             .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::SnpKnative {
-                label = "sev-knative".to_string();
+            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm {
+                label = "accless".to_string();
             }
 
             // Draw the baseline label (Text)
             root.draw(&Text::new(
                 label,
                 (x_pos + 30, y_pos + 5),
-                ("sans-serif", 20).into_font(),
+                ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
         }
 
         root.present().unwrap();
+        println!("invrs: generated plot at: {}", plot_path.display());
     }
 
     fn compute_cdf(samples: &Vec<u64>) -> Vec<(f64, f64)> {
@@ -1441,7 +1492,7 @@ impl Eval {
             chart
                 .draw_series(LineSeries::new(
                     values_cdf.into_iter().map(|(x, y)| (x as i32, y * 100.0)),
-                    EvalBaseline::get_color(&baseline).stroke_width(5),
+                    EvalBaseline::get_color(&baseline).stroke_width(STROKE_WIDTH),
                 ))
                 .unwrap();
         }
@@ -1538,7 +1589,8 @@ impl Eval {
                 Self::plot_e2e_latency(&exp, &data_files)?;
             }
             EvalExperiment::ScaleUpLatency => {
-                Self::plot_scale_up_latency(&data_files);
+                Self::plot_scale_up_latency("faasm", &data_files);
+                // Self::plot_scale_up_latency("knative", &data_files);
             }
         }
 
