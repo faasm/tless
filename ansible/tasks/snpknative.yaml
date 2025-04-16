@@ -8,5 +8,10 @@
   environment:
     PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# TODO: copy this after installation
+# sudo cp /home/tless/git/sc2-sys/nydus/target/release/nydus-image /opt/confidential-containers/bin/nydus-image
+# TODO: also missing to set ACCLESS_ATTESTATION_SERVICE_URL as an env. var inside the container
+# TODO: also missing to populate the attestation-service certs/cert.pem
+
 # TODO: build workflows here, and patch with the right certificate for the AS
 # we just need to pack the container image, so we can do it locally?

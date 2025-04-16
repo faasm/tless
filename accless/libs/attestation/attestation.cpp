@@ -166,8 +166,22 @@ getSnpReport(std::optional<std::array<uint8_t, 64>> reportData) {
 
 // Get the URL of our own attestation service (**not** MAA)
 std::string getAttestationServiceUrl() {
-    const char *val = std::getenv("ACCLESS_ATTESTATION_SERVICE_URL");
-    return val ? std::string(val) : "https://127.0.0.1:8443";
+    const char *val = std::getenv("ACCLESS_AS_URL");
+    if (val == nullptr) {
+        // This url uses https://ip:port
+        std::cerr << "accless(att): must set ACCLESS_AS_URL" << std::endl;
+        throw std::runtime_error("must set ACCLESS_AS_URL");
+    }
+    return std::string(val);
+}
+
+std::string getAttestationServiceCertPath() {
+    const char *val = std::getenv("ACCLESS_AS_CERT");
+    if (val == nullptr) {
+        std::cerr << "accless(att): must set ACCLESS_AS_CERT" << std::endl;
+        throw std::runtime_error("must set ACCLESS_AS_CERT");
+    }
+    return std::string(val);
 }
 
 size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
@@ -187,11 +201,10 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
     }
 
     std::string asUrl = getAttestationServiceUrl();
+    std::string certPath = getAttestationServiceCertPath();
     curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(
-        curl, CURLOPT_CAINFO,
-        "/home/tless/git/faasm/tless/attestation-service/certs/cert.pem");
+    curl_easy_setopt(curl, CURLOPT_CAINFO, certPath);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, snpReport.data());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, snpReport.size());
