@@ -306,6 +306,7 @@ impl S3 {
                 let cmd = "-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}";
                 let args: Vec<&str> = cmd.split_whitespace().collect();
 
+                debug!("foo3");
                 let output = Command::new("kubectl")
                     .args(&args[0..])
                     .output()

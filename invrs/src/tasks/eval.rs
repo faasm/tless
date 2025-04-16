@@ -353,7 +353,7 @@ impl Eval {
                         _ => panic!("woops"),
                     },
                 ),
-                ("TLESS_VERSION", &Env::get_version().unwrap()),
+                ("ACCLESS_VERSION", &env::var("ACCLESS_VERSION").unwrap()),
                 (
                     "ACCLESS_MODE",
                     match baseline {
@@ -387,12 +387,10 @@ impl Eval {
             .wait_with_output()
             .expect("invrs(eval): failed to run kubectl command");
 
-        // No waiting for cold start (?)
-        if exp == &EvalExperiment::ColdStart {
-            return;
-        }
+        thread::sleep(time::Duration::from_secs(2));
 
         // Specific per-workflow wait command
+        /*
         match workflow {
             AvailableWorkflow::Finra => {
                 Self::wait_for_pod("accless", "accless.workflows/name=finra-fetch-private");
@@ -412,6 +410,7 @@ impl Eval {
                 Self::wait_for_pod("accless", "accless.workflows/name=word-count-reducer");
             }
         }
+        */
     }
 
     fn delete_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
@@ -639,12 +638,14 @@ impl Eval {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
+        /*
         let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
         // k8s_common_path.push("common.yaml");
         Self::run_kubectl_cmd(&format!("apply -f {}", k8s_common_path.display()));
 
         // Wait for the MinIO pod to be ready
         Self::wait_for_pod("accless", "accless.workflows/name=minio");
+        */
 
         // Get the MinIO URL
         let minio_url = Self::run_kubectl_cmd("-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
@@ -702,8 +703,8 @@ impl Eval {
         }
 
         // Experiment-wide clean-up
-        let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
-        Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
+        // let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
+        // Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
 
         Ok(())
     }
@@ -858,7 +859,8 @@ impl Eval {
                 EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            // for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            for scale_up_factor in 2..(args.scale_up_range + 1) {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -1568,7 +1570,12 @@ impl Eval {
     }
 
     pub async fn upload_state(eval: &EvalExperiment) -> anyhow::Result<()> {
-        // TODO: must know the AS_URL here somehow
+        // Get the MinIO URL
+        let minio_url = S3::get_url("knative");
+        unsafe {
+            env::set_var("MINIO_URL", minio_url);
+            env::set_var("AS_URL", "https://146.179.4.33:8443");
+        }
 
         // Work-out the workflows to execute for each experiment
         let workflow_iter = match eval {

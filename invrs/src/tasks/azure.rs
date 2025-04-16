@@ -280,7 +280,7 @@ impl Azure {
             "az vm create --resource-group {AZURE_RESOURCE_GROUP} \
             --name {vm_name} --admin-username {AZURE_USERNAME} --location \
             {AZURE_LOCATION} --ssh-key-value {AZURE_SSH_PUB_KEY} \
-            --image {AZURE_SGX_VM_IMAGE} --size {vm_sku} --os-disk-size-gb 63 \
+            --image {AZURE_SGX_VM_IMAGE} --size {vm_sku} --os-disk-size-gb 128 \
             --public-ip-sku Standard --os-disk-delete-option delete \
             --data-disk-delete-option delete --nic-delete-option delete"
         );

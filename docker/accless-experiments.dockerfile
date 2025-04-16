@@ -58,7 +58,7 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 9f157aa06131c6af9a102531edcf39893322908a \
+    && git checkout 20b76962c15be97700b4b68fe700839db6268392 \
     && git submodule update --init -f cpp \
     && pip3 install /code/faasm-examples/cpp \
     # TODO: remove branch before merge
@@ -79,8 +79,10 @@ RUN cd /code/faasm-examples/cpp \
         opencv opencv --native \
         rabe rabe --native
 
+RUN cd /code/tless && git pull origin snp-knative && git checkout 100c5f4df8782b5e8231a6e80f0a1c88cb51e3a4
+
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
 RUN cd /code/tless \
-    && python3 ./ubench/build.py
-    # && python3 ./workflows/build.py
+    && python3 ./ubench/build.py \
+    && python3 ./workflows/build.py
