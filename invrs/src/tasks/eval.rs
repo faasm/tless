@@ -836,8 +836,7 @@ impl Eval {
                 EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            // for scale_up_factor in 1..(args.scale_up_range + 1) {
-                            for scale_up_factor in vec![1, 7, 8, 9, 10] {
+                            for scale_up_factor in 1..(args.scale_up_range + 1) {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }

@@ -20,6 +20,7 @@ kubectl delete namespace accless
 
 # In a Faasm environment
 invrs eval scale-up-latency upload-state
+invrs eval scale-up-latency upload-wasm
 invrs eval scale-up-latency run --baseline [faasm,sgx-faasm,accless-faasm] [--debug]
 ...
 # Once you are done
