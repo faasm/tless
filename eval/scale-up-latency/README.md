@@ -5,6 +5,12 @@
 To deploy the baseline follow the corresponding instructions: [SNP-Knative](
 ../docs/snp_knative.md) or [SGX-Faasm](../../docs/sgx_faasm.md).
 
+For Faasm, when you deploy, make sure to set:
+
+```bash
+export FAASM_OVERRIDE_CPU_COUNT=30
+```
+
 ## Run the experiment
 
 For each baseline, separately, you may run:
