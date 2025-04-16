@@ -12,7 +12,7 @@ extern "C"
 #include "libs/s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <string>
@@ -53,7 +53,7 @@ std::string join(const std::vector<std::string>& stringList, const std::string& 
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("ml-inference", "load", 0)) {
+    if (!accless::checkChain("ml-inference", "load", 0)) {
         std::cerr << "ml-inference(load): error checking TLess chain" << std::endl;
         return 1;
     }

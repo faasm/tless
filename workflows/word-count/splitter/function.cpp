@@ -28,7 +28,7 @@ extern "C"
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("word-count", "splitter", 0)) {
+    if (!accless::checkChain("word-count", "splitter", 0)) {
         std::cerr << "word-count(splitter): error checking TLess chain" << std::endl;
         return 1;
     }

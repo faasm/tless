@@ -12,7 +12,7 @@ extern "C"
 #include "libs/s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <string>
@@ -63,7 +63,7 @@ int main(int argc, char** argv)
     std::string bucketName = "tless";
     std::string s3prefix;
 
-    if (!tless::checkChain("ml-training", "validation", 0)) {
+    if (!accless::checkChain("ml-training", "validation", 0)) {
         std::cerr << "ml-training(validation): error checking TLess chain" << std::endl;
         return 1;
     }

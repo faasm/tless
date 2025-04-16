@@ -104,7 +104,7 @@ int main(int argc, char** argv)
 
     std::string us = "mapper-" + std::to_string(id);
 
-    if (!tless::checkChain("word-count", "mapper", id)) {
+    if (!accless::checkChain("word-count", "mapper", id)) {
         std::cerr << "word-count(" << us << "): error checking TLess chain" << std::endl;
         return 1;
     }

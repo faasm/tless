@@ -54,7 +54,7 @@ std::string serialiseWordCount(const std::map<std::string, int>& wordCount)
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("word-count", "reducer", 0)) {
+    if (!accless::checkChain("word-count", "reducer", 0)) {
         std::cerr << "word-count(splitter): error checking TLess chain" << std::endl;
         return 1;
     }

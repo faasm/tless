@@ -30,7 +30,7 @@ extern "C"
 #include "libs/s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <filesystem>
 #include <iostream>
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
 #endif
     std::string us = "predict-" + std::to_string(id);
 
-    if (!tless::checkChain("ml-inference", "predict", id)) {
+    if (!accless::checkChain("ml-inference", "predict", id)) {
         std::cerr << "ml-inference(" << us << "): error checking TLess chain" << std::endl;
         return 1;
     }
