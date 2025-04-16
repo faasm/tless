@@ -204,7 +204,7 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
     std::string certPath = getAttestationServiceCertPath();
     curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_CAINFO, certPath);
+    curl_easy_setopt(curl, CURLOPT_CAINFO, certPath.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, snpReport.data());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, snpReport.size());
