@@ -93,7 +93,10 @@ enum EvalSubCommand {
     Run(EvalRunArgs),
     /// Plot
     Plot {},
-    UploadState {},
+    UploadState {
+        /// Whereas we are using S3 with 'faasm' or 'knative'
+        system: String,
+    },
     UploadWasm {},
 }
 
@@ -326,8 +329,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::ColdStart)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::ColdStart).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::ColdStart, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::ColdStart)?;
@@ -340,8 +343,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatency)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::E2eLatency).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::E2eLatency, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::E2eLatency)?;
@@ -354,8 +357,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatencyCold)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::E2eLatencyCold).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::E2eLatencyCold, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::E2eLatencyCold)?;
@@ -368,8 +371,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::ScaleUpLatency)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::ScaleUpLatency).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::ScaleUpLatency, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::ScaleUpLatency)?;

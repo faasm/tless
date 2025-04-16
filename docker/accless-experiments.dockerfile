@@ -79,7 +79,7 @@ RUN cd /code/faasm-examples/cpp \
         opencv opencv --native \
         rabe rabe --native
 
-RUN cd /code/tless && git pull origin snp-knative && git checkout 100c5f4df8782b5e8231a6e80f0a1c88cb51e3a4
+RUN cd /code/tless && git pull origin snp-knative && git checkout 63e3529dcfb088db75ce4c5377d4b3a8a9e2c77a
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin

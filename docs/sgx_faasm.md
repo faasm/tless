@@ -12,3 +12,35 @@ directly on top of AKS.
 invrs azure sgx-faasm create
 invrs azure sgx-faasm provision
 ```
+
+### Faasm
+
+```bash
+export FAASM_WASM_VM=wamr
+faasmctl deploy.compose --mount-source . --workers=1
+faasmctl cli.faasm
+inv dev.tools --build Release --sgx Disabled
+exit
+```
+
+### SGX-Faasm
+
+```bash
+export FAASM_ACCLESS_ENABLED=off
+export FAASM_WASM_VM=sgx
+faasmctl deploy.compose --mount-source . --workers=1
+faasmctl cli.faasm
+inv dev.tools --build Release --sgx Hardware
+exit
+```
+
+### Accless-Faasm
+
+```bash
+export FAASM_ACCLESS_ENABLED=on
+export FAASM_WASM_VM=sgx
+faasmctl deploy.compose --mount-source . --workers=1
+faasmctl cli.faasm
+inv dev.tools --build Release --sgx Hardware
+exit
+```

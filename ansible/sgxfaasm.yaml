@@ -3,10 +3,10 @@
 - hosts: sgxfaasm
   gather_facts: yes
   tasks:
-    #     - include_tasks: tasks/sgx-faasm/sgx_setup.yaml
-    #     - include_tasks: tasks/sgx-faasm/apt.yaml
-    #     - include_tasks: tasks/util/docker.yaml
-    #     - include_tasks: tasks/util/rust.yaml
-    #     - include_tasks: tasks/util/vim.yaml
-    #     - include_tasks: tasks/sgx-faasm/code.yaml
+    - include_tasks: tasks/sgx-faasm/sgx_setup.yaml
+    - include_tasks: tasks/sgx-faasm/apt.yaml
+    - include_tasks: tasks/util/docker.yaml
+    - include_tasks: tasks/util/rust.yaml
+    - include_tasks: tasks/util/vim.yaml
+    - include_tasks: tasks/sgx-faasm/code.yaml
     - include_tasks: tasks/sgxfaasm.yaml

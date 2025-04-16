@@ -388,29 +388,6 @@ impl Eval {
             .expect("invrs(eval): failed to run kubectl command");
 
         thread::sleep(time::Duration::from_secs(2));
-
-        // Specific per-workflow wait command
-        /*
-        match workflow {
-            AvailableWorkflow::Finra => {
-                Self::wait_for_pod("accless", "accless.workflows/name=finra-fetch-private");
-                Self::wait_for_pod("accless", "accless.workflows/name=finra-fetch-public");
-                Self::wait_for_pod("accless", "accless.workflows/name=finra-merge");
-            }
-            AvailableWorkflow::MlTraining => {
-                Self::wait_for_pod("accless", "accless.workflows/name=ml-training-partition");
-                Self::wait_for_pod("accless", "accless.workflows/name=ml-training-validation");
-            }
-            AvailableWorkflow::MlInference => {
-                Self::wait_for_pod("accless", "accless.workflows/name=ml-inference-load");
-                Self::wait_for_pod("accless", "accless.workflows/name=ml-inference-partition");
-            }
-            AvailableWorkflow::WordCount => {
-                Self::wait_for_pod("accless", "accless.workflows/name=word-count-splitter");
-                Self::wait_for_pod("accless", "accless.workflows/name=word-count-reducer");
-            }
-        }
-        */
     }
 
     fn delete_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
@@ -860,7 +837,7 @@ impl Eval {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
                             // for scale_up_factor in 1..(args.scale_up_range + 1) {
-                            for scale_up_factor in 2..(args.scale_up_range + 1) {
+                            for scale_up_factor in vec![1, 7, 8, 9, 10] {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -1569,9 +1546,9 @@ impl Eval {
         Ok(())
     }
 
-    pub async fn upload_state(eval: &EvalExperiment) -> anyhow::Result<()> {
+    pub async fn upload_state(eval: &EvalExperiment, system: &str) -> anyhow::Result<()> {
         // Get the MinIO URL
-        let minio_url = S3::get_url("knative");
+        let minio_url = S3::get_url(system);
         unsafe {
             env::set_var("MINIO_URL", minio_url);
             env::set_var("AS_URL", "https://146.179.4.33:8443");

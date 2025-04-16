@@ -16,44 +16,6 @@ First, make sure you have deployed [SGX-Faasm](../../docs/sgx_faasm.md). Then,
 SSH into the SGX VM using: `invrs azure sgx-faasm ssh`. Make sure no cluster
 is running:
 
-```bash
-cd git/faasm/faasm
-source ./bin/workon.sh
-faasmctl delete
-```
-
-then, for Faasm:
-
-```bash
-export FAASM_WASM_VM=wamr
-faasmctl deploy.compose --mount-source . --workers=1
-faasmctl cli.faasm
-inv dev.tools --build Release --sgx Disabled
-exit
-```
-
-for SGX-Faasm:
-
-```bash
-export FAASM_ACCLESS_ENABLED=off
-export FAASM_WASM_VM=sgx
-faasmctl deploy.compose --mount-source . --workers=1
-faasmctl cli.faasm
-inv dev.tools --build Release --sgx Hardware
-exit
-```
-
-for Accless-Faasm:
-
-```bash
-export FAASM_ACCLESS_ENABLED=on
-export FAASM_WASM_VM=sgx
-faasmctl deploy.compose --mount-source . --workers=1
-faasmctl cli.faasm
-inv dev.tools --build Release --sgx Hardware
-exit
-```
-
 ### Run
 
 To run the experiment, first upload the corresponding WASM files and state:

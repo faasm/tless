@@ -1,10 +1,11 @@
 # Scale-Out Latency
 
-## Deploy
+## Deploy the experiment
 
-To deploy the baseline follow the corresponding instructions
+To deploy the baseline follow the corresponding instructions: [SNP-Knative](
+../docs/snp_knative.md) or [SGX-Faasm](../../docs/sgx_faasm.md).
 
-### Run the experiment
+## Run the experiment
 
 For each baseline, separately, you may run:
 
