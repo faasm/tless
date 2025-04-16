@@ -200,7 +200,7 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
         throw std::runtime_error("curl error");
     }
 
-    std::string asUrl = getAttestationServiceUrl();
+    std::string asUrl = getAttestationServiceUrl() + "/verify-snp-report";
     std::string certPath = getAttestationServiceCertPath();
     curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
