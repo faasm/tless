@@ -75,9 +75,9 @@ int main() {
         if (std::strncmp(buffer, "GET", 3) == 0) {
             std::string output;
             if (accless::checkChain("word-count", "splitter", 1)) {
-                output = "accless: access approved :-)";
+                output = "accless: access approved :-)\n";
             } else {
-                output = "accless: access denied :-(";
+                output = "accless: access denied :-(\n";
             }
 
             std::ostringstream response;
