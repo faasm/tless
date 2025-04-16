@@ -335,14 +335,20 @@ impl Eval {
         String::from_utf8(result.stdout).expect("Failed to convert envsubst output to string")
     }
 
-    fn deploy_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+    fn deploy_workflow(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+    ) {
         let workflow_yaml = match exp {
-            EvalExperiment::ColdStart => {
-                Env::proj_root().join("ubench").join("cold-start").join("service.yaml")
-            }
-            _ => {
-                Workflows::get_root().join(format!("{workflow}")).join("knative").join("workflow.yaml")
-            }
+            EvalExperiment::ColdStart => Env::proj_root()
+                .join("ubench")
+                .join("cold-start")
+                .join("service.yaml"),
+            _ => Workflows::get_root()
+                .join(format!("{workflow}"))
+                .join("knative")
+                .join("workflow.yaml"),
         };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
@@ -351,7 +357,9 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-snp-sc2",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
+                            "kata-qemu-snp-sc2"
+                        }
                         _ => panic!("woops"),
                     },
                 ),
@@ -392,14 +400,20 @@ impl Eval {
         thread::sleep(time::Duration::from_secs(2));
     }
 
-    fn delete_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+    fn delete_workflow(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+    ) {
         let workflow_yaml = match exp {
-            EvalExperiment::ColdStart => {
-                Env::proj_root().join("ubench").join("cold-start").join("service.yaml")
-            }
-            _ => {
-                Workflows::get_root().join(format!("{workflow}")).join("knative").join("workflow.yaml")
-            }
+            EvalExperiment::ColdStart => Env::proj_root()
+                .join("ubench")
+                .join("cold-start")
+                .join("service.yaml"),
+            _ => Workflows::get_root()
+                .join(format!("{workflow}"))
+                .join("knative")
+                .join("workflow.yaml"),
         };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
@@ -408,7 +422,9 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-snp-sc2",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
+                            "kata-qemu-snp-sc2"
+                        }
                         _ => panic!("woops"),
                     },
                 ),
@@ -486,7 +502,10 @@ impl Eval {
                 .output()
                 .expect("invrs(eval): failed to execute trigger command"),
             EvalExperiment::ColdStart => {
-                let cmd = Env::proj_root().join("ubench").join("cold-start").join("curl_cmd.sh");
+                let cmd = Env::proj_root()
+                    .join("ubench")
+                    .join("cold-start")
+                    .join("curl_cmd.sh");
                 let output = Command::new(cmd.clone())
                     .output()
                     .expect("invrs(eval): failed to execute trigger command");
@@ -586,7 +605,9 @@ impl Eval {
                             S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
                         }
                         None => {
-                            error!("invrs(eval): timed-out waiting for Word Count workload to finish")
+                            error!(
+                                "invrs(eval): timed-out waiting for Word Count workload to finish"
+                            )
                         }
                     }
                 }
@@ -856,7 +877,11 @@ impl Eval {
     // Plotting Functions
     // ------------------------------------------------------------------------
 
-    fn plot_e2e_latency(plot_version: &str, exp: &EvalExperiment, data_files: &Vec<PathBuf>) -> anyhow::Result<()> {
+    fn plot_e2e_latency(
+        plot_version: &str,
+        exp: &EvalExperiment,
+        data_files: &Vec<PathBuf>,
+    ) -> anyhow::Result<()> {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -956,12 +981,17 @@ impl Eval {
         root.fill(&WHITE).unwrap();
 
         let x_min = -0.5;
+        let y_max = match plot_version {
+            "faasm" => 10.0,
+            "knative" => 5.0,
+            _ => unreachable!(),
+        };
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .build_cartesian_2d(x_min..x_max as f64, 0f64..5f64)
+            .build_cartesian_2d(x_min..x_max as f64, 0f64..y_max)
             .unwrap();
 
         chart
@@ -1038,7 +1068,10 @@ impl Eval {
 
                     let this_y = (y / y_ref) as f64;
                     let mut bar = Rectangle::new(
-                        [(x_orig + x as f64, 0 as f64), (x_orig + x as f64 + 1.0, this_y as f64)],
+                        [
+                            (x_orig + x as f64, 0 as f64),
+                            (x_orig + x as f64 + 1.0, this_y as f64),
+                        ],
                         bar_style,
                     );
                     bar.set_margin(0, 0, margin_px, margin_px);
@@ -1047,19 +1080,21 @@ impl Eval {
                 .unwrap();
 
             let x_axis_range = 0.0..x_max as f64;
-            let margin_units: f64 = margin_px as f64 * (x_axis_range.end - x_axis_range.start)
-                / chart_width_px as f64;
+            let margin_units: f64 =
+                margin_px as f64 * (x_axis_range.end - x_axis_range.start) / chart_width_px as f64;
 
             // Draw solid lines arround bars
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (_, y))| {
                     let this_y = (y / y_ref) as f64;
                     PathElement::new(
-                        vec![(x_orig + x as f64 + margin_units, 0.0),
-                             (x_orig + x as f64 + 1.0 - margin_units, 0.0),
-                             (x_orig + x as f64 + 1.0 - margin_units, this_y as f64),
-                             (x_orig + x as f64 + margin_units, this_y as f64),
-                             (x_orig + x as f64 + margin_units, 0.0)],
+                        vec![
+                            (x_orig + x as f64 + margin_units, 0.0),
+                            (x_orig + x as f64 + 1.0 - margin_units, 0.0),
+                            (x_orig + x as f64 + 1.0 - margin_units, this_y as f64),
+                            (x_orig + x as f64 + margin_units, this_y as f64),
+                            (x_orig + x as f64 + margin_units, 0.0),
+                        ],
                         &BLACK,
                     )
                 }))
@@ -1069,31 +1104,48 @@ impl Eval {
                 let this_y = (y / y_ref) as f64;
 
                 // Add text for bars that overflow
-                let x_orig_pixel = chart.plotting_area().map_coordinate(&(x_orig, 3.75));
-                if this_y > 5.0 {
-                    let y_offset = -1.5;
-                    root
-                        .draw(&Rectangle::new(
-                            [(x_orig_pixel.0, x_orig_pixel.1), (x_orig_pixel.0 + 30, x_orig_pixel.1 + 30)],
-                            WHITE.filled()
-                        ))
-                        .unwrap();
-                    root
-                        .draw(&PathElement::new(
-                            [(x_orig_pixel.0, x_orig_pixel.1),
-                             (x_orig_pixel.0 + 30, x_orig_pixel.1),
-                             (x_orig_pixel.0 + 30, x_orig_pixel.1 + 30),
-                             (x_orig_pixel.0, x_orig_pixel.1 + 30),
-                             (x_orig_pixel.0, x_orig_pixel.1)],
-                            &BLACK
-                        ))
-                        .unwrap();
+                let y_offset = match plot_version {
+                    "faasm" => -3.0,
+                    "knative" => -1.5,
+                    _ => unreachable!(),
+                };
+                let x_orig_pixel = chart
+                    .plotting_area()
+                    .map_coordinate(&(x_orig + x as f64, y_max + y_offset));
+                if this_y > y_max {
+                    let width = 20;
+                    let height = match plot_version {
+                        "faasm" => 50,
+                        "knative" => 35,
+                        _ => unreachable!(),
+                    };
+                    root.draw(&Rectangle::new(
+                        [
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1 - height),
+                        ],
+                        WHITE.filled(),
+                    ))
+                    .unwrap();
+                    root.draw(&PathElement::new(
+                        [
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1 - height),
+                            (x_orig_pixel.0, x_orig_pixel.1 - height),
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                        ],
+                        &BLACK,
+                    ))
+                    .unwrap();
                     chart
                         .plotting_area()
                         .draw(&Text::new(
                             format!("{:.1}", this_y),
-                            (x_orig + x as f64, (this_y + y_offset) as f64),
-                            ("sans-serif", FONT_SIZE).into_font().transform(FontTransform::Rotate270),
+                            (x_orig + x as f64, (y_max + y_offset) as f64),
+                            ("sans-serif", FONT_SIZE - 2)
+                                .into_font()
+                                .transform(FontTransform::Rotate270),
                         ))
                         .unwrap();
                 }
@@ -1105,9 +1157,11 @@ impl Eval {
                     AvailableWorkflow::Finra => format!("{workflow}"),
                     AvailableWorkflow::MlTraining => "ml-train".to_string(),
                     AvailableWorkflow::MlInference => "ml-inf".to_string(),
-                    AvailableWorkflow::WordCount  => "wc".to_string(),
+                    AvailableWorkflow::WordCount => "wc".to_string(),
                 },
-                chart.plotting_area().map_coordinate(&get_coordinate_for_workflow_label(workflow)),
+                chart
+                    .plotting_area()
+                    .map_coordinate(&get_coordinate_for_workflow_label(workflow)),
                 ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
@@ -1192,7 +1246,8 @@ impl Eval {
             .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm {
+            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm
+            {
                 label = "accless".to_string();
             }
 
@@ -1285,7 +1340,10 @@ impl Eval {
             let mut count = 0;
             let avg_times = data.get_mut(&baseline).unwrap();
 
-            let idx = num_parallel_funcs.iter().position(|&x| x == scale_up_factor).unwrap();
+            let idx = num_parallel_funcs
+                .iter()
+                .position(|&x| x == scale_up_factor)
+                .unwrap();
             for result in reader.deserialize() {
                 let record: Record = result.unwrap();
 
@@ -1315,6 +1373,7 @@ impl Eval {
             .margin(10)
             .margin_top(40)
             .margin_left(40)
+            .margin_right(20)
             .build_cartesian_2d(0..(x_max) as u32, 0f64..y_max as f64)
             .unwrap();
 
@@ -1371,11 +1430,17 @@ impl Eval {
         // Add solid frames
         chart
             .plotting_area()
-            .draw(&PathElement::new(vec![(0, y_max), (x_max as u32, y_max)], &BLACK))
+            .draw(&PathElement::new(
+                vec![(0, y_max), (x_max as u32, y_max)],
+                &BLACK,
+            ))
             .unwrap();
         chart
             .plotting_area()
-            .draw(&PathElement::new(vec![(x_max as u32, 0.0), (x_max as u32, y_max)], &BLACK))
+            .draw(&PathElement::new(
+                vec![(x_max as u32, 0.0), (x_max as u32, y_max)],
+                &BLACK,
+            ))
             .unwrap();
 
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
@@ -1424,7 +1489,8 @@ impl Eval {
             .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm {
+            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm
+            {
                 label = "accless".to_string();
             }
 
@@ -1615,7 +1681,6 @@ impl Eval {
                 ))
                 .unwrap();
 
-
             for baseline in &baselines {
                 // Calculate position for each legend item
                 let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
@@ -1651,7 +1716,9 @@ impl Eval {
                 // Draw the baseline label (Text)
                 root.draw(&Text::new(
                     match baseline {
-                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => format!("accless"),
+                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
+                            format!("accless")
+                        }
                         _ => format!("{baseline}"),
                     },
                     (x_pos + 30, y_pos + 2), // Adjust text position
@@ -1726,7 +1793,6 @@ impl Eval {
                 ))
                 .unwrap();
 
-
             for baseline in &baselines {
                 // Calculate position for each legend item
                 let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
@@ -1762,7 +1828,9 @@ impl Eval {
                 // Draw the baseline label (Text)
                 root.draw(&Text::new(
                     match baseline {
-                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => format!("accless"),
+                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
+                            format!("accless")
+                        }
                         _ => format!("{baseline}"),
                     },
                     (x_pos + 30, y_pos + 2), // Adjust text position
@@ -1787,7 +1855,7 @@ impl Eval {
                 Self::plot_cold_start_cdf("knative", &data_files);
             }
             EvalExperiment::E2eLatency => {
-                // Self::plot_e2e_latency(&exp, &data_files)?;
+                Self::plot_e2e_latency("faasm", &exp, &data_files)?;
                 Self::plot_e2e_latency("knative", &exp, &data_files)?;
             }
             EvalExperiment::E2eLatencyCold => {

@@ -89,11 +89,11 @@
 Slowdown
 </text>
 <rect x="62" y="208" width="17" height="41" opacity="1" fill="#010682" stroke="none"/>
-<rect x="83" y="96" width="17" height="153" opacity="1" fill="#B3B000" stroke="none"/>
-<rect x="104" y="92" width="18" height="157" opacity="1" fill="#820101" stroke="none"/>
+<rect x="83" y="103" width="17" height="146" opacity="1" fill="#B3B000" stroke="none"/>
+<rect x="104" y="102" width="18" height="147" opacity="1" fill="#820101" stroke="none"/>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="62,249 80,249 80,208 62,208 62,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="83,249 101,249 101,96 83,96 83,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="104,249 122,249 122,92 104,92 104,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="83,249 101,249 101,103 83,103 83,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="104,249 122,249 122,102 104,102 104,249 "/>
 <text x="60" y="260" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="22.580645161290324" opacity="1" fill="#000000">
 finra
 </text>
@@ -106,31 +106,31 @@ finra
 <rect x="166" y="68" width="20" height="35" opacity="1" fill="#FFFFFF" stroke="none"/>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="166,103 186,103 186,68 166,68 166,103 "/>
 <text x="166" y="103" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="20.967741935483872" opacity="1" fill="#000000" transform="rotate(270, 166, 103)">
-5.6
+5.5
 </text>
 <rect x="187" y="68" width="20" height="35" opacity="1" fill="#FFFFFF" stroke="none"/>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="187,103 207,103 207,68 187,68 187,103 "/>
 <text x="187" y="103" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="20.967741935483872" opacity="1" fill="#000000" transform="rotate(270, 187, 103)">
-5.7
+5.5
 </text>
 <text x="134" y="260" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="22.580645161290324" opacity="1" fill="#000000">
 ml-train
 </text>
 <rect x="232" y="208" width="17" height="41" opacity="1" fill="#010682" stroke="none"/>
-<rect x="253" y="116" width="17" height="133" opacity="1" fill="#B3B000" stroke="none"/>
-<rect x="274" y="118" width="17" height="131" opacity="1" fill="#820101" stroke="none"/>
+<rect x="253" y="117" width="17" height="132" opacity="1" fill="#B3B000" stroke="none"/>
+<rect x="274" y="115" width="17" height="134" opacity="1" fill="#820101" stroke="none"/>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="231,249 249,249 249,208 231,208 231,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="252,249 270,249 270,116 252,116 252,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="274,249 292,249 292,118 274,118 274,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="252,249 270,249 270,117 252,117 252,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="274,249 292,249 292,115 274,115 274,249 "/>
 <text x="230" y="260" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="22.580645161290324" opacity="1" fill="#000000">
 ml-inf
 </text>
 <rect x="316" y="208" width="18" height="41" opacity="1" fill="#010682" stroke="none"/>
-<rect x="338" y="92" width="17" height="157" opacity="1" fill="#B3B000" stroke="none"/>
-<rect x="359" y="89" width="17" height="160" opacity="1" fill="#820101" stroke="none"/>
+<rect x="338" y="94" width="17" height="155" opacity="1" fill="#B3B000" stroke="none"/>
+<rect x="359" y="94" width="17" height="155" opacity="1" fill="#820101" stroke="none"/>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="316,249 334,249 334,208 316,208 316,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="337,249 355,249 355,92 337,92 337,249 "/>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="358,249 376,249 376,89 358,89 358,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="337,249 355,249 355,94 337,94 337,249 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="358,249 376,249 376,94 358,94 358,249 "/>
 <text x="330" y="260" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="22.580645161290324" opacity="1" fill="#000000">
 wc
 </text>

@@ -80,7 +80,10 @@ impl Workflows {
         }
 
         // First, upload the DAG
-        let yaml_path = Env::proj_root().join("workflows").join(format!("{workflow}")).join("accless.yaml");
+        let yaml_path = Env::proj_root()
+            .join("workflows")
+            .join(format!("{workflow}"))
+            .join("accless.yaml");
         Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await?;
 
         if dag_only {
