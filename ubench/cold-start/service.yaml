@@ -9,21 +9,17 @@ spec:
       labels:
         accless.ubench/name: cold-start
       annotations:
-        io.containerd.cri.runtime-handler: kata-${SC2_RUNTIME_CLASS}
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
     spec:
-      runtimeClassName: kata-${SC2_RUNTIME_CLASS}
+      runtimeClassName: ${RUNTIME_CLASS_NAME}
       securityContext:
         runAsUser: 1000
       containers:
-        # - image: ghcr.io/faasm/accless-knative-worker:0.5.0
-        - image: sc2cr.io/accless-knative-worker:0.5.3
+        - image: sc2cr.io/accless-knative-worker:0.6.0
           ports:
             - containerPort: 8080
-          # command: [""]
-          # command: ["ls"]
           command: ["/bin/sh", "-c"]
           args: ["/code/tless/ubench/build-native/accless-ubench-cold-start-server"]
-          # args: ["ls"]
           env:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"

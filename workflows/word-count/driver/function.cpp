@@ -1,6 +1,6 @@
 #ifdef __faasm
 #include <faasm/core.h>
-#include "tless.h"
+#include "accless.h"
 #endif
 
 #include <iostream>

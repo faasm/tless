@@ -9,9 +9,9 @@ WORKFLOWS_ROOT = dirname(realpath(__file__))
 
 WORKFLOWS = {
     "finra": ["driver", "fetch-public", "fetch-private", "audit", "merge"],
-    "ml-training": ["driver", "partition", "pca", "rf", "validation"],
-    "ml-inference": ["driver", "partition", "load", "predict"],
-    "word-count": ["driver", "splitter", "mapper", "reducer"],
+    #     "ml-training": ["driver", "partition", "pca", "rf", "validation"],
+    #     "ml-inference": ["driver", "partition", "load", "predict"],
+    #     "word-count": ["driver", "splitter", "mapper", "reducer"],
 }
 
 
@@ -29,30 +29,6 @@ def compile(wasm=False, native=False, debug=False):
 
     if not exists(build_dir):
         makedirs(build_dir)
-
-    # TODO: remove me just testing
-    if wasm:
-        wasm_cmake(
-            WORKFLOWS_ROOT,
-            build_dir,
-            "tless_test",
-            clean=False,
-            debug=False,
-            is_threads=False,
-        )
-    else:
-        cmake_cmd = [
-            "cmake",
-            "-GNinja",
-            "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
-            "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
-            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
-            WORKFLOWS_ROOT,
-        ]
-        cmake_cmd = " ".join(cmake_cmd)
-
-        run(cmake_cmd, shell=True, check=True, cwd=build_dir)
-        run("ninja tless_test_native", shell=True, check=True, cwd=build_dir)
 
     for wflow in WORKFLOWS:
         for function in WORKFLOWS[wflow]:

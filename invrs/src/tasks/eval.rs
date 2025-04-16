@@ -333,11 +333,15 @@ impl Eval {
         String::from_utf8(result.stdout).expect("Failed to convert envsubst output to string")
     }
 
-    fn deploy_workflow(workflow: &AvailableWorkflow, baseline: &EvalBaseline) {
-        let mut workflow_yaml = Workflows::get_root();
-        workflow_yaml.push(format!("{workflow}"));
-        workflow_yaml.push("knative");
-        workflow_yaml.push("workflow.yaml");
+    fn deploy_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+        let workflow_yaml = match exp {
+            EvalExperiment::ColdStart => {
+                Env::proj_root().join("ubench").join("cold-start").join("service.yaml")
+            }
+            _ => {
+                Workflows::get_root().join(format!("{workflow}")).join("knative").join("workflow.yaml")
+            }
+        };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
             BTreeMap::from([
@@ -345,13 +349,13 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-snp-sc2",
                         _ => panic!("woops"),
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
                 (
-                    "TLESS_MODE",
+                    "ACCLESS_MODE",
                     match baseline {
                         EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
@@ -383,34 +387,42 @@ impl Eval {
             .wait_with_output()
             .expect("invrs(eval): failed to run kubectl command");
 
+        // No waiting for cold start (?)
+        if exp == &EvalExperiment::ColdStart {
+            return;
+        }
+
         // Specific per-workflow wait command
         match workflow {
             AvailableWorkflow::Finra => {
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-private");
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-public");
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-merge");
+                Self::wait_for_pod("accless", "accless.workflows/name=finra-fetch-private");
+                Self::wait_for_pod("accless", "accless.workflows/name=finra-fetch-public");
+                Self::wait_for_pod("accless", "accless.workflows/name=finra-merge");
             }
             AvailableWorkflow::MlTraining => {
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-partition");
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-validation");
+                Self::wait_for_pod("accless", "accless.workflows/name=ml-training-partition");
+                Self::wait_for_pod("accless", "accless.workflows/name=ml-training-validation");
             }
             AvailableWorkflow::MlInference => {
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-load");
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-partition");
+                Self::wait_for_pod("accless", "accless.workflows/name=ml-inference-load");
+                Self::wait_for_pod("accless", "accless.workflows/name=ml-inference-partition");
             }
             AvailableWorkflow::WordCount => {
-                Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
-                Self::wait_for_pod("tless", "tless.workflows/name=word-count-reducer");
+                Self::wait_for_pod("accless", "accless.workflows/name=word-count-splitter");
+                Self::wait_for_pod("accless", "accless.workflows/name=word-count-reducer");
             }
         }
     }
 
-    fn delete_workflow(workflow: &AvailableWorkflow, baseline: &EvalBaseline) {
-        // Common deploy mechanism
-        let mut workflow_yaml = Workflows::get_root();
-        workflow_yaml.push(format!("{workflow}"));
-        workflow_yaml.push("knative");
-        workflow_yaml.push("workflow.yaml");
+    fn delete_workflow(workflow: &AvailableWorkflow, exp: &EvalExperiment, baseline: &EvalBaseline) {
+        let workflow_yaml = match exp {
+            EvalExperiment::ColdStart => {
+                Env::proj_root().join("ubench").join("cold-start").join("service.yaml")
+            }
+            _ => {
+                Workflows::get_root().join(format!("{workflow}")).join("knative").join("workflow.yaml")
+            }
+        };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
             BTreeMap::from([
@@ -418,13 +430,13 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => "kata-qemu-snp-sc2",
                         _ => panic!("woops"),
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
                 (
-                    "TLESS_MODE",
+                    "ACCLESS_MODE",
                     match baseline {
                         EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
@@ -460,10 +472,11 @@ impl Eval {
 
     async fn wait_for_scale_to_zero() {
         loop {
-            let output = Self::run_kubectl_cmd(&format!("-n tless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
+            let output = Self::run_kubectl_cmd(&format!("-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
             debug!("invrs: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
+            // One pod corresponds to the MinIO service
             if values.len() == 1 {
                 break;
             }
@@ -494,6 +507,17 @@ impl Eval {
                 .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
                 .output()
                 .expect("invrs(eval): failed to execute trigger command"),
+            EvalExperiment::ColdStart => {
+                let cmd = Env::proj_root().join("ubench").join("cold-start").join("curl_cmd.sh");
+                let output = Command::new(cmd.clone())
+                    .output()
+                    .expect("invrs(eval): failed to execute trigger command");
+
+                // Cold-start is done here
+                exp_result.end_time = Utc::now();
+
+                output
+            }
             _ => Command::new(trigger_cmd.clone())
                 .output()
                 .expect("invrs(eval): failed to execute trigger command"),
@@ -573,32 +597,27 @@ impl Eval {
                 }
             }
             AvailableWorkflow::WordCount => {
-                // First wait for the result key
-                let result_key = format!("{workflow}/outputs/aggregated-results.txt");
+                if exp != &EvalExperiment::ColdStart {
+                    // First wait for the result key
+                    let result_key = format!("{workflow}/outputs/aggregated-results.txt");
 
-                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
-                    Some(time) => {
-                        // If succesful, remove the result key
-                        exp_result.end_time = time;
-                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
-                    }
-                    None => {
-                        error!("invrs(eval): timed-out waiting for Word Count workload to finish")
+                    match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                        Some(time) => {
+                            // If succesful, remove the result key
+                            exp_result.end_time = time;
+                            S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                        }
+                        None => {
+                            error!("invrs(eval): timed-out waiting for Word Count workload to finish")
+                        }
                     }
                 }
             }
         }
 
-        // Common-clean-up
-        S3::clear_dir(
-            EVAL_BUCKET_NAME.to_string(),
-            "{workflow}/exec-tokens".to_string(),
-        )
-        .await;
-
         // Per-experiment, per-workflow clean-up
         match exp {
-            EvalExperiment::E2eLatencyCold => {
+            EvalExperiment::E2eLatencyCold | EvalExperiment::ColdStart => {
                 debug!("invrs: {exp}: waiting for scale-to-zero...");
                 Self::wait_for_scale_to_zero().await;
             }
@@ -620,15 +639,15 @@ impl Eval {
         let baseline = args.baseline[args_offset].clone();
 
         // First, deploy the common services
-        let mut k8s_common_path = Workflows::get_root();
-        k8s_common_path.push("k8s_common.yaml");
+        let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
+        // k8s_common_path.push("common.yaml");
         Self::run_kubectl_cmd(&format!("apply -f {}", k8s_common_path.display()));
 
         // Wait for the MinIO pod to be ready
-        Self::wait_for_pod("tless", "tless.workflows/name=minio");
+        Self::wait_for_pod("accless", "accless.workflows/name=minio");
 
         // Get the MinIO URL
-        let minio_url = Self::run_kubectl_cmd("-n tless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
+        let minio_url = Self::run_kubectl_cmd("-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
         unsafe {
             env::set_var("MINIO_URL", minio_url);
         }
@@ -659,27 +678,16 @@ impl Eval {
                 workflow_str.as_str(),
             );
 
-            // Deploy workflow
-            Self::deploy_workflow(workflow, &baseline);
+            Self::deploy_workflow(workflow, &exp, &baseline);
 
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_workflow_once(workflow, exp, scale_up_factor).await;
-                S3::clear_dir(
-                    EVAL_BUCKET_NAME.to_string(),
-                    format!("{workflow}/exec-tokens"),
-                )
-                .await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
                 let mut result = Self::run_workflow_once(workflow, exp, scale_up_factor).await;
-                S3::clear_dir(
-                    EVAL_BUCKET_NAME.to_string(),
-                    format!("{workflow}/exec-tokens"),
-                )
-                .await;
                 result.iter = i;
                 Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
@@ -687,15 +695,14 @@ impl Eval {
             }
 
             // Delete workflow
-            Self::delete_workflow(workflow, &baseline);
+            Self::delete_workflow(workflow, &exp, &baseline);
 
             // Finish progress bar
             pb.finish();
         }
 
         // Experiment-wide clean-up
-        let mut k8s_common_path = Workflows::get_root();
-        k8s_common_path.push("k8s_common.yaml");
+        let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
         Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
 
         Ok(())
@@ -1375,6 +1382,9 @@ impl Eval {
 
             let file_name_len = file_name.len();
             let baseline: EvalBaseline = file_name[0..file_name_len - 4].parse().unwrap();
+            if !baselines.contains(&baseline) {
+                continue;
+            }
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -1401,7 +1411,11 @@ impl Eval {
         root.fill(&WHITE).unwrap();
 
         // X axis in ms
-        let x_max = 2000;
+        let x_max = match plot_version {
+            "faasm" => 2000,
+            "knative" => 20000,
+            _ => panic!(),
+        };
         let y_max: f64 = 100.0;
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
@@ -1475,7 +1489,9 @@ impl Eval {
                 EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
                 EvalBaseline::SgxFaasm => (legend_x_start + 110, legend_y_pos),
                 EvalBaseline::AcclessFaasm => (legend_x_start + 270, legend_y_pos),
-                _ => todo!(),
+                EvalBaseline::Knative => (legend_x_start, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 110, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 270, legend_y_pos),
             }
         }
 
@@ -1534,8 +1550,8 @@ impl Eval {
 
         match exp {
             EvalExperiment::ColdStart => {
-                Self::plot_cold_start_cdf("faasm", &data_files);
-                // Self::plot_cold_start_cdf("knative", &data_files);
+                // Self::plot_cold_start_cdf("faasm", &data_files);
+                Self::plot_cold_start_cdf("knative", &data_files);
             }
             EvalExperiment::E2eLatency => {
                 Self::plot_e2e_latency(&exp, &data_files)?;

@@ -95,7 +95,7 @@ void initS3Wrapper() {
               << s3PortStr << std::endl;
 }
 
-void shutdownFaasmS3() { ; }
+void shutdownS3Wrapper() { ; }
 
 S3Wrapper::S3Wrapper()
     : baseUrl(minio::s3::BaseUrl(

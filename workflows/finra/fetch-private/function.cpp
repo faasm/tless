@@ -9,10 +9,10 @@ extern "C"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 #include "trade.h"
 
 #include <iostream>
@@ -35,7 +35,7 @@ Portfolio portfolio = {
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("finra", "fetch-private", 0)) {
+    if (!accless::checkChain("finra", "fetch-private", 0)) {
         std::cerr << "finra(fetch-private): error checking TLess chain" << std::endl;
         return 1;
     }

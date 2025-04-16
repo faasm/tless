@@ -8,10 +8,10 @@ extern "C"
 #else
 #include <cstdlib>
 #include <fstream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <stdio.h>

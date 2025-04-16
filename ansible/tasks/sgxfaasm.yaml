@@ -7,7 +7,7 @@
     executable: /bin/bash
   environment:
     FAASM_ACCLESS_ENABLED: on
-    FAASM_ATTESTATION_SERVICE_URL: {{ as_ip }}
+      # FAASM_ATTESTATION_SERVICE_URL: "{{ as_ip }}"
     FAASM_WASM_VM: sgx
 
 # For the time being, we mount the source, so we must rebuild all targets
