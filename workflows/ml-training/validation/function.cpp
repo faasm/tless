@@ -9,7 +9,7 @@ extern "C"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
 #include "accless.h"
