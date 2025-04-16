@@ -65,10 +65,6 @@ spec:
     metadata:
       labels:
         accless.workflows/name: finra-fetch-public
-      annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: serving.knative.dev/v1
 kind: Service
@@ -91,10 +87,6 @@ spec:
     metadata:
       labels:
         accless.workflows/name: finra-fetch-private
-      annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
@@ -115,7 +107,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: main
-              image: sc2cr.io/accless-knative-worker@sha256:
+              image: sc2cr.io/accless-knative-worker@sha256:306ae34589a4925c672cdc9c0e8665e4517bf3a1be22605f43c82a89af7b62e8
               ports:
                 - containerPort: 8080
               workingDir: /workflows/finra/knative
@@ -128,10 +120,6 @@ spec:
         metadata:
           labels:
             accless.workflows/name: finra-audit
-          annotations:
-            # NOTE: we may have to enable this annotation in Kata's config file
-            # under hypervisor.qemu.enable_annotations (add 'default_memory')
-            io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: serving.knative.dev/v1
 kind: Service
@@ -158,9 +146,6 @@ spec:
         # High grace-period to guarantee the same instance processes requests
         # for all jobs in the JobSink (i.e. instances of the audit function)
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription

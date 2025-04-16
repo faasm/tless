@@ -23,12 +23,3 @@ ${COCO_SOURCE:-/usr/local}/bin/kubectl run curl-2-${THIS_RUN_MAGIC} --image=curl
    -H "ce-id: 1" \
    -d '{"num-audit": '"${NUM_AUDIT_FUNCS}"', "run-magic": '"${THIS_RUN_MAGIC}"'}' \
    http://ingress-to-fetch-private-kn-channel.accless.svc.cluster.local
-
-# curl -X POST -v \
-#    -H "content-type: application/json"  \
-#    -H "ce-specversion: 1.0" \
-#    -H "ce-source: audit" \
-#    -H "ce-type: http://fetch-to-audit-kn-channel.tless.svc.cluster.local" \
-#    -H "ce-id: 1" \
-#    -d '{"num-audit": 2, "audit-id": 0, "run-magic": '"${THIS_RUN_MAGIC}}"'' \
-#    http://localhost:8080

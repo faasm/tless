@@ -113,7 +113,7 @@ pub fn get_json_from_event(event: &Event) -> Value {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
         Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-        _ => panic!("tless(driver): error: must be json data"),
+        _ => panic!("accless(driver): error: must be json data"),
     }
     .unwrap()
 }
@@ -319,7 +319,7 @@ pub fn process_event(mut event: Event) -> Event {
             // include one magic per run, and spawn two cloud events with the
             // same magic
             let mut scaled_event = event.clone();
-            scaled_event.set_type("http://audit-to-merge-kn-channel.tless.svc.cluster.local");
+            scaled_event.set_type("http://audit-to-merge-kn-channel.accless.svc.cluster.local");
 
             for i in 1..num_audit {
                 scaled_event.set_id((run_magic + i).to_string());
