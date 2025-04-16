@@ -26,6 +26,7 @@ add_library(${CMAKE_PROJECT_TARGET}
 # in WASM because there is  no easy way to pass CMake vars to `wasm_cmake` in
 # faasmtools
 if (ACCLESS_UBENCH)
+    message(STATUS "Building UBENCH")
     target_compile_definitions(${CMAKE_PROJECT_TARGET} PUBLIC ACCLESS_UBENCH)
 endif ()
 
