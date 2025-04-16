@@ -47,6 +47,7 @@ def compile(wasm=False, native=False, debug=False, time=False):
 
             run(cmake_cmd, shell=True, check=True, cwd=build_dir)
             run("ninja {}".format(UBENCHS[ubench]), shell=True, check=True, cwd=build_dir)
+            run("ninja {}-server".format(UBENCHS[ubench]), shell=True, check=True, cwd=build_dir)
 
 
 if __name__ == "__main__":
