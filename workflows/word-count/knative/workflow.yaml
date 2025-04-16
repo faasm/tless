@@ -60,6 +60,8 @@ spec:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
     metadata:
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
       labels:
         accless.workflows/name: word-count-splitter
 ---
@@ -100,6 +102,8 @@ spec:
                 - name: ACCLESS_MODE
                   value: "${ACCLESS_MODE}"
         metadata:
+          annotations:
+            io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
           labels:
             accless.workflows/name: word-count-mapper
 ---
@@ -127,6 +131,7 @@ spec:
       labels:
         accless.workflows/name: word-count-reducer
       annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
 ---
 apiVersion: messaging.knative.dev/v1

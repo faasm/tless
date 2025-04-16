@@ -53,6 +53,8 @@ spec:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
     metadata:
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
       labels:
         accless.workflows/name: ml-inference-partition
 ---
@@ -75,6 +77,8 @@ spec:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
     metadata:
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
       labels:
         accless.workflows/name: ml-inference-load
 ---
@@ -109,6 +113,8 @@ spec:
                 - name: ACCLESS_MODE
                   value: "${ACCLESS_MODE}"
         metadata:
+          annotations:
+            io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
           labels:
             accless.workflows/name: ml-inference-predict
 ---

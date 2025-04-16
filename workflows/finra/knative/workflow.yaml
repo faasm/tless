@@ -63,6 +63,8 @@ spec:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
     metadata:
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
       labels:
         accless.workflows/name: finra-fetch-public
 ---
@@ -85,6 +87,8 @@ spec:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
     metadata:
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
       labels:
         accless.workflows/name: finra-fetch-private
 ---
@@ -118,6 +122,8 @@ spec:
                 - name: ACCLESS_MODE
                   value: "${ACCLESS_MODE}"
         metadata:
+          annotations:
+            io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
           labels:
             accless.workflows/name: finra-audit
 ---
@@ -143,6 +149,7 @@ spec:
       labels:
         accless.workflows/name: finra-merge
       annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
         # High grace-period to guarantee the same instance processes requests
         # for all jobs in the JobSink (i.e. instances of the audit function)
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
