@@ -107,7 +107,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: main
-              image: sc2cr.io/accless-knative-worker@sha256:306ae34589a4925c672cdc9c0e8665e4517bf3a1be22605f43c82a89af7b62e8
+              image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
               ports:
                 - containerPort: 8080
               workingDir: /workflows/finra/knative
