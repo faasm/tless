@@ -850,7 +850,7 @@ impl Eval {
                 EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            for scale_up_factor in 1..(10) {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -860,7 +860,7 @@ impl Eval {
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            for scale_up_factor in vec![1, 10, 20, 40, 50, 60, 70, 80, 90, 100] {
                                 Self::run_faasm_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -1874,6 +1874,7 @@ impl Eval {
     pub async fn upload_state(eval: &EvalExperiment, system: &str) -> anyhow::Result<()> {
         // Get the MinIO URL
         let minio_url = S3::get_url(system);
+        // TODO: get the correct AS URL too
         unsafe {
             env::set_var("MINIO_URL", minio_url);
             env::set_var("AS_URL", "https://146.179.4.33:8443");
