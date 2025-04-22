@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::tasks::color::{get_color_from_label, FONT_SIZE};
+use crate::tasks::color::{get_color_from_label, FONT_SIZE, STROKE_WIDTH};
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
@@ -19,17 +19,29 @@ use std::{
     time::Instant,
 };
 
+// We obtain this numbers by following the instructions to run the escrow-xput
+// benchmark, and do a run where we modify the number of requests to be [0, 10]
+// These numbers are run when the server is a D2
+const ACCLESS_LATENCY_D2: &[f64] = &[
+    0.091594, 0.100394, 0.107495, 0.111224, 0.11829, 0.122359, 0.126534, 0.131722, 0.127414,
+    0.123334,
+];
+// Rounded monthly cost (in USD) of a Standard_DCas_v5 as of 17/04/2025
+const UNIT_MONTHLY_COST_DC2: u32 = 62;
+
 const REQUEST_COUNTS_MHSM: &[usize] = &[1, 5, 10, 15, 20, 40, 60, 80, 100];
-const REQUEST_COUNTS_TRUSTEE: &[usize] = &[1, 10, 50, 100, 200, 400, 600, 800, 1000];
+const REQUEST_COUNTS_TRUSTEE: &[usize] = &[1, 20, 60, 80, 100, 120, 160, 180, 200];
 const REQUEST_PARALLELISM: usize = 10;
 
 pub enum MicroBenchmarks {
+    EscrowCost,
     EscrowXput,
 }
 
 impl fmt::Display for MicroBenchmarks {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            MicroBenchmarks::EscrowCost => write!(f, "escrow-cost"),
             MicroBenchmarks::EscrowXput => write!(f, "escrow-xput"),
         }
     }
@@ -418,11 +430,11 @@ impl Ubench {
         plot_path.push(format!("{}.svg", MicroBenchmarks::EscrowXput));
 
         // Plot data
-        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
-        let x_max = 1000;
-        let y_max: f64 = 20.0;
+        let x_max = 200;
+        let y_max: f64 = 5.0;
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
@@ -436,7 +448,6 @@ impl Ubench {
 
         chart
             .configure_mesh()
-            // .disable_mesh()
             .light_line_style(&WHITE)
             .x_labels(8)
             .y_labels(6)
@@ -458,7 +469,7 @@ impl Ubench {
         .unwrap();
         root.draw(&Text::new(
             "Throughput [RPS]",
-            (350, 275),
+            (125, 275),
             ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
         ))
         .unwrap();
@@ -467,8 +478,8 @@ impl Ubench {
             // Draw line
             chart
                 .draw_series(LineSeries::new(
-                    (1..values.len())
-                        .zip(values[1..].iter())
+                    (0..values.len())
+                        .zip(values[0..].iter())
                         .filter(|(_, y)| **y <= y_max)
                         .map(|(x, y)| {
                             (
@@ -483,15 +494,15 @@ impl Ubench {
                                 *y,
                             )
                         }),
-                    EscrowBaseline::get_color(&baseline).stroke_width(5),
+                    EscrowBaseline::get_color(&baseline).stroke_width(STROKE_WIDTH),
                 ))
                 .unwrap();
 
             // Draw data point on line
             chart
                 .draw_series(
-                    (1..values.len())
-                        .zip(values[1..].iter())
+                    (0..values.len())
+                        .zip(values[0..].iter())
                         .filter(|(_, y)| **y <= y_max)
                         .map(|(x, y)| {
                             Circle::new(
@@ -506,7 +517,7 @@ impl Ubench {
                                     },
                                     *y,
                                 ),
-                                7,
+                                5,
                                 EscrowBaseline::get_color(&baseline).filled(),
                             )
                         }),
@@ -528,19 +539,18 @@ impl Ubench {
             .unwrap();
 
         fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
-            let legend_x_start = 120;
+            let legend_x_start = 20;
             let legend_y_pos = 6;
 
             match baseline {
-                EscrowBaseline::Trustee => (legend_x_start, legend_y_pos),
-                EscrowBaseline::ManagedHSM => (legend_x_start + 120, legend_y_pos),
-                EscrowBaseline::AcclessMaa => (legend_x_start + 320, legend_y_pos),
-                EscrowBaseline::Accless => (legend_x_start + 490, legend_y_pos),
+                EscrowBaseline::ManagedHSM => (legend_x_start, legend_y_pos),
+                EscrowBaseline::AcclessMaa => (legend_x_start + 220, legend_y_pos),
+                _ => panic!(),
             }
         }
 
-        // for id_x in 0..EscrowBaseline::iter_variants().len() {
-        for baseline in EscrowBaseline::iter_variants() {
+        // NOTE: we combine the labels with the figure that is placed side-by-side
+        for baseline in [EscrowBaseline::ManagedHSM, EscrowBaseline::AcclessMaa] {
             // Calculate position for each legend item
             let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
@@ -585,17 +595,217 @@ impl Ubench {
         println!("invrs: generated plot at: {}", plot_path.display());
     }
 
+    fn plot_escrow_cost() {
+        // Variables:
+        let trustee_latency_single_req = 0.05;
+        let trustee_unit_cost = UNIT_MONTHLY_COST_DC2;
+        let accless_unit_cost = UNIT_MONTHLY_COST_DC2;
+        let num_max_users = 10;
+        let accless_latency: Vec<(u32, f64)> = (1..=ACCLESS_LATENCY_D2.len() as u32)
+            .map(|x| (x, ACCLESS_LATENCY_D2[x as usize - 1]))
+            .collect();
+
+        let plot_path = Env::proj_root()
+            .join("eval")
+            .join(format!("{}", MicroBenchmarks::EscrowCost))
+            .join("plots")
+            .join("cost.svg");
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+
+        let mut chart = ChartBuilder::on(&root)
+            .margin(10)
+            .margin_top(40)
+            .margin_left(40)
+            .margin_bottom(20)
+            .margin_right(45)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .right_y_label_area_size(40)
+            .build_cartesian_2d(1u32..num_max_users, 0.0f64..300.0)
+            .unwrap()
+            .set_secondary_coord(
+                1u32..num_max_users,
+                0f64..(num_max_users * trustee_unit_cost) as f64,
+            ); // Right axis for cost
+
+        // Draw meshes
+        chart
+            .configure_mesh()
+            .light_line_style(&WHITE)
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .x_labels(8)
+            .y_labels(6)
+            .y_label_formatter(&|y| format!("{:.0}", y))
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
+            .draw()
+            .unwrap();
+
+        chart
+            .configure_secondary_axes()
+            .label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_formatter(&|y| format!("{:.0}", y))
+            .y_labels(6)
+            .draw()
+            .unwrap();
+
+        // Manually draw the X/Y-axis label with a custom font and size
+        root.draw(&Text::new(
+            "Latency [ms]",
+            (5, 215),
+            ("sans-serif", FONT_SIZE)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "# of users ",
+            (120, 280),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            "Op. Cost [$/month]",
+            (390, 35),
+            ("sans-serif", FONT_SIZE)
+                .into_font()
+                .transform(FontTransform::Rotate90)
+                .color(&BLACK),
+        ))
+        .unwrap();
+
+        chart
+            .draw_series(LineSeries::new(
+                (1..=num_max_users).map(|x| (x, trustee_latency_single_req * 1000.0)),
+                EscrowBaseline::get_color(&EscrowBaseline::Trustee).stroke_width(STROKE_WIDTH),
+            ))
+            .unwrap();
+
+        chart
+            .draw_series(LineSeries::new(
+                accless_latency
+                    .clone()
+                    .into_iter()
+                    .map(|(x, y)| (x, y * 1000.0)),
+                EscrowBaseline::get_color(&EscrowBaseline::Accless).stroke_width(STROKE_WIDTH),
+            ))
+            .unwrap();
+
+        // Cost: Trustee (linear y = unit_cost * x)
+        let trustee_cost: Vec<(u32, f64)> = (1..=num_max_users)
+            .map(|x| (x, (trustee_unit_cost * x) as f64))
+            .collect();
+        let trustee_cost_style =
+            EscrowBaseline::get_color(&EscrowBaseline::Trustee).stroke_width(STROKE_WIDTH);
+        chart
+            .draw_secondary_series(LineSeries::new(trustee_cost.clone(), trustee_cost_style))
+            .unwrap();
+        chart
+            .draw_secondary_series(trustee_cost.into_iter().map(|(x, y)| {
+                Circle::new(
+                    (x, y),
+                    7,
+                    EscrowBaseline::get_color(&EscrowBaseline::Trustee).filled(),
+                )
+            }))
+            .unwrap();
+
+        // Accless cost
+        let accless_cost: Vec<(u32, f64)> = (1..=num_max_users)
+            .map(|x| (x, (accless_unit_cost) as f64))
+            .collect();
+        chart
+            .draw_secondary_series(LineSeries::new(
+                accless_cost.clone(),
+                EscrowBaseline::get_color(&EscrowBaseline::Accless).stroke_width(STROKE_WIDTH),
+            ))
+            .unwrap();
+        chart
+            .draw_secondary_series(accless_cost.into_iter().map(|(x, y)| {
+                Circle::new(
+                    (x, y),
+                    7,
+                    EscrowBaseline::get_color(&EscrowBaseline::Accless).filled(),
+                )
+            }))
+            .unwrap();
+
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(0, 1.0), (num_max_users, 1.0)],
+                &BLACK,
+            ))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(num_max_users, 0.0), (num_max_users, 1.0)],
+                &BLACK,
+            ))
+            .unwrap();
+
+        fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
+            let legend_x_start = 100;
+            let legend_y_pos = 6;
+
+            match baseline {
+                EscrowBaseline::Trustee => (legend_x_start, legend_y_pos),
+                EscrowBaseline::Accless => (legend_x_start + 120, legend_y_pos),
+                _ => panic!(),
+            }
+        }
+
+        for baseline in &[EscrowBaseline::Trustee, EscrowBaseline::Accless] {
+            // Calculate position for each legend item
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+            // Draw the color box (Rectangle)
+            root.draw(&Rectangle::new(
+                [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
+                baseline.get_color().filled(),
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![
+                    (x_pos, y_pos),
+                    (x_pos + 20, y_pos),
+                    (x_pos + 20, y_pos + 20),
+                    (x_pos, y_pos + 20),
+                    (x_pos, y_pos),
+                ],
+                &BLACK,
+            ))
+            .unwrap();
+
+            // Draw the baseline label (Text)
+            root.draw(&Text::new(
+                format!("{baseline}"),
+                (x_pos + 30, y_pos + 5),
+                ("sans-serif", FONT_SIZE).into_font(),
+            ))
+            .unwrap();
+        }
+
+        root.present().unwrap();
+        println!("invrs: generated plot at: {}", plot_path.display());
+    }
+
     pub async fn run(ubench: &MicroBenchmarks, run_args: &UbenchRunArgs) {
         match ubench {
+            MicroBenchmarks::EscrowCost => panic!("escrow-cost is not meant to be ran"),
             MicroBenchmarks::EscrowXput => Self::run_escrow_ubench(&run_args).await.unwrap(),
         }
     }
 
     pub fn plot(ubench: &MicroBenchmarks) {
-        let data_files = Self::get_all_data_files(ubench);
-
         match ubench {
-            MicroBenchmarks::EscrowXput => Self::plot_escrow_xput_ubench(&data_files),
+            MicroBenchmarks::EscrowXput => {
+                let data_files = Self::get_all_data_files(ubench);
+                Self::plot_escrow_xput_ubench(&data_files);
+            }
+            MicroBenchmarks::EscrowCost => Self::plot_escrow_cost(),
         };
     }
 }

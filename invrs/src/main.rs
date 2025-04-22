@@ -127,6 +127,11 @@ enum EvalCommand {
 
 #[derive(Debug, Subcommand)]
 enum UbenchCommand {
+    /// Measure the cost per user of different configurations
+    EscrowCost {
+        #[command(subcommand)]
+        ubench_sub_command: UbenchSubCommand,
+    },
     /// Measure the throughput of the trusted escrow as we increase the number
     /// of parallel authorization requests
     EscrowXput {
@@ -380,6 +385,14 @@ async fn main() -> anyhow::Result<()> {
             },
         },
         Command::Ubench { ubench_command } => match ubench_command {
+            UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
+                UbenchSubCommand::Run(run_args) => {
+                    Ubench::run(&MicroBenchmarks::EscrowCost, run_args).await;
+                }
+                UbenchSubCommand::Plot {} => {
+                    Ubench::plot(&MicroBenchmarks::EscrowCost);
+                }
+            },
             UbenchCommand::EscrowXput { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {
                     Ubench::run(&MicroBenchmarks::EscrowXput, run_args).await;
@@ -448,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
                     Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
-                    Azure::create_snp_guest("accless-as", "Standard_DC8as_v5");
+                    Azure::create_snp_guest("accless-as", "Standard_DC2as_v5");
                     Azure::create_aa("accless");
 
                     Azure::open_vm_ports("accless-cvm", &[22]);
@@ -666,16 +679,14 @@ async fn main() -> anyhow::Result<()> {
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    // DC2 is 62.78$/month
+                    // DC2 is 62.78$/month -> original experiments w/ this
                     // DC4 is DC2 * 2
                     // DC8 is DC2 * 4
-                    Azure::create_snp_guest("tless-trustee-client-snp", "Standard_DC2as_v5");
-                    Azure::create_sgx_vm("tless-trustee-client-sgx", "Standard_DC2as_v5");
+                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");
                     Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5");
 
                     // Open port 8080 on the server VM
-                    Azure::open_vm_ports("tless-trustee-client-snp", &[22]);
-                    Azure::open_vm_ports("tless-trustee-client-sgx", &[22]);
+                    Azure::open_vm_ports("tless-trustee-client", &[22]);
                     Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
                 }
                 AzureSubCommand::Provision {} => {
@@ -737,8 +748,7 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("tless-trustee-server");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-trustee-client-snp");
-                    Azure::delete_sgx_vm("tless-trustee-client-sgx");
+                    Azure::delete_snp_guest("tless-trustee-client");
                     Azure::delete_snp_guest("tless-trustee-server");
                 }
             },

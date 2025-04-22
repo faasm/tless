@@ -55,6 +55,7 @@ COPY --from=build /usr/local/attestationssl/lib64 /usr/local/attestationssl/lib6
 COPY --from=build /usr/local/attestationtpm2-tss /usr/local/attestationtpm2-tss
 
 # Copy trusted certificates
+# TODO: support copying a list in
 COPY ./attestation-service/certs/cert.pem /certs/cert.pem
 
 # Set env. vars for runtime
