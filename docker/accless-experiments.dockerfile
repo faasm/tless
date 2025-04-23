@@ -1,6 +1,6 @@
 # We inherit from the examples repo because it is likely that we want to use
 # off-the-shelve examples like tensorflow
-FROM faasm.azurecr.io/examples-build:0.6.0_0.4.0
+FROM ghcr.io/faasm/examples-build:0.6.0_0.4.0
 
 # Install rust
 RUN rm -rf /root/.rustup \
@@ -58,11 +58,10 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 20b76962c15be97700b4b68fe700839db6268392 \
+    && git checkout 59d4d2c2e2a004f132cf61fc9c15c3faa7d61336 \
     && git submodule update --init -f cpp \
     && pip3 install /code/faasm-examples/cpp \
-    # TODO: remove branch before merge
-    && git clone -b snp-knative https://github.com/faasm/tless /code/tless
+    && git clone https://github.com/faasm/tless /code/tless
 
 # Build specific libraries we need
 RUN cd /code/faasm-examples/cpp \
@@ -78,8 +77,6 @@ RUN cd /code/faasm-examples/cpp \
         jwt jwt --native \
         opencv opencv --native \
         rabe rabe --native
-
-RUN cd /code/tless && git pull origin snp-knative && git checkout 63e3529dcfb088db75ce4c5377d4b3a8a9e2c77a
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
