@@ -31,9 +31,9 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 # Faasm vars
 # ----------------------------
 
+# This is the path in the SGX-enabled machine we use for the experiments
 export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
-# TODO: update me
-export FAASM_VERSION=0.29.0
+export FAASM_VERSION=0.30.0
 
 # ----------------------------
 # APT deps
