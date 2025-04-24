@@ -72,9 +72,7 @@ RUN cd /code/faasm-examples/cpp \
     && cd /code/faasm-examples \
     && git submodule update --init ./examples/opencv \
     && git submodule update --init ./examples/rabe \
-    && git submodule update --init ./examples/tless-jwt \
     && ./bin/inv_wrapper.sh \
-        jwt jwt --native \
         opencv opencv --native \
         rabe rabe --native
 

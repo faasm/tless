@@ -30,6 +30,15 @@ if (ACCLESS_UBENCH)
     target_compile_definitions(${CMAKE_PROJECT_TARGET} PUBLIC ACCLESS_UBENCH)
 endif ()
 
+# Common libraries and headers that support WASM and native compilation
+add_subdirectory(./libs/jwt/cpp-bindings)
+
+set(ACCLESS_COMMON_HEADERS
+    ${CMAKE_CURRENT_LIST_DIR}/include
+    ${CMAKE_CURRENT_LIST_DIR}/libs/jwt/cpp-bindings
+)
+set(ACCLESS_COMMON_LIBRARIES accless::jwt)
+
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # The WASM version of the library relies on a pre-populated sysroot as part
     # of a Faasm installation
@@ -37,11 +46,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
         faasm
         rabe-cpp
         rabe
-        tless-jwt-cpp
-        tless-jwt
     )
-
-    set(ACCLESS_HEADERS ${CMAKE_CURRENT_LIST_DIR}/include)
 else ()
     # This lines do not suppress the warning
     set(MY_CUSTOM_RPATH "/usr/local/attestationcurl/lib;/usr/local/attestationssl/lib64")
@@ -53,6 +58,9 @@ else ()
         /usr/local/attestationssl/lib64
     )
 
+    # The WASM version of the attestation and S3 libraries is part of Faasm
+    # because it needs to execute (partially) outside of the WASM module
+    # and outside of the enclave
     add_subdirectory(./libs/attestation)
     add_subdirectory(./libs/s3)
 
@@ -64,20 +72,21 @@ else ()
         # Order matters: librabe-cpp must preceede librabe
         "/usr/local/lib/rabe/librabe-cpp.a"
         "/usr/local/lib/rabe/librabe.a"
-        # Same for JWT
-        "/usr/local/lib/tless-jwt/libtless-jwt-cpp.a"
-        "/usr/local/lib/tless-jwt/libtless_jwt.a"
     )
     set(ACCLESS_HEADERS
-        ${CMAKE_CURRENT_LIST_DIR}/include
         ${CMAKE_CURRENT_LIST_DIR}/libs
         "/usr/include/rabe"
-        "/usr/include/tless-jwt"
     )
 endif()
 
-target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${ACCLESS_HEADERS})
-target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC ${ACCLESS_LIBRARIES})
+target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
+    ${ACCLESS_COMMON_HEADERS}
+    ${ACCLESS_HEADERS}
+)
+target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
+    ${ACCLESS_COMMON_LIBRARIES}
+    ${ACCLESS_LIBRARIES}
+)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # Manually install the .imports file so that we can link against it

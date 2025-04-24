@@ -3,7 +3,7 @@
 #include "dag.h"
 #include "tless_abe.h"
 #include "tless_aes.h"
-#include "tless_jwt.h"
+#include "jwt.h"
 #include "utils.h"
 
 #ifdef __faasm
@@ -107,7 +107,7 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
 #endif
 
     // Verify JWT signature
-    bool valid = tless::jwt::verify(jwtStr);
+    bool valid = accless::jwt::verify(jwtStr);
     if (!valid) {
         std::cout << "accless: error: failed to verify the signature in the JWT"
                   << std::endl;
@@ -115,16 +115,16 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
     }
 
     // Check signed JWT comes from the expected attestation service
-    if (!tless::jwt::checkProperty(jwtStr, "aud", ATT_PROVIDER_AUD)) {
+    if (!accless::jwt::checkProperty(jwtStr, "aud", ATT_PROVIDER_AUD)) {
         std::cout << "accless: error: failed to validate JWT AUD" << std::endl;
         return false;
-    } else if (!tless::jwt::checkProperty(jwtStr, "sub", ATT_PROVIDER_SUB)) {
+    } else if (!accless::jwt::checkProperty(jwtStr, "sub", ATT_PROVIDER_SUB)) {
         std::cout << "accless: error: failed to validate JWT AUD" << std::endl;
         return false;
 #ifdef __faasm
-    } else if (!tless::jwt::checkProperty(jwtStr, "tee", "sgx")) {
+    } else if (!accless::jwt::checkProperty(jwtStr, "tee", "sgx")) {
 #else
-    } else if (!tless::jwt::checkProperty(jwtStr, "tee", "snp")) {
+    } else if (!accless::jwt::checkProperty(jwtStr, "tee", "snp")) {
 #endif
         std::cout << "accless: error: failed to validate tee" << std::endl;
         return false;
@@ -140,7 +140,7 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
     std::string mrEnclaveHex = accless::utils::byteArrayToHexString(
         mrEnclave.data(), mrEnclave.size());
     /* TODO: attestation-service still cannot parse SGX reports
-    if (!tless::jwt::checkProperty(jwt, "sgx-mrenclave", mrEnclaveHex)) {
+    if (!accless::jwt::checkProperty(jwt, "sgx-mrenclave", mrEnclaveHex)) {
         std::cout << "accless: error: failed to validate MrEnclave" <<
     std::endl; return false;
     }
@@ -229,7 +229,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
         return false;
     }
 
-    std::string teeIdentity = tless::jwt::getProperty(jwtStr, "tee_identity");
+    std::string teeIdentity = accless::jwt::getProperty(jwtStr, "tee_identity");
 
     // -----------------------------------------------------------------------
     // 2. Bootstrap CP-ABE context
@@ -242,7 +242,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
 #endif
 
     std::string teeSymKeyBase64 =
-        tless::jwt::getProperty(jwtStr, "aes_key_b64");
+        accless::jwt::getProperty(jwtStr, "aes_key_b64");
     auto teeSymKey = accless::utils::base64Decode(teeSymKeyBase64);
 
     // Fetch the (encrypted) CP-ABE context from S3
