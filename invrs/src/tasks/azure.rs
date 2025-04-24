@@ -55,7 +55,7 @@ impl Azure {
             .arg("-c")
             .arg(cmd)
             .status()
-            .expect(format!("invrs: {}", error_msg).as_str())
+            .unwrap_or_else(|_| panic!("invrs: {}", error_msg))
     }
 
     fn run_cmd_check_status(cmd: &str, error_msg: &str) {
@@ -71,7 +71,7 @@ impl Azure {
             .arg("-c")
             .arg(cmd)
             .output()
-            .expect(format!("invrs: {}", error_msg).as_str());
+            .unwrap_or_else(|_| panic!("invrs: {}", error_msg));
 
         let stdout = String::from_utf8(output.stdout).unwrap();
         stdout.trim().to_string()
@@ -199,7 +199,7 @@ impl Azure {
 
     fn get_subscription_id() -> String {
         let az_cmd = "az account show --query id --output tsv";
-        Self::run_cmd_get_output(&az_cmd, "error getting subscription id")
+        Self::run_cmd_get_output(az_cmd, "error getting subscription id")
     }
 
     pub fn get_vm_ip(vm_name: &str) -> String {

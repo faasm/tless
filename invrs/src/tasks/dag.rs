@@ -132,7 +132,7 @@ impl Dag {
             &pk,
             &policy,
             rabe::utils::policy::pest::PolicyLanguage::HumanPolicy,
-            &plain_text_origin_cert_chain.as_bytes(),
+            plain_text_origin_cert_chain.as_bytes(),
         )
         .unwrap();
 

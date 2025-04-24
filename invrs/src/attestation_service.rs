@@ -5,7 +5,7 @@ use reqwest::{tls, Client};
 use std::{env, fs};
 
 fn get_as_url() -> Result<String> {
-    Ok(env::var("AS_URL").context("AS_URL env. var not set")?)
+    env::var("AS_URL").context("AS_URL env. var not set")
 }
 
 fn get_tls_client() -> Result<Client> {

@@ -6,7 +6,6 @@ use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
 use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
-use env_logger;
 use log::error;
 use std::{path::Path, process};
 
@@ -477,16 +476,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         },
-        // FIXME: move all S3 methods to &str
         Command::S3 { s3_command } => match s3_command {
             S3Command::ClearBucket { bucket_name } => {
-                S3::clear_bucket(bucket_name.to_string()).await;
+                S3::clear_bucket(bucket_name).await;
             }
             S3Command::ClearDir {
                 bucket_name,
                 prefix,
             } => {
-                S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
+                S3::clear_dir(bucket_name, prefix).await;
             }
             S3Command::GetDir {
                 bucket_name,
@@ -510,19 +508,14 @@ async fn main() -> anyhow::Result<()> {
                 bucket_name,
                 prefix,
             } => {
-                S3::list_keys(bucket_name.to_string(), prefix).await;
+                S3::list_keys(bucket_name, &prefix.as_deref()).await;
             }
             S3Command::UploadDir {
                 bucket_name,
                 host_path,
                 s3_path,
             } => {
-                S3::upload_dir(
-                    bucket_name.to_string(),
-                    host_path.to_string(),
-                    s3_path.to_string(),
-                )
-                .await;
+                S3::upload_dir(bucket_name, host_path, s3_path).await;
             }
             S3Command::UploadKey {
                 bucket_name,
@@ -554,6 +547,8 @@ async fn main() -> anyhow::Result<()> {
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
+
+                    #[allow(clippy::single_element_loop)]
                     for file in ["cert.pem"] {
                         let scp_cmd_in =
                             format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");

@@ -70,12 +70,8 @@ impl Workflows {
     ) -> anyhow::Result<()> {
         // Note that cleaning here means cleaning the outputs of previous runs
         if clean {
-            for key_dir in vec!["outputs", "cert-chains"] {
-                S3::clear_dir(
-                    bucket_name.to_string(),
-                    format!("{workflow}/{key_dir}").to_string(),
-                )
-                .await;
+            for key_dir in ["outputs", "cert-chains"] {
+                S3::clear_dir(bucket_name, &format!("{workflow}/{key_dir}")).await;
             }
         }
 
@@ -103,27 +99,27 @@ impl Workflows {
             }
             AvailableWorkflow::MlTraining => {
                 // We upload both datasets until we decide which one to use
-                for dataset in vec!["mnist-images-2k", "mnist-images-10k"] {
+                for dataset in ["mnist-images-2k", "mnist-images-10k"] {
                     let mut host_path = S3::get_datasets_root();
                     host_path.push(format!("{workflow}"));
-                    host_path.push(format!("{dataset}"));
+                    host_path.push(dataset);
                     S3::upload_dir(
-                        bucket_name.to_string(),
-                        host_path.display().to_string(),
-                        format!("{workflow}/{dataset}"),
+                        bucket_name,
+                        &host_path.display().to_string(),
+                        &format!("{workflow}/{dataset}"),
                     )
                     .await;
                 }
             }
             AvailableWorkflow::MlInference => {
-                for dataset in vec!["images-inference-1k", "model"] {
+                for dataset in ["images-inference-1k", "model"] {
                     let mut host_path = S3::get_datasets_root();
                     host_path.push(format!("{workflow}"));
-                    host_path.push(format!("{dataset}"));
+                    host_path.push(dataset);
                     S3::upload_dir(
-                        bucket_name.to_string(),
-                        host_path.display().to_string(),
-                        format!("{workflow}/{dataset}"),
+                        bucket_name,
+                        &host_path.display().to_string(),
+                        &format!("{workflow}/{dataset}"),
                     )
                     .await;
                 }
@@ -133,9 +129,9 @@ impl Workflows {
                 host_path.push(format!("{workflow}"));
                 host_path.push("fewer-files");
                 S3::upload_dir(
-                    bucket_name.to_string(),
-                    host_path.display().to_string(),
-                    format!("{workflow}/few-files"),
+                    bucket_name,
+                    &host_path.display().to_string(),
+                    &format!("{workflow}/few-files"),
                 )
                 .await;
             }
@@ -150,12 +146,12 @@ impl Workflows {
         dag_only: bool,
     ) -> anyhow::Result<()> {
         if clean {
-            S3::clear_bucket(bucket_name.to_string()).await;
+            S3::clear_bucket(bucket_name).await;
         }
 
         // Upload state for different workflows
         for workflow in AvailableWorkflow::iter_variants() {
-            Self::upload_workflow_state(&workflow, bucket_name, clean, dag_only).await?;
+            Self::upload_workflow_state(workflow, bucket_name, clean, dag_only).await?;
         }
 
         Ok(())
