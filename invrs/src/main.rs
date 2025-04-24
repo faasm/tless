@@ -7,7 +7,8 @@ use crate::tasks::s3::S3;
 use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
 use env_logger;
-use std::process;
+use log::error;
+use std::{path::Path, process};
 
 pub mod attestation_service;
 pub mod env;
@@ -40,6 +41,8 @@ enum Command {
         #[command(subcommand)]
         eval_command: EvalCommand,
     },
+    /// Run code formatting: clang-format, cargo fmt, and cargo clippy
+    FormatCode { check: bool },
     /// Run microbenchmark
     Ubench {
         #[command(subcommand)]
@@ -384,6 +387,75 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         },
+        Command::FormatCode { check } => {
+            // First, format all CPP "projects"
+            if !process::Command::new("clang-format")
+                .arg("--version")
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+            {
+                error!("clang-format must be installed and in your path");
+                process::exit(1);
+            }
+
+            let clang_format_cfg = Env::proj_root().join("config").join(".clang-format");
+
+            let extensions = ["cpp", "c", "h", "hpp"];
+
+            fn is_source_file(path: &Path, exts: &[&str]) -> bool {
+                path.is_file()
+                    && path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|ext| exts.contains(&ext))
+                        .unwrap_or(false)
+            }
+
+            fn is_excluded(entry: &walkdir::DirEntry) -> bool {
+                let excluded_dirs = ["build-wasm", "build-native", "target"];
+                entry
+                    .file_type()
+                    .is_dir() &&
+                    entry.file_name()
+                        .to_str()
+                        .map(|name| excluded_dirs.contains(&name))
+                        .unwrap_or(false)
+            }
+
+            for entry in walkdir::WalkDir::new(".")
+                .into_iter()
+                .filter_entry(|e| !is_excluded(e))
+                .filter_map(Result::ok)
+            {
+                let path = entry.path();
+                if is_source_file(path, &extensions) {
+                    let mut cmd = process::Command::new("clang-format");
+                    cmd.arg("-i").arg(path);
+                    cmd.arg(format!("--style=file:{}", clang_format_cfg.display()));
+
+                    if *check {
+                        cmd.arg("--dry-run").arg("--Werror").arg(path);
+                    }
+
+                    match cmd.status() {
+                        Ok(status) if status.success() => {}
+                        Ok(status) => {
+                            error!(
+                                "clang-format failed on {} with status {}",
+                                path.display(),
+                                status
+                            );
+                            process::exit(1);
+                        }
+                        Err(err) => {
+                            error!("Failed to run clang-format on {}: {}", path.display(), err);
+                            process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
         Command::Ubench { ubench_command } => match ubench_command {
             UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {

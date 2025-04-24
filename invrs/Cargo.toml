@@ -22,6 +22,7 @@ minio = { git = "https://github.com/minio/minio-rs.git", rev = "b254b2f7aeaf18a1
 plotters = "^0.3.7"
 rabe = { git = "https://github.com/faasm/rabe.git", rev = "0dc7696a95eef44dd051e1d9c2e5c2c8c35211bf" }
 rand = "0.8.5"
+reqwest = "0.12.15"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 serde_yaml = "0.9"
@@ -29,4 +30,4 @@ shellexpand = "^3.1"
 sha2 = "0.10"
 shell-words = "^1.1.0"
 tokio = { version = "1", features = ["full"] }
-reqwest = "0.12.15"
+walkdir = "2"
