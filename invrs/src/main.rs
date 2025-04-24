@@ -457,6 +457,68 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
+
+            // Now format rust code
+            let dirs = [
+                "accless/libs/jwt",
+                "attestation-service",
+                "invrs",
+                "workflows/finra/knative",
+                "workflows/word-count/knative",
+                "workflows/ml-inference/knative",
+                "workflows/ml-training/knative",
+            ];
+            for dir in dirs {
+                let cwd = Env::proj_root().join(dir);
+
+                // cargo fmt
+                let mut fmt_cmd = process::Command::new("cargo");
+                fmt_cmd.arg("fmt");
+                if *check {
+                    fmt_cmd.arg("--").arg("--check");
+                }
+                fmt_cmd.current_dir(&cwd);
+
+                match fmt_cmd.status() {
+                    Ok(status) if status.success() => {}
+                    Ok(status) => {
+                        error!(
+                            "clang-format failed on {} with status {}",
+                            cwd.clone().display(),
+                            status
+                        );
+                        process::exit(1);
+                    }
+                    Err(err) => {
+                        error!("Failed to run clang-format on {}: {}", cwd.display(), err);
+                        process::exit(1);
+                    }
+                }
+
+                // cargo clippy
+                let mut clippy_cmd = process::Command::new("cargo");
+                clippy_cmd.arg("clippy");
+                if *check {
+                    clippy_cmd.arg("--").arg("-D").arg("warnings");
+                }
+                clippy_cmd.current_dir(&cwd);
+
+                match clippy_cmd.status() {
+                    Ok(status) if status.success() => {}
+                    Ok(status) => {
+                        error!(
+                            "clang-format failed on {} with status {}",
+                            cwd.clone().display(),
+                            status
+                        );
+                        process::exit(1);
+                    }
+                    Err(err) => {
+                        error!("Failed to run clang-format on {}: {}", cwd.display(), err);
+                        process::exit(1);
+                    }
+                }
+            }
         }
         Command::Ubench { ubench_command } => match ubench_command {
             UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {

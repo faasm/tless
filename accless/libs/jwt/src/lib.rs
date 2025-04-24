@@ -82,7 +82,10 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
 
 #[allow(clippy::missing_safety_doc)]
 #[no_mangle]
-pub unsafe extern "C" fn get_property(jwt_cstr: *const c_char, prop_cstr: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn get_property(
+    jwt_cstr: *const c_char,
+    prop_cstr: *const c_char,
+) -> *mut c_char {
     if jwt_cstr.is_null() || prop_cstr.is_null() {
         return ptr::null_mut();
     }

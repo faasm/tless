@@ -81,7 +81,7 @@ pub async fn wait_for_key(key_name: &str) {
                 Err(e) => match e {
                     Error::S3Error(s3_error) => {
                         panic!("{WORKFLOW_NAME}: error: {}", s3_error.message)
-                    },
+                    }
                     _ => panic!("{WORKFLOW_NAME}: error: {}", e),
                 },
             }
