@@ -1,18 +1,11 @@
 use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
-use futures_util::StreamExt;
-use minio::s3::args::*;
-use minio::s3::client::ClientBuilder;
-use minio::s3::creds::StaticProvider;
-use minio::s3::error::Error;
-use minio::s3::http::BaseUrl;
-use minio::s3::types::ToStream;
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::{env, fs, thread, time};
+use std::{env, fs};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use warp::Filter;
@@ -63,7 +56,7 @@ pub fn post_event(dest: String, event: Event) -> JoinHandle<()> {
 pub fn get_json_from_event(event: &Event) -> Value {
     match event.data() {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
-        Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
+        Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
         _ => panic!("accless(driver): error: must be json data"),
     }
@@ -349,11 +342,6 @@ pub fn process_event(mut event: Event) -> Event {
                 .and_then(Value::as_i64)
                 .expect("ml-training(driver): error: cannot find 'pca-id' in CE");
 
-            let run_magic: i64 = get_json_from_event(&event)
-                .get("run-magic")
-                .and_then(Value::as_i64)
-                .expect("ml-training(driver): error: cannot find 'run-magic' in CE");
-
             let num_train_funcs: i64 = get_json_from_event(&event)
                 .get("num-train-funcs")
                 .and_then(Value::as_i64)
@@ -373,9 +361,7 @@ pub fn process_event(mut event: Event) -> Event {
             let this_func_scale: i64 = num_train_funcs / num_pca_funcs;
             println!("{WORKFLOW_NAME}: scaling to {this_func_scale} RF functions");
 
-            let this_magic = run_magic + num_train_funcs * pca_id;
             for i in 1..this_func_scale {
-                // scaled_event.set_id((this_magic + i).to_string());
                 scaled_event.set_id(Uuid::new_v4().to_string());
                 scaled_event.set_data(
                     "aplication/json",
@@ -394,7 +380,6 @@ pub fn process_event(mut event: Event) -> Event {
 
             // Update the event for the zero-th id (the one we return as part
             // of the method)
-            // scaled_event.set_id((this_magic + 0).to_string());
             scaled_event.set_id(Uuid::new_v4().to_string());
             scaled_event.set_data(
                 "aplication/json",
