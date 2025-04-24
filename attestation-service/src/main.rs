@@ -142,6 +142,7 @@ struct VcekResponse {
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     return Ok(vec![]);
 
+    #[allow(unreachable_code)]
     match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
         .set("Metadata", "true")
         .call()
@@ -164,23 +165,15 @@ pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 }
 
 fn generate_jwt_encoding_key() -> Result<EncodingKey, anyhow::Error> {
-    // let key_file = &mut BufReader::new(File::open("certs/key.pem").context("certs/key.pem file not found")?);
     let pem_bytes = std::fs::read("certs/key.pem").context("certs/key.pem file not found")?;
     let jwt_encoding_key = EncodingKey::from_rsa_pem(&pem_bytes)?;
-    /*
-    let mut keys = pkcs8_private_keys(key_file)?;
-    if keys.is_empty() {
-        anyhow::bail!("accless: 0 private keys found in PEM");
-    }
-    let raw_key = keys.remove(0);
-    let jwt_encoding_key = EncodingKey::from_rsa_der(&raw_key);
-    */
 
     Ok(jwt_encoding_key)
 }
 
 #[derive(Clone)]
 struct AppState {
+    #[allow(dead_code)]
     pub vcek_pem: Vec<u8>,
     pub jwt_encoding_key: EncodingKey,
     pub aes_key_b64: String,
@@ -274,7 +267,7 @@ async fn verify_sgx_report(
     // Decode the quote
     // WARNING: we must use URL_SAFE as on the client side we are encoding
     // with cppcodec::base64_url
-    let raw_quote_b64 = payload.quote.replace('\n', "").replace('\r', "");
+    let raw_quote_b64 = payload.quote.replace(['\n', '\r'], "");
     let _quote_bytes = match general_purpose::URL_SAFE.decode(&raw_quote_b64) {
         Ok(b) => {
             // TODO: validate the quote and check that the runtime data matches the
@@ -425,7 +418,7 @@ async fn verify_snp_report(
     let full_body = to_bytes(body, 1024 * 1024).await;
 
     match full_body {
-        Ok(bytes) => {
+        Ok(_bytes) => {
             /* TODO: uncomment when deploying on Azure
             match snpguest::verify::attestation::verify_attestation(&state.vcek_pem, bytes.as_ref())
             {
@@ -458,8 +451,7 @@ async fn verify_snp_report(
             println!("WARNING: report verification disabled - deploy on Azure");
             let claims = JwtClaims {
                 sub: "attested-client".to_string(),
-                exp: (chrono::Utc::now() + chrono::Duration::minutes(5)).timestamp()
-                    as usize,
+                exp: (chrono::Utc::now() + chrono::Duration::minutes(5)).timestamp() as usize,
                 aud: "accless-attestation-service".to_string(),
                 tee: "snp".to_string(),
                 // TODO: TEE identity should be a secret
