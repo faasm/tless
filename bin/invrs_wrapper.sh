@@ -1,4 +1,5 @@
 #!/bin/bash
 set -e
 
-source bin/workon.sh && invrs "$@"
+source bin/workon.sh
+invrs "$@"
