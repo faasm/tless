@@ -483,14 +483,14 @@ async fn main() -> anyhow::Result<()> {
                     Ok(status) if status.success() => {}
                     Ok(status) => {
                         error!(
-                            "clang-format failed on {} with status {}",
+                            "cargo fmt failed on {} with status {}",
                             cwd.clone().display(),
                             status
                         );
                         process::exit(1);
                     }
                     Err(err) => {
-                        error!("Failed to run clang-format on {}: {}", cwd.display(), err);
+                        error!("Failed to run cargo fmt on {}: {}", cwd.display(), err);
                         process::exit(1);
                     }
                 }
@@ -507,14 +507,14 @@ async fn main() -> anyhow::Result<()> {
                     Ok(status) if status.success() => {}
                     Ok(status) => {
                         error!(
-                            "clang-format failed on {} with status {}",
+                            "cargo clippy failed on {} with status {}",
                             cwd.clone().display(),
                             status
                         );
                         process::exit(1);
                     }
                     Err(err) => {
-                        error!("Failed to run clang-format on {}: {}", cwd.display(), err);
+                        error!("Failed to run cargo clippy on {}: {}", cwd.display(), err);
                         process::exit(1);
                     }
                 }
