@@ -1,15 +1,14 @@
 #ifdef __faasm
-extern "C"
-{
+extern "C" {
 #include "faasm/host_interface.h"
 }
 
 #include <faasm/faasm.h>
 #else
+#include "s3/S3Wrapper.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "s3/S3Wrapper.hpp"
 #endif
 
 #include "accless.h"
@@ -20,8 +19,8 @@ extern "C"
 #include <string_view>
 #include <vector>
 
-std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::string& delimiter)
-{
+std::vector<std::string> splitByDelimiter(std::string stringCopy,
+                                          const std::string &delimiter) {
     std::vector<std::string> splitString;
 
     size_t pos = 0;
@@ -35,8 +34,8 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
     return splitString;
 }
 
-std::string join(const std::vector<std::string>& stringList, const std::string& delimiter)
-{
+std::string join(const std::vector<std::string> &stringList,
+                 const std::string &delimiter) {
     if (stringList.size() == 0) {
         return "";
     }
@@ -52,10 +51,10 @@ std::string join(const std::vector<std::string>& stringList, const std::string& 
 
 /* Fetch Public Data - FINRA workflow
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
     if (!accless::checkChain("finra", "fetch-public", 0)) {
-        std::cerr << "finra(fetch-public): error checking TLess chain" << std::endl;
+        std::cerr << "finra(fetch-public): error checking TLess chain"
+                  << std::endl;
         return 1;
     }
 
@@ -67,13 +66,14 @@ int main(int argc, char** argv)
     // Get the object key as an input
     int inputSize = faasmGetInputSize();
     char inputChar[inputSize];
-    faasmGetInput((uint8_t*)inputChar, inputSize);
+    faasmGetInput((uint8_t *)inputChar, inputSize);
 
     s3DataFile.assign(inputChar, inputChar + inputSize);
 #else
     if (argc != 2) {
-        std::cerr << "finra(fetch-public): error: cannot parse input from driver"
-                  << std::endl;
+        std::cerr
+            << "finra(fetch-public): error: cannot parse input from driver"
+            << std::endl;
         return 1;
     }
     s3DataFile = argv[1];
@@ -83,24 +83,23 @@ int main(int argc, char** argv)
 #endif
 
     std::cout << "finra(fetch-public): fetching public trades data from "
-              << s3DataFile
-              << std::endl;
+              << s3DataFile << std::endl;
 
     std::string csvData;
 #ifdef __faasm
-    uint8_t* keyBytes;
+    uint8_t *keyBytes;
     int keyBytesLen;
 
-    int ret =
-      __faasm_s3_get_key_bytes(bucketName.c_str(), s3DataFile.c_str(), &keyBytes, &keyBytesLen);
+    int ret = __faasm_s3_get_key_bytes(bucketName.c_str(), s3DataFile.c_str(),
+                                       &keyBytes, &keyBytesLen);
     if (ret != 0) {
-        std::cerr << "finra(fetch-public): error: error getting bytes from key: "
-                  << s3DataFile << "(bucket: " << bucketName << ")"
-                  << std::endl;
+        std::cerr
+            << "finra(fetch-public): error: error getting bytes from key: "
+            << s3DataFile << "(bucket: " << bucketName << ")" << std::endl;
         return 1;
     }
     // WARNING: can we avoid the copy
-    csvData.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+    csvData.assign((char *)keyBytes, (char *)keyBytes + keyBytesLen);
 #else
     csvData = s3cli.getKeyStr(bucketName, s3DataFile);
 #endif
@@ -110,23 +109,18 @@ int main(int argc, char** argv)
               << std::endl;
 
     std::vector<TradeData> tradeData = tless::finra::loadCSVFromString(csvData);
-    std::vector<uint8_t> serializedTradeData = tless::finra::serializeTradeVector(tradeData);
+    std::vector<uint8_t> serializedTradeData =
+        tless::finra::serializeTradeVector(tradeData);
 
     // Upload structured data to S3
     std::string key = "finra/outputs/fetch-public/trades";
-    std::cout << "finra(fetch-public): uploading data from "
-              << tradeData.size()
-              << " trades to "
-              << key
-              << std::endl;
+    std::cout << "finra(fetch-public): uploading data from " << tradeData.size()
+              << " trades to " << key << std::endl;
 #ifdef __faasm
     // Overwrite the results
-    ret =
-      __faasm_s3_add_key_bytes(bucketName.c_str(),
-                               key.c_str(),
-                               serializedTradeData.data(),
-                               serializedTradeData.size(),
-                               true);
+    ret = __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(),
+                                   serializedTradeData.data(),
+                                   serializedTradeData.size(), true);
     if (ret != 0) {
         std::cerr << "finra(fetch-public): error uploading trade data"
                   << std::endl;

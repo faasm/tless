@@ -1,15 +1,14 @@
 #ifdef __faasm
-extern "C"
-{
+extern "C" {
 #include "faasm/host_interface.h"
 }
 
 #include <faasm/faasm.h>
 #else
+#include "s3/S3Wrapper.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "s3/S3Wrapper.hpp"
 #endif
 
 #include "accless.h"
@@ -20,8 +19,8 @@ extern "C"
 #include <string_view>
 #include <vector>
 
-std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::string& delimiter)
-{
+std::vector<std::string> splitByDelimiter(std::string stringCopy,
+                                          const std::string &delimiter) {
     std::vector<std::string> splitString;
 
     size_t pos = 0;
@@ -37,8 +36,7 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
 
 /* Run Audit Rule - FINRA workflow
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
     // TODO: the bucket name is currently hardcoded
     std::string bucketName = "tless";
 
@@ -50,7 +48,7 @@ int main(int argc, char** argv)
     // Get the object key as an input
     int inputSize = faasmGetInputSize();
     char inputChar[inputSize];
-    faasmGetInput((uint8_t*)inputChar, inputSize);
+    faasmGetInput((uint8_t *)inputChar, inputSize);
 
     std::string tmpStr(inputChar, inputChar + inputSize);
     auto parts = splitByDelimiter(tmpStr, ":");
@@ -78,65 +76,66 @@ int main(int argc, char** argv)
     std::string us = "audit-" + std::to_string(id);
 
     if (!accless::checkChain("finra", "audit", id)) {
-        std::cerr << "finra(" << us << "): error checking TLess chain" << std::endl;
+        std::cerr << "finra(" << us << "): error checking TLess chain"
+                  << std::endl;
         return 1;
     }
 
     std::cout << "finra(" << us << "): fetching public trades data from "
-              << tradesKey
-              << std::endl;
+              << tradesKey << std::endl;
 
     std::vector<uint8_t> tradeData;
 #ifdef __faasm
-    uint8_t* keyBytes;
+    uint8_t *keyBytes;
     int keyBytesLen;
 
-    int ret =
-      __faasm_s3_get_key_bytes(bucketName.c_str(), tradesKey.c_str(), &keyBytes, &keyBytesLen);
+    int ret = __faasm_s3_get_key_bytes(bucketName.c_str(), tradesKey.c_str(),
+                                       &keyBytes, &keyBytesLen);
     if (ret != 0) {
-        std::cerr << "finra(" << us << "): error: error getting bytes from key: "
-                  << tradesKey << "(bucket: " << bucketName << ")"
-                  << std::endl;
+        std::cerr << "finra(" << us
+                  << "): error: error getting bytes from key: " << tradesKey
+                  << "(bucket: " << bucketName << ")" << std::endl;
         return 1;
     }
     // WARNING: can we avoid the copy
-    tradeData.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+    tradeData.assign((char *)keyBytes, (char *)keyBytes + keyBytesLen);
 #else
     tradeData = s3cli.getKeyBytes(bucketName, tradesKey);
 #endif
 
     std::cout << "finra(" << us << "): fetching portfolio data from "
-              << portfolioKey
-              << std::endl;
+              << portfolioKey << std::endl;
 
     std::vector<uint8_t> portfolioData;
 #ifdef __faasm
     keyBytes = nullptr;
     keyBytesLen = 0;
 
-    ret =
-      __faasm_s3_get_key_bytes(bucketName.c_str(), portfolioKey.c_str(), &keyBytes, &keyBytesLen);
+    ret = __faasm_s3_get_key_bytes(bucketName.c_str(), portfolioKey.c_str(),
+                                   &keyBytes, &keyBytesLen);
     if (ret != 0) {
-        std::cerr << "finra(" << us << "): error: error getting bytes from key: "
-                  << portfolioKey << "(bucket: " << bucketName << ")"
-                  << std::endl;
+        std::cerr << "finra(" << us
+                  << "): error: error getting bytes from key: " << portfolioKey
+                  << "(bucket: " << bucketName << ")" << std::endl;
         return 1;
     }
     // WARNING: can we avoid the copy
-    portfolioData.assign((char*) keyBytes, (char*) keyBytes + keyBytesLen);
+    portfolioData.assign((char *)keyBytes, (char *)keyBytes + keyBytesLen);
 #else
     portfolioData = s3cli.getKeyBytes(bucketName, portfolioKey);
 #endif
 
     std::cout << "finra(" << us << "): de-serializing data" << std::endl;
-    std::vector<TradeData> trades = tless::finra::deserializeTradeVector(tradeData);
+    std::vector<TradeData> trades =
+        tless::finra::deserializeTradeVector(tradeData);
     Portfolio portfolio = tless::finra::deserializePortfolio(portfolioData);
 
-    std::cout << "finra(" << us << "): running audit rule on " << trades.size() << " trades ..." << std::endl;
+    std::cout << "finra(" << us << "): running audit rule on " << trades.size()
+              << " trades ..." << std::endl;
     std::string auditResults;
-    for (const auto& trade : trades) {
-        bool insideTradeDetected =
-          tless::finra::rules::potentialInsiderTrade(portfolio, trades, trade.date);
+    for (const auto &trade : trades) {
+        bool insideTradeDetected = tless::finra::rules::potentialInsiderTrade(
+            portfolio, trades, trade.date);
         auditResults += std::to_string(insideTradeDetected) + ",";
     }
     auditResults.pop_back();
@@ -144,17 +143,13 @@ int main(int argc, char** argv)
 
     // Upload structured data to S3
     std::string key = "finra/outputs/audit/" + us;
-    std::cout << "finra(" << us << "): uploading audit results to "
-              << key
+    std::cout << "finra(" << us << "): uploading audit results to " << key
               << std::endl;
 #ifdef __faasm
     // Overwrite the results
-    ret =
-      __faasm_s3_add_key_bytes(bucketName.c_str(),
-                               key.c_str(),
-                               (uint8_t*) auditResults.c_str(),
-                               auditResults.size(),
-                               true);
+    ret = __faasm_s3_add_key_bytes(bucketName.c_str(), key.c_str(),
+                                   (uint8_t *)auditResults.c_str(),
+                                   auditResults.size(), true);
     if (ret != 0) {
         std::cerr << "finra(" << us << "): error uploading trade data"
                   << std::endl;

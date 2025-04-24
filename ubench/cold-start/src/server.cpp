@@ -25,7 +25,8 @@ int main() {
 
     // Allow reuse of the address.
     int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
+        0) {
         perror("setsockopt");
         close(server_fd);
         exit(EXIT_FAILURE);
@@ -89,7 +90,8 @@ int main() {
             std::string responseStr = response.str();
             write(client_fd, responseStr.c_str(), responseStr.size());
         } else {
-            std::string badResponse = "HTTP/1.1 400 Bad Request\r\n\r\nOnly GET supported.";
+            std::string badResponse =
+                "HTTP/1.1 400 Bad Request\r\n\r\nOnly GET supported.";
             write(client_fd, badResponse.c_str(), badResponse.size());
         }
         close(client_fd);

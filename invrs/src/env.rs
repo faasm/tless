@@ -10,7 +10,8 @@ impl Env {
     pub const SYS_NAME: &'static str = "invrs";
 
     pub fn proj_root() -> PathBuf {
-        env::current_dir().expect("invrs: failed to get current directory")
+        let cargo_root: PathBuf = env!("CARGO_MANIFEST_DIR").into();
+        cargo_root.parent().unwrap().to_path_buf()
     }
 
     pub fn ansible_root() -> PathBuf {

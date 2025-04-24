@@ -1,9 +1,9 @@
 #include "accless.h"
 // Both tless::aes256gcm and tles::sha256 are declared in this header
 #include "dag.h"
+#include "jwt.h"
 #include "tless_abe.h"
 #include "tless_aes.h"
-#include "jwt.h"
 #include "utils.h"
 
 #ifdef __faasm

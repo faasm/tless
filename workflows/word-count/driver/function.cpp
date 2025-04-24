@@ -1,6 +1,6 @@
 #ifdef __faasm
-#include <faasm/core.h>
 #include "accless.h"
+#include <faasm/core.h>
 #endif
 
 #include <iostream>
@@ -9,8 +9,8 @@
 #include <tuple>
 #include <vector>
 
-std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::string& delimiter)
-{
+std::vector<std::string> splitByDelimiter(std::string stringCopy,
+                                          const std::string &delimiter) {
     std::vector<std::string> splitString;
 
     size_t pos = 0;
@@ -35,10 +35,10 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
  *
  * As an input, this workflow gets the S3 path read data from.
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
     if (argc != 2) {
-        printf("word-count(driver): error: workflow must be invoked with one parameter: <s3_prefix>\n");
+        printf("word-count(driver): error: workflow must be invoked with one "
+               "parameter: <s3_prefix>\n");
         return 1;
     }
     std::string s3prefix = argv[1];
@@ -52,17 +52,21 @@ int main(int argc, char** argv)
     printf("word-count(driver): invoking one splitter function\n");
 #ifdef __faasm
     // Call splitter
-    int splitterId = faasmChainNamed("splitter", (uint8_t*) s3prefix.c_str(), s3prefix.size());
+    int splitterId = faasmChainNamed("splitter", (uint8_t *)s3prefix.c_str(),
+                                     s3prefix.size());
 #endif
 
 #ifdef __faasm
-    char* splitterOutputPtr;
+    char *splitterOutputPtr;
     int splitterOutputLen;
-    int result = faasmAwaitCallOutput(splitterId, &splitterOutputPtr, &splitterOutputLen);
+    int result = faasmAwaitCallOutput(splitterId, &splitterOutputPtr,
+                                      &splitterOutputLen);
     std::string splitterOutput(splitterOutputPtr);
 
     if (result != 0) {
-        printf("word-count(driver): error: splitter execution failed with rc %i\n", result);
+        printf(
+            "word-count(driver): error: splitter execution failed with rc %i\n",
+            result);
         return 1;
     }
 #else
@@ -70,17 +74,20 @@ int main(int argc, char** argv)
 #endif
 
     // Get all message ids from output
-    std::vector<std::string>  mapperIds = splitByDelimiter(splitterOutput, ",");
+    std::vector<std::string> mapperIds = splitByDelimiter(splitterOutput, ",");
 
     // 2. Wait for all mapper functions to have finished
-    printf("word-count(driver): waiting for %zu mapper functions...\n", mapperIds.size());
+    printf("word-count(driver): waiting for %zu mapper functions...\n",
+           mapperIds.size());
     for (auto mapperIdStr : mapperIds) {
         int mapperId = std::stoi(mapperIdStr);
 #ifdef __faasm
         // std::tie(result, std::ignore) = tless::wait(mapperId, true);
         result = faasmAwaitCall(mapperId);
         if (result != 0) {
-            printf("word-count(driver): error: mapper execution (id: %i) failed with rc %i\n", mapperId, result);
+            printf("word-count(driver): error: mapper execution (id: %i) "
+                   "failed with rc %i\n",
+                   mapperId, result);
             return 1;
         }
 #endif
@@ -92,11 +99,13 @@ int main(int argc, char** argv)
            s3result.c_str());
 #ifdef __faasm
     // Call reducer and await
-    int reducerId = faasmChainNamed("reducer", (uint8_t*) s3result.c_str(), s3result.size());
+    int reducerId = faasmChainNamed("reducer", (uint8_t *)s3result.c_str(),
+                                    s3result.size());
     // std::tie(result, std::ignore) = tless::wait(reducerId, true);
     result = faasmAwaitCall(reducerId);
     if (result != 0) {
-        printf("word-count(driver): error: reducer failed with rc %i\n", result);
+        printf("word-count(driver): error: reducer failed with rc %i\n",
+               result);
         return 1;
     }
 #endif
