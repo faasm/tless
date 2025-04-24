@@ -27,20 +27,22 @@ struct Portfolio {
 };
 
 namespace tless::finra {
-std::vector<TradeData> loadCSVFromString(const std::string& data);
+std::vector<TradeData> loadCSVFromString(const std::string &data);
 
 // Trade (de-)serialization
-std::vector<uint8_t> serializeTrade(const TradeData& trade);
-TradeData deserializeTrade(const std::vector<uint8_t>& buffer);
-std::vector<uint8_t> serializeTradeVector(const std::vector<TradeData>& trades);
-std::vector<TradeData> deserializeTradeVector(const std::vector<uint8_t>& buffer);
+std::vector<uint8_t> serializeTrade(const TradeData &trade);
+TradeData deserializeTrade(const std::vector<uint8_t> &buffer);
+std::vector<uint8_t> serializeTradeVector(const std::vector<TradeData> &trades);
+std::vector<TradeData>
+deserializeTradeVector(const std::vector<uint8_t> &buffer);
 
 // Portfolio (de-)serialization
-std::vector<uint8_t> serializeHolding(const PortfolioHolding& holding);
-PortfolioHolding deserializeHolding(const std::vector<uint8_t>& buffer, size_t offset);
-std::vector<uint8_t> serializePortfolio(const Portfolio& portfolio);
-Portfolio deserializePortfolio(const std::vector<uint8_t>& buffer);
-}
+std::vector<uint8_t> serializeHolding(const PortfolioHolding &holding);
+PortfolioHolding deserializeHolding(const std::vector<uint8_t> &buffer,
+                                    size_t offset);
+std::vector<uint8_t> serializePortfolio(const Portfolio &portfolio);
+Portfolio deserializePortfolio(const std::vector<uint8_t> &buffer);
+} // namespace tless::finra
 
 // Specific audit rules. We only implement one rule, and each parallel function
 // runs the same rule. In reality, each function would implement a different
@@ -52,9 +54,9 @@ namespace tless::finra::rules {
 // specific time window before a significant movent in the public trading
 // data, like a sudden increase in trading volume or price. If this is
 // detected, we flag it as insider trade
-bool potentialInsiderTrade(const Portfolio& portfolio,
-                           const std::vector<TradeData>& trades,
-                           const std::string& tradeDate,
+bool potentialInsiderTrade(const Portfolio &portfolio,
+                           const std::vector<TradeData> &trades,
+                           const std::string &tradeDate,
                            double volumeSpikeThreshold = 1.5,
                            double priceChangeThreshold = 0.05);
-}
+} // namespace tless::finra::rules

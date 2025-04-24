@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::string& delimiter)
-{
+std::vector<std::string> splitByDelimiter(std::string stringCopy,
+                                          const std::string &delimiter) {
     std::vector<std::string> splitString;
 
     size_t pos = 0;
@@ -30,11 +30,11 @@ std::vector<std::string> splitByDelimiter(std::string stringCopy, const std::str
  * As an input, this workflow gets the S3 path to read model data from, the S3
  * path to load the images from and the number of inference functions to run.
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
 #ifdef __faasm
     if (argc != 4) {
-        std::cout << "ml-infernce(driver): usage: <s3_path_model> <s3_image_data> <num_inf_funcs>"
+        std::cout << "ml-infernce(driver): usage: <s3_path_model> "
+                     "<s3_image_data> <num_inf_funcs>"
                   << std::endl;
         return 1;
     }
@@ -45,46 +45,48 @@ int main(int argc, char** argv)
     // Invoke one instance of the partition function. It will populate
     // different files in S3 with the images to run inference on for each
     // inference function
-    std::cout << "ml-inference(driver): invoking one partition function" << std::endl;
-    std::string partitionInput = s3DataPrefix + ":" + std::to_string(numInfFuncs);
-    int partitionId = faasmChainNamed("partition", (uint8_t*) partitionInput.c_str(), partitionInput.size());
+    std::cout << "ml-inference(driver): invoking one partition function"
+              << std::endl;
+    std::string partitionInput =
+        s3DataPrefix + ":" + std::to_string(numInfFuncs);
+    int partitionId = faasmChainNamed(
+        "partition", (uint8_t *)partitionInput.c_str(), partitionInput.size());
 
     // Invoke one instance of the model loading function
-    std::cout << "ml-inference(driver): invoking one load function" << std::endl;
+    std::cout << "ml-inference(driver): invoking one load function"
+              << std::endl;
     std::string loadInput = s3ModelPrefix;
-    int loadId = faasmChainNamed("load", (uint8_t*) loadInput.c_str(), loadInput.size());
+    int loadId =
+        faasmChainNamed("load", (uint8_t *)loadInput.c_str(), loadInput.size());
 
     // Wait for both partition and load to finish
     int result = faasmAwaitCall(partitionId);
     if (result != 0) {
         std::cerr << "ml-inference(driver): error: "
-                  << "partition execution failed with rc: "
-                  << result
+                  << "partition execution failed with rc: " << result
                   << std::endl;
         return 1;
     }
     result = faasmAwaitCall(loadId);
     if (result != 0) {
         std::cerr << "ml-inference(driver): error: "
-                  << "load execution failed with rc: "
-                  << result
-                  << std::endl;
+                  << "load execution failed with rc: " << result << std::endl;
         return 1;
     }
 
     // Wait for all PCA functions to have finished
     std::cout << "ml-inference(driver): invoking " << numInfFuncs
-              << " inference functions..."
-              << std::endl;
+              << " inference functions..." << std::endl;
     std::vector<int> inferenceIds(numInfFuncs);
     std::string loadOutput = "ml-inference/outputs/load";
     std::string partitionOutput = "ml-inference/outputs/partition/inf-";
     for (int i = 0; i < numInfFuncs; i++) {
-        std::string infInput = std::to_string(i) + ":" + loadOutput + ":" + partitionOutput + std::to_string(i);
+        std::string infInput = std::to_string(i) + ":" + loadOutput + ":" +
+                               partitionOutput + std::to_string(i);
         std::cout << "ml-inference(driver): invoking prediction with input "
-                  << infInput
-                  << std::endl; // DELETE ME
-        int infId = faasmChainNamed("predict", (uint8_t*) infInput.c_str(), infInput.size());
+                  << infInput << std::endl; // DELETE ME
+        int infId = faasmChainNamed("predict", (uint8_t *)infInput.c_str(),
+                                    infInput.size());
         inferenceIds.at(i) = infId;
     }
 
@@ -95,8 +97,7 @@ int main(int argc, char** argv)
                       << " inference execution (id: " << infId << ")"
                       << std::endl
                       << "ml-infernce(driver): error: failed with rc: "
-                      << result
-                      << std::endl;
+                      << result << std::endl;
             return 1;
         }
     }

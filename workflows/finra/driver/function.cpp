@@ -8,49 +8,52 @@
 
 /* Driver Function - FINRA workflow
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
 #ifdef __faasm
     if (argc != 3) {
-        std::cout << "finra(driver): usage: <s3_public_data_path> <num_audit_funcs>"
-                  << std::endl;
+        std::cout
+            << "finra(driver): usage: <s3_public_data_path> <num_audit_funcs>"
+            << std::endl;
         return 1;
     }
     std::string s3DataFile = argv[1];
     int numAuditFuncs = std::stoi(argv[2]);
 
-    std::cout << "finra(driver): invoking one fetch-public function" << std::endl;
-    int fetchPublicId = faasmChainNamed("fetch-public", (uint8_t*) s3DataFile.c_str(), s3DataFile.size());
+    std::cout << "finra(driver): invoking one fetch-public function"
+              << std::endl;
+    int fetchPublicId = faasmChainNamed(
+        "fetch-public", (uint8_t *)s3DataFile.c_str(), s3DataFile.size());
 
-    std::cout << "finra(driver): invoking one fetch-private function" << std::endl;
+    std::cout << "finra(driver): invoking one fetch-private function"
+              << std::endl;
     int fetchPrivateId = faasmChainNamed("fetch-private", nullptr, 0);
 
     // Wait for both functions to finish
     int result = faasmAwaitCall(fetchPublicId);
     if (result != 0) {
         std::cerr << "finra(driver): error: "
-                  << "fetch-public execution failed with rc: "
-                  << result
+                  << "fetch-public execution failed with rc: " << result
                   << std::endl;
         return 1;
     }
     result = faasmAwaitCall(fetchPrivateId);
     if (result != 0) {
         std::cerr << "finra(driver): error: "
-                  << "fetch-private execution failed with rc: "
-                  << result
+                  << "fetch-private execution failed with rc: " << result
                   << std::endl;
         return 1;
     }
 
-    std::cout << "finra(driver): invoking " << numAuditFuncs << " audit function" << std::endl;
+    std::cout << "finra(driver): invoking " << numAuditFuncs
+              << " audit function" << std::endl;
     std::vector<int> auditFuncIds;
     int auditId;
     for (int i = 0; i < numAuditFuncs; i++) {
         std::string auditInput = std::to_string(i);
         auditInput += ":finra/outputs/fetch-public/trades";
         auditInput += ":finra/outputs/fetch-private/portfolio";
-        int auditId = faasmChainNamed("audit", (uint8_t*) auditInput.c_str(), auditInput.size());
+        int auditId = faasmChainNamed("audit", (uint8_t *)auditInput.c_str(),
+                                      auditInput.size());
         auditFuncIds.push_back(auditId);
     }
 
@@ -58,11 +61,9 @@ int main(int argc, char** argv)
     for (const auto auditId : auditFuncIds) {
         result = faasmAwaitCall(auditId);
         if (result != 0) {
-            std::cerr << "finra(driver): error: "
-                      << " audit execution (id: " << auditId << ")"
-                      << std::endl
-                      << "finra(driver): error: failed with rc: "
-                      << result
+            std::cerr << "finra(driver): error: " << " audit execution (id: "
+                      << auditId << ")" << std::endl
+                      << "finra(driver): error: failed with rc: " << result
                       << std::endl;
             return 1;
         }
@@ -72,8 +73,7 @@ int main(int argc, char** argv)
     int mergeId = faasmChainNamed("merge", nullptr, 0);
     result = faasmAwaitCall(mergeId);
     if (result != 0) {
-        std::cout << "finra(driver): merge execution failed with rc "
-                  << result
+        std::cout << "finra(driver): merge execution failed with rc " << result
                   << std::endl;
         return 1;
     }

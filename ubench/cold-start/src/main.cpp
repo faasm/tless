@@ -4,8 +4,7 @@
 #include <iostream>
 #include <string>
 
-int main()
-{
+int main() {
     if (accless::checkChain("word-count", "splitter", 1)) {
         std::cout << "accless: access approved :-)" << std::endl;
     } else {

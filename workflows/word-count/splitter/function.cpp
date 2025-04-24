@@ -1,14 +1,13 @@
 #ifdef __faasm
-extern "C"
-{
+extern "C" {
 #include "faasm/host_interface.h"
 }
 
 #include <faasm/faasm.h>
 #else
+#include "s3/S3Wrapper.hpp"
 #include <cstdlib>
 #include <fstream>
-#include "s3/S3Wrapper.hpp"
 #endif
 
 #include "accless.h"
@@ -26,10 +25,10 @@ extern "C"
  * The function returns a comma-separated list of the message ids corresponding
  * to all the invoked functions.
  */
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
     if (!accless::checkChain("word-count", "splitter", 0)) {
-        std::cerr << "word-count(splitter): error checking TLess chain" << std::endl;
+        std::cerr << "word-count(splitter): error checking TLess chain"
+                  << std::endl;
         return 1;
     }
 
@@ -41,7 +40,7 @@ int main(int argc, char** argv)
     // Get the object key as an input
     int inputSize = faasmGetInputSize();
     char s3dirChar[inputSize];
-    faasmGetInput((uint8_t*)s3dirChar, inputSize);
+    faasmGetInput((uint8_t *)s3dirChar, inputSize);
     s3dir.assign(s3dirChar, s3dirChar + inputSize);
 #else
     s3::initS3Wrapper();
@@ -49,12 +48,11 @@ int main(int argc, char** argv)
     s3::S3Wrapper s3cli;
 
     // In non-WASM deployments we can get the object key as an env. variable
-    char* s3dirChar = std::getenv("TLESS_S3_DIR");
+    char *s3dirChar = std::getenv("TLESS_S3_DIR");
 
     if (s3dirChar == nullptr) {
         std::cerr << "word-count(splitter): error: must populate TLESS_S3_DIR"
-                  << " env. variable!"
-                  << std::endl;
+                  << " env. variable!" << std::endl;
 
         return 1;
     }
@@ -69,13 +67,13 @@ int main(int argc, char** argv)
     // structured objects (i.e. vectors) through the WASM calling interface,
     // and (ii) we have not implmented prefix listing, so we need to filter
     // out entries manually
-    int numKeys = __faasm_s3_get_num_keys_with_prefix(
-      bucketName.c_str(), s3dir.c_str());
+    int numKeys =
+        __faasm_s3_get_num_keys_with_prefix(bucketName.c_str(), s3dir.c_str());
 
-    char** keysBuffer = (char**) malloc(numKeys * sizeof(char*));
-    int* keysBufferLens = (int*) malloc(numKeys * sizeof(int32_t));
-    __faasm_s3_list_keys_with_prefix(
-      bucketName.c_str(), s3dir.c_str(), keysBuffer, keysBufferLens);
+    char **keysBuffer = (char **)malloc(numKeys * sizeof(char *));
+    int *keysBufferLens = (int *)malloc(numKeys * sizeof(int32_t));
+    __faasm_s3_list_keys_with_prefix(bucketName.c_str(), s3dir.c_str(),
+                                     keysBuffer, keysBufferLens);
 
     int totalSize = 0;
     for (int i = 0; i < numKeys; i++) {
@@ -85,7 +83,7 @@ int main(int argc, char** argv)
     }
 #else
     auto rawS3files = s3cli.listKeys(bucketName, s3dir);
-    for (const auto& key : rawS3files) {
+    for (const auto &key : rawS3files) {
         // Filter by prefix
         if (key.rfind(s3dir, 0) == 0) {
             s3files.push_back(key);
@@ -105,11 +103,10 @@ int main(int argc, char** argv)
         auto s3file = s3files.at(i);
 #ifdef __faasm
         std::cout << "word-count(splitter): chaining to mapper (" << i << ")"
-                  << " with file "
-                  << s3file
-                  << std::endl;
+                  << " with file " << s3file << std::endl;
         std::string mapperInput = std::to_string(i) + ":" + s3file;
-        int splitterId = accless::chain("word-count", "splitter", 0, "mapper", i, mapperInput);
+        int splitterId = accless::chain("word-count", "splitter", 0, "mapper",
+                                        i, mapperInput);
         splitterCallIds.push_back(splitterId);
 #else
         std::cout << "file: " << s3file << std::endl;
@@ -120,7 +117,7 @@ int main(int argc, char** argv)
 #ifdef __faasm
     // Prepare the output: comma separated list of message ids
     std::string outputStr;
-    for (const auto& splitterId : splitterCallIds) {
+    for (const auto &splitterId : splitterCallIds) {
         outputStr += std::to_string(splitterId) + ",";
     }
     outputStr.pop_back();

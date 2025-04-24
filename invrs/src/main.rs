@@ -42,7 +42,11 @@ enum Command {
         eval_command: EvalCommand,
     },
     /// Run code formatting: clang-format, cargo fmt, and cargo clippy
-    FormatCode { check: bool },
+    FormatCode {
+        /// Dry-run and report errors if not formatted well
+        #[arg(long)]
+        check: bool
+    },
     /// Run microbenchmark
     Ubench {
         #[command(subcommand)]

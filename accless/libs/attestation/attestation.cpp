@@ -17,7 +17,8 @@
 using namespace attest;
 
 #define SNP_GUEST_REQ_IOC_TYPE 'S'
-#define SNP_GET_REPORT _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_request_ioctl)
+#define SNP_GET_REPORT                                                         \
+    _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_request_ioctl)
 
 namespace accless::attestation {
 void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
@@ -120,7 +121,7 @@ getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> userData,
     // Prepare the ioctl wrapper.
     snp_guest_request_ioctl guestReq;
     std::memset(&guestReq, 0, sizeof(guestReq));
-    guestReq.msg_version = 1;  // Must be non-zero.
+    guestReq.msg_version = 1; // Must be non-zero.
     guestReq.req_data = reinterpret_cast<uint64_t>(&reqPayload);
     guestReq.resp_data = reinterpret_cast<uint64_t>(&respPayload);
 
@@ -128,7 +129,8 @@ getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> userData,
     if (ioctl(fd, SNP_GET_REPORT, &guestReq) < 0) {
         int err = errno;
         close(fd);
-        std::cerr << "accless(att): ioctl SNP_GET_REPORT failed: " << strerror(err) << std::endl;
+        std::cerr << "accless(att): ioctl SNP_GET_REPORT failed: "
+                  << strerror(err) << std::endl;
         throw std::runtime_error("ioctl SNP_GET_REPORT failed");
     }
     close(fd);
@@ -141,7 +143,8 @@ getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> userData,
     }
 
     // Convert the response to a vector.
-    std::vector<uint8_t> report(respPayload.data, respPayload.data + SNP_REPORT_RESP_SIZE);
+    std::vector<uint8_t> report(respPayload.data,
+                                respPayload.data + SNP_REPORT_RESP_SIZE);
     return report;
 }
 
