@@ -45,7 +45,7 @@ enum Command {
     FormatCode {
         /// Dry-run and report errors if not formatted well
         #[arg(long)]
-        check: bool
+        check: bool,
     },
     /// Run microbenchmark
     Ubench {
@@ -417,11 +417,10 @@ async fn main() -> anyhow::Result<()> {
             }
 
             fn is_excluded(entry: &walkdir::DirEntry) -> bool {
-                let excluded_dirs = ["build-wasm", "build-native", "target"];
-                entry
-                    .file_type()
-                    .is_dir() &&
-                    entry.file_name()
+                let excluded_dirs = ["build-wasm", "build-native", "target", "venv"];
+                entry.file_type().is_dir()
+                    && entry
+                        .file_name()
                         .to_str()
                         .map(|name| excluded_dirs.contains(&name))
                         .unwrap_or(false)
