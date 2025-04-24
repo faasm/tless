@@ -30,6 +30,15 @@
   environment:
     FAASM_WASM_VM: sgx
 
+# Stop the cluster
+- name: "Deploy Faasm cluster"
+  shell: source ./bin/workon.sh && faasmctl delete
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
+    executable: /bin/bash
+  environment:
+    FAASM_WASM_VM: sgx
+
 - name: "Fetch the cross-compilation toolchain image"
   shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
   args:
