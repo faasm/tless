@@ -1,0 +1,17 @@
+[package]
+name = "accless-jwt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name="accless_jwt"
+crate-type=["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.97"
+base64 = "0.13"
+rsa = { version = "0.9.6", features = ["sha2"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+x509-parser = { version = "0.10.0" }
