@@ -2,13 +2,13 @@
 # This YAML describes the FINRA workflow for TLess in Knative.
 #
 # See here for more details on the workflow:
-# https://github.com/faasm/experiment-tless/blob/main/workflows/finra/README.md
+# https://github.com/faasm/accless/blob/main/workflows/finra/README.md
 # -----
 apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: ingress-to-fetch-public
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -18,7 +18,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: ingress-to-fetch-private
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -28,7 +28,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: fetch-to-audit
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -38,7 +38,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: audit-to-merge
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -48,59 +48,55 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: finra-fetch-public
-  namespace: tless
+  namespace: accless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
+          command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
-      labels:
-        tless.workflows/name: finra-fetch-public
       annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+      labels:
+        accless.workflows/name: finra-fetch-public
 ---
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: finra-fetch-private
-  namespace: tless
+  namespace: accless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
+          command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
-      labels:
-        tless.workflows/name: finra-fetch-private
       annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+      labels:
+        accless.workflows/name: finra-fetch-private
 ---
 apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
 metadata:
   name: finra-audit
-  namespace: tless
+  namespace: accless
 spec:
   job:
     spec:
@@ -115,60 +111,54 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: main
-              # TODO: pin to version
-              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:b88d473092ecd6f98c59717223717129fc249df04556377b24224b3349fc7495
+              image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
               ports:
                 - containerPort: 8080
               workingDir: /workflows/finra/knative
-              command: [ "./target/release/tless-cloudevent-handler" ]
+              command: [ "./target/release/accless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
-                - name: TLESS_MODE
-                  value: "${TLESS_MODE}"
+                - name: ACCLESS_MODE
+                  value: "${ACCLESS_MODE}"
         metadata:
-          labels:
-            tless.workflows/name: finra-audit
           annotations:
-            # NOTE: we may have to enable this annotation in Kata's config file
-            # under hypervisor.qemu.enable_annotations (add 'default_memory')
-            io.katacontainers.config.hypervisor.default_memory: "6144"
+            io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+          labels:
+            accless.workflows/name: finra-audit
 ---
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: finra-merge
-  namespace: tless
+  namespace: accless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/finra/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
+          command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
       labels:
-        tless.workflows/name: finra-merge
+        accless.workflows/name: finra-merge
       annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
         # High grace-period to guarantee the same instance processes requests
         # for all jobs in the JobSink (i.e. instances of the audit function)
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-one-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1
@@ -189,7 +179,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-two-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1
@@ -210,7 +200,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-three-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1
@@ -226,7 +216,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-four-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1

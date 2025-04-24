@@ -93,7 +93,10 @@ enum EvalSubCommand {
     Run(EvalRunArgs),
     /// Plot
     Plot {},
-    UploadState {},
+    UploadState {
+        /// Whereas we are using S3 with 'faasm' or 'knative'
+        system: String,
+    },
     UploadWasm {},
 }
 
@@ -124,6 +127,11 @@ enum EvalCommand {
 
 #[derive(Debug, Subcommand)]
 enum UbenchCommand {
+    /// Measure the cost per user of different configurations
+    EscrowCost {
+        #[command(subcommand)]
+        ubench_sub_command: UbenchSubCommand,
+    },
     /// Measure the throughput of the trusted escrow as we increase the number
     /// of parallel authorization requests
     EscrowXput {
@@ -169,6 +177,10 @@ enum S3Command {
         bucket_name: String,
         #[arg(long)]
         key: String,
+    },
+    GetUrl {
+        /// Whereas we are using S3 with 'faasm' or 'knative'
+        system: String,
     },
     /// List all buckets in an S3 server
     ListBuckets {},
@@ -231,6 +243,11 @@ enum AzureCommand {
     /// (for the time being, we deploy Faasm using docker compose, we could
     /// consider moving to AKS, or a single-node K8s)
     SgxFaasm {
+        #[command(subcommand)]
+        az_sub_command: AzureSubCommand,
+    },
+    /// Deploy our port of Knative that can run KServices inside SNP cVMs
+    SnpKnative {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
@@ -317,8 +334,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::ColdStart)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::ColdStart).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::ColdStart, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::ColdStart)?;
@@ -331,8 +348,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatency)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::E2eLatency).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::E2eLatency, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::E2eLatency)?;
@@ -345,8 +362,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::E2eLatencyCold)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::E2eLatencyCold).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::E2eLatencyCold, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::E2eLatencyCold)?;
@@ -359,8 +376,8 @@ async fn main() -> anyhow::Result<()> {
                 EvalSubCommand::Plot {} => {
                     Eval::plot(&EvalExperiment::ScaleUpLatency)?;
                 }
-                EvalSubCommand::UploadState {} => {
-                    Eval::upload_state(&EvalExperiment::ScaleUpLatency).await?;
+                EvalSubCommand::UploadState { system } => {
+                    Eval::upload_state(&EvalExperiment::ScaleUpLatency, system).await?;
                 }
                 EvalSubCommand::UploadWasm {} => {
                     Eval::upload_wasm(&EvalExperiment::ScaleUpLatency)?;
@@ -368,6 +385,14 @@ async fn main() -> anyhow::Result<()> {
             },
         },
         Command::Ubench { ubench_command } => match ubench_command {
+            UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
+                UbenchSubCommand::Run(run_args) => {
+                    Ubench::run(&MicroBenchmarks::EscrowCost, run_args).await;
+                }
+                UbenchSubCommand::Plot {} => {
+                    Ubench::plot(&MicroBenchmarks::EscrowCost);
+                }
+            },
             UbenchCommand::EscrowXput { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {
                     Ubench::run(&MicroBenchmarks::EscrowXput, run_args).await;
@@ -398,6 +423,10 @@ async fn main() -> anyhow::Result<()> {
             S3Command::GetKey { bucket_name, key } => {
                 let key_contents = S3::get_key(bucket_name, key).await;
                 println!("{key_contents}");
+            }
+            S3Command::GetUrl { system } => {
+                let url = S3::get_url(system);
+                println!("{url}");
             }
             S3Command::ListBuckets {} => {
                 S3::list_buckets().await;
@@ -432,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
                     Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
-                    Azure::create_snp_guest("accless-as", "Standard_DC8as_v5");
+                    Azure::create_snp_guest("accless-as", "Standard_DC2as_v5");
                     Azure::create_aa("accless");
 
                     Azure::open_vm_ports("accless-cvm", &[22]);
@@ -582,9 +611,11 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
-                    let result_path = "eval/cold-start/data";
+                    // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/scale-up-latency/data";
+                    // let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
+                    let results_file = vec!["accless-faasm.csv"];
+                    let result_path = "eval/scale-up-latency/data";
 
                     for result_file in results_file {
                         let scp_cmd = format!(
@@ -607,9 +638,48 @@ async fn main() -> anyhow::Result<()> {
                     Azure::delete_sgx_vm("sgx-faasm-vm");
                 }
             },
+            AzureCommand::SnpKnative { az_sub_command } => match az_sub_command {
+                AzureSubCommand::Create {} => {
+                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5");
+                }
+                AzureSubCommand::Provision {} => {
+                    let version = Env::get_version().unwrap();
+                    Azure::provision_with_ansible(
+                        "snp-knative",
+                        "snpknative",
+                        Some(format!("accless_version={version}").as_str()),
+                    );
+                }
+                AzureSubCommand::ScpResults {} => {
+                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
+                    let results_file =
+                        vec!["knative.csv", "snp-knative.csv", "accless-knative.csv"];
+                    let result_path = "eval/cold-start/data";
+
+                    for result_file in results_file {
+                        let scp_cmd = format!(
+                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
+                            Azure::build_scp_command("snp-knative-vm"),
+                            Env::proj_root().join(result_path).display(),
+                        );
+
+                        process::Command::new("sh")
+                            .arg("-c")
+                            .arg(scp_cmd)
+                            .status()
+                            .expect("invrs: error scp-ing results");
+                    }
+                }
+                AzureSubCommand::Ssh {} => {
+                    Azure::build_ssh_command("snp-knative-vm");
+                }
+                AzureSubCommand::Delete {} => {
+                    Azure::delete_sgx_vm("snp-knative-vm");
+                }
+            },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    // DC2 is 62.78$/month
+                    // DC2 is 62.78$/month -> original experiments w/ this
                     // DC4 is DC2 * 2
                     // DC8 is DC2 * 4
                     Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");

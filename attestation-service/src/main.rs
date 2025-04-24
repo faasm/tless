@@ -140,6 +140,8 @@ struct VcekResponse {
 
 /// This method can only be called from an Azure cVM
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    return Ok(vec![]);
+
     match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
         .set("Metadata", "true")
         .call()
@@ -424,6 +426,7 @@ async fn verify_snp_report(
 
     match full_body {
         Ok(bytes) => {
+            /* TODO: uncomment when deploying on Azure
             match snpguest::verify::attestation::verify_attestation(&state.vcek_pem, bytes.as_ref())
             {
                 Ok(_) => {
@@ -449,6 +452,29 @@ async fn verify_snp_report(
                 _ => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "ERROR: attestation report verification failed".into(),
+                ),
+            }
+            */
+            println!("WARNING: report verification disabled - deploy on Azure");
+            let claims = JwtClaims {
+                sub: "attested-client".to_string(),
+                exp: (chrono::Utc::now() + chrono::Duration::minutes(5)).timestamp()
+                    as usize,
+                aud: "accless-attestation-service".to_string(),
+                tee: "snp".to_string(),
+                // TODO: TEE identity should be a secret
+                tee_identity: TEE_IDENTITY.to_string(),
+                aes_key_b64: TEE_AES_KEY_B64.to_string(),
+            };
+            let header = Header {
+                alg: jsonwebtoken::Algorithm::RS256,
+                ..Default::default()
+            };
+            match encode(&header, &claims, &state.jwt_encoding_key) {
+                Ok(token) => (StatusCode::OK, token),
+                Err(_) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to encode JWT".into(),
                 ),
             }
         }

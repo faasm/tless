@@ -10,8 +10,6 @@
 // mr_enclave in the SGX report has type sgx_measurement_t which is a SHA256
 // digest (see sgx_report.h)
 #define MRENCLAVE_SIZE 32
-#define ATT_PROVIDER_AUD "accless-attestation-service"
-#define ATT_PROVIDER_SUB "attested-client"
 
 // We define with C-linkage all the external symbols that a TLess ECF needs
 // from the runtime environment. These are implemented by the runtime outside
@@ -24,7 +22,10 @@ void __accless_get_mrenclave(uint8_t *buf, int32_t bufSize);
 }
 #endif
 
-/* Main TLess C++ API
+#define ATT_PROVIDER_AUD "accless-attestation-service"
+#define ATT_PROVIDER_SUB "attested-client"
+
+/* Main Accless C++ API
  *
  * MISSING:
  * - Decrypt/Encrypt function input/output
@@ -50,4 +51,4 @@ int32_t chain(const std::string &workflow, const std::string &parentFuncName,
 // Wait for a function by its id, and get its output and return code
 std::pair<int, std::string> wait(int32_t functionId, bool ignoreOutput = false);
 #endif
-} // namespace tless
+} // namespace accless

@@ -32,8 +32,8 @@ impl S3Data {
     const BUCKET: S3Data = S3Data { data: "tless" };
 }
 
-pub fn get_tless_mode() -> String {
-    match env::var("TLESS_MODE") {
+pub fn get_accless_mode() -> String {
+    match env::var("ACCLESS_MODE") {
         Ok(value) => match value.as_str() {
             "on" => "on".to_string(),
             _ => "off".to_string(),
@@ -113,7 +113,7 @@ pub fn get_json_from_event(event: &Event) -> Value {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
         Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-        _ => panic!("tless(driver): error: must be json data"),
+        _ => panic!("accless(driver): error: must be json data"),
     }
     .unwrap()
 }
@@ -138,7 +138,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .arg("finra/yfinance.csv")
@@ -172,7 +172,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
@@ -218,7 +218,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .arg(audit_id.to_string())
                 .arg("finra/outputs/fetch-public/trades")
                 .arg("finra/outputs/fetch-private/portfolio")
@@ -266,7 +266,7 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", S3Data::PASSWORD.data)
                     .env("S3_PORT", S3Data::PORT.data)
                     .env("S3_USER", S3Data::USER.data)
-                    .env("TLESS_MODE", get_tless_mode())
+                    .env("ACCLESS_MODE", get_accless_mode())
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .output()
@@ -319,7 +319,7 @@ pub fn process_event(mut event: Event) -> Event {
             // include one magic per run, and spawn two cloud events with the
             // same magic
             let mut scaled_event = event.clone();
-            scaled_event.set_type("http://audit-to-merge-kn-channel.tless.svc.cluster.local");
+            scaled_event.set_type("http://audit-to-merge-kn-channel.accless.svc.cluster.local");
 
             for i in 1..num_audit {
                 scaled_event.set_id((run_magic + i).to_string());

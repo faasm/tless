@@ -37,7 +37,7 @@ def compile(wasm=False, native=False, debug=False, time=False):
             cmake_cmd = [
                 "cmake",
                 "-GNinja",
-                "-DACCLESS_UBENCH" if time else "",
+                "-DACCLESS_UBENCH=on" if time else "",
                 "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
                 "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
                 "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
@@ -47,6 +47,7 @@ def compile(wasm=False, native=False, debug=False, time=False):
 
             run(cmake_cmd, shell=True, check=True, cwd=build_dir)
             run("ninja {}".format(UBENCHS[ubench]), shell=True, check=True, cwd=build_dir)
+            run("ninja {}-server".format(UBENCHS[ubench]), shell=True, check=True, cwd=build_dir)
 
 
 if __name__ == "__main__":
@@ -60,4 +61,4 @@ if __name__ == "__main__":
 
     # Build the microbenchmarks
     compile(wasm=True, debug=debug, time=time)
-# compile(native=True, debug=debug, time=time)
+    compile(native=True, debug=debug, time=time)

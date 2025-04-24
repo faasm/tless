@@ -35,13 +35,13 @@ pub fn get_json_from_event(event: &Event) -> Value {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
         Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-        _ => panic!("tless(driver): error: must be json data"),
+        _ => panic!("accless(driver): error: must be json data"),
     }
     .unwrap()
 }
 
-pub fn get_tless_mode() -> String {
-    match env::var("TLESS_MODE") {
+pub fn get_accless_mode() -> String {
+    match env::var("ACCLESS_MODE") {
         Ok(value) => match value.as_str() {
             "on" => "on".to_string(),
             _ => "off".to_string(),
@@ -70,27 +70,27 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
                 .env("TLESS_S3_DIR", "word-count/few-files")
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
-                .expect("tless(driver): failed executing command");
+                .expect("accless(driver): failed executing command");
 
             "splitter"
         }
         "splitter" => {
-            println!("tless(driver): executing 'mapper' from 'splitter': {event}");
+            println!("accless(driver): executing 'mapper' from 'splitter': {event}");
 
             let json_file = get_json_from_event(&event);
             let s3_file = json_file
                 .get("input-file")
                 .and_then(Value::as_str)
-                .expect("tless(driver): error getting 'input-file' from CE");
+                .expect("accless(driver): error getting 'input-file' from CE");
 
             let mapper_id: i64 = get_json_from_event(&event)
                 .get("mapper-id")
                 .and_then(Value::as_i64)
-                .expect("tless(driver): error getting 'mapper-id' from CE");
+                .expect("accless(driver): error getting 'mapper-id' from CE");
 
             // Simulate actual function execution by a sleep
             Command::new(format!("{}/word-count_mapper", BINARY_DIR))
@@ -101,32 +101,32 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", "minio123")
                 .env("S3_PORT", "9000")
                 .env("S3_USER", "minio")
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .arg(mapper_id.to_string())
                 .arg(s3_file)
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .output()
-                .expect("tless(driver): failed executing command");
+                .expect("accless(driver): failed executing command");
 
             "mapper"
         }
         "mapper" => {
-            println!("tless(driver): executing 'reducer' from 'mapper': {event}");
+            println!("accless(driver): executing 'reducer' from 'mapper': {event}");
 
             let fan_out_scale: i64 = get_json_from_event(&event)
                 .get("scale-factor")
                 .and_then(Value::as_i64)
-                .expect("tless(driver): error: cannot find 'scale-factor' in CE");
+                .expect("accless(driver): error: cannot find 'scale-factor' in CE");
 
             // Increment an atomic counter, and only execute the reducer
             // function when all fan-in functions have executed
             let mut count = INVOCATION_COUNTER.lock().unwrap();
             *count += 1;
-            println!("tless(driver): counted {}/{}", *count, fan_out_scale);
+            println!("accless(driver): counted {}/{}", *count, fan_out_scale);
 
             if *count == fan_out_scale {
-                println!("tless(driver): done!");
+                println!("accless(driver): done!");
 
                 // Execute the function only after enough POST requests have
                 // been received
@@ -138,15 +138,15 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", "minio123")
                     .env("S3_PORT", "9000")
                     .env("S3_USER", "minio")
-                    .env("TLESS_MODE", get_tless_mode())
+                    .env("ACCLESS_MODE", get_accless_mode())
                     .arg("word-count/outputs/mapper-")
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
                     .output()
-                    .expect("tless(reducer): failed executing command");
+                    .expect("accless(reducer): failed executing command");
 
                 // Reset counter for next (warm) execution
-                println!("tless(reducer): resetting counter to 0");
+                println!("accless(reducer): resetting counter to 0");
                 *count = 0;
             }
 
@@ -186,7 +186,7 @@ pub fn process_event(mut event: Event) -> Event {
             let mut scaled_event = event.clone();
 
             // Write the new destination channel for the 'mapper' function
-            scaled_event.set_type("http://mapper-to-reducer-kn-channel.tless.svc.cluster.local");
+            scaled_event.set_type("http://mapper-to-reducer-kn-channel.accless.svc.cluster.local");
 
             println!("cloudevent(s1): fanning out by a factor of {}", lines.len());
 

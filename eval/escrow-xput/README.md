@@ -26,7 +26,7 @@ As a consequence, when running the [Trustee](#trustee) and [Managed HSM](
 This experiment deliberately ignores phases involved in the set-up, like
 generating key material inside the cVM, or attesting the Trustee, Managed HSM,
 or Azure Attestation service. A full breakdown of the overheads of access
-control can be found in TODO WHICH EXPERIMENT.
+control can be found in the [cold-start](../../eval/cold-start/README.md).
 
 ## Accless
 
@@ -42,8 +42,7 @@ invrs azure accless provision
 
 ### Run
 
-To run the experiments, first SSH into the server machine and start Trustee
-(in particular the KBS):
+To run the experiments, first SSH into the server machine and start the AS:
 
 ```bash
 # Client and Server IP addresses should appear
@@ -75,6 +74,14 @@ sudo -E ./accless-ubench --maa
 # Run timing breakdown for authentication + authorization
 # TODO: finish me
 sudo -E ./accless-ubench --once
+```
+
+To generate the results for the economical cost plot, run:
+
+```bash
+# TODO:
+# Just change the number of runs to be [1, 100]
+# TODO: load from file, right now hard-coded
 ```
 
 ### Clean-Up
@@ -122,7 +129,7 @@ then, SSH into the client and:
 ```bash
 cd git/faasm/tless
 # TODO: set this env. var as part of provisioning
-export TLESS_KBS_URL=https://${server_ip_from_above}:8080
+export TLESS_KBS_URL="https://${server_ip_from_above}:8080"
 source ./bin/workon.sh
 invrs ubench escrow-xput run --baseline trustee
 ```

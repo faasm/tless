@@ -12,7 +12,7 @@ pushd ${PROJ_ROOT}>>/dev/null
 
 export PROJ_ROOT=${PROJ_ROOT}
 export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
-export PS1="(tless) $PS1"
+export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
 # alias tlessctl="cargo run --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
@@ -22,7 +22,7 @@ alias invrs="cargo run --release --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
 # Knative vars (TODO FIXME consider changing)
 # ----------------------------
 
-export COCO_SOURCE=~/git/coco-serverless/coco-serverless
+export COCO_SOURCE=~/git/sc2-sys/deploy
 export KUBECONFIG=${COCO_SOURCE}/.config/kubeadm_kubeconfig
 alias k9s=${COCO_SOURCE}/bin/k9s
 alias kubectl=${COCO_SOURCE}/bin/kubectl
@@ -31,9 +31,9 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 # Faasm vars
 # ----------------------------
 
-export FAASM_INI_FILE=${PROJ_ROOT}/faasm.ini
-# TODO: update me
-export FAASM_VERSION=0.28.0
+# This is the path in the SGX-enabled machine we use for the experiments
+export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
+export FAASM_VERSION=0.30.0
 
 # ----------------------------
 # APT deps
@@ -64,7 +64,7 @@ source ${VENV_PATH}/bin/activate
 
 echo ""
 echo "----------------------------------"
-echo "TLess Experiments CLI"
+echo "Accless CLI"
 echo "Version: ${TLESS_VERSION}"
 echo "Project root: ${PROJ_ROOT}"
 echo "----------------------------------"

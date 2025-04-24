@@ -1,11 +1,11 @@
 - name: "Build demo"
-  shell: mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja
+  shell: rm -rf build && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/tless/ubench/escrow-xput"
     executable: /bin/bash
 
 - name: "Generate keys"
-  shell: ./bin/gen_keys.sh
+  shell: ./bin/gen_keys.sh --force
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
     executable: /bin/bash

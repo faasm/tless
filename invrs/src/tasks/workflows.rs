@@ -1,6 +1,8 @@
+use crate::env::Env;
 use crate::tasks::dag::Dag;
 use crate::tasks::s3::S3;
 use clap::ValueEnum;
+use log::debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{env, fmt};
@@ -78,9 +80,10 @@ impl Workflows {
         }
 
         // First, upload the DAG
-        let mut yaml_path = Self::get_root();
-        yaml_path.push(format!("{workflow}"));
-        yaml_path.push("accless.yaml");
+        let yaml_path = Env::proj_root()
+            .join("workflows")
+            .join(format!("{workflow}"))
+            .join("accless.yaml");
         Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await?;
 
         if dag_only {
@@ -90,11 +93,13 @@ impl Workflows {
         // Then, upload the respective state
         match workflow {
             AvailableWorkflow::Finra => {
+                debug!("foo");
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
                 host_path.push("yfinance.csv");
                 let s3_path = format!("{workflow}/yfinance.csv");
                 S3::upload_file(bucket_name, host_path.to_str().unwrap(), &s3_path).await;
+                debug!("bar");
             }
             AvailableWorkflow::MlTraining => {
                 // We upload both datasets until we decide which one to use

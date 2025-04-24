@@ -27,10 +27,10 @@ extern "C"
 
 #include <faasm/faasm.h>
 #else
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <filesystem>
 #include <iostream>
@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
 #endif
     std::string us = "pca-" + std::to_string(id);
 
-    if (!tless::checkChain("ml-training", "pca", id)) {
+    if (!accless::checkChain("ml-training", "pca", id)) {
         std::cerr << "ml-training(" << us << "): error checking TLess chain" << std::endl;
         return 1;
     }
@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
         std::string pcaInput = std::to_string(id) + ":" + std::to_string(i) + ":" + dataKey + ":" + labelsKey;
 #ifdef __faasm
         // int pcaId = faasmChainNamed("rf", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-        int pcaId = tless::chain("ml-training", "pca", id, "rf", i, pcaInput);
+        int pcaId = accless::chain("ml-training", "pca", id, "rf", i, pcaInput);
         trainFuncIds.push_back(std::to_string(pcaId));
 #endif
     }

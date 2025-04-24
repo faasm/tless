@@ -4,9 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
-#include <aws/s3/S3Client.h>
+#include <miniocpp/client.h>
 
 #define S3_REQUEST_TIMEOUT_MS 10000
 #define S3_CONNECT_TIMEOUT_MS 500
@@ -23,7 +21,7 @@ class S3Wrapper {
 
     void createBucket(const std::string &bucketName);
 
-    void deleteBucket(const std::string &bucketName);
+    void deleteBucket(const std::string &bucketName, bool recursive = true);
 
     std::vector<std::string> listBuckets();
 
@@ -43,10 +41,12 @@ class S3Wrapper {
                                      bool tolerateMissing = false);
 
     std::string getKeyStr(const std::string &bucketName,
-                          const std::string &keyName);
+                          const std::string &keyName,
+                          bool tolerateMissing = false);
 
   private:
-    Aws::Client::ClientConfiguration clientConf;
-    Aws::S3::S3Client client;
+    minio::s3::BaseUrl baseUrl;
+    minio::creds::StaticProvider provider;
+    minio::s3::Client client;
 };
 } // namespace s3

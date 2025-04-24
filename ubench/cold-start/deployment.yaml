@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: accless-cold-start
+  namespace: accless
+  labels:
+    accless.ubench/name: cold-start
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+        accless.ubench/name: cold-start
+  template:
+    metadata:
+      labels:
+        accless.ubench/name: cold-start
+      annotations:
+        io.containerd.cri.runtime-handler: kata-${SC2_RUNTIME_CLASS}
+    spec:
+      runtimeClassName: kata-${SC2_RUNTIME_CLASS}
+      containers:
+      - name: accless-cold-start
+        image: ghcr.io/faasm/accless-knative-worker:0.5.0
+        imagePullPolicy: Always

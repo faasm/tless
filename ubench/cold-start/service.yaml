@@ -1,0 +1,25 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cold-start
+  namespace: accless
+spec:
+  template:
+    metadata:
+      labels:
+        accless.ubench/name: cold-start
+      annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+    spec:
+      runtimeClassName: ${RUNTIME_CLASS_NAME}
+      securityContext:
+        runAsUser: 1000
+      containers:
+        - image: sc2cr.io/accless-knative-worker:0.6.0
+          ports:
+            - containerPort: 8080
+          command: ["/bin/sh", "-c"]
+          args: ["/code/tless/ubench/build-native/accless-ubench-cold-start-server"]
+          env:
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"

@@ -12,7 +12,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: ingress-to-splitter
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -22,7 +22,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: splitter-to-mapper
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -32,7 +32,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Channel
 metadata:
   name: mapper-to-reducer
-  namespace: tless
+  namespace: accless
 spec:
   channelTemplate:
     apiVersion: messaging.knative.dev/v1
@@ -45,27 +45,25 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: word-count-splitter
-  namespace: tless
+  namespace: accless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/word-count/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
+          command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
-      labels:
-        tless.workflows/name: word-count-splitter
       annotations:
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+      labels:
+        accless.workflows/name: word-count-splitter
 ---
 # JobSink guarantees one Job per CloudEvent, satisfying our dynamic scale-up
 # requirements. However, JobSink's propagate CloudEvents through a volume
@@ -74,7 +72,7 @@ apiVersion: sinks.knative.dev/v1alpha1
 kind: JobSink
 metadata:
   name: word-count-mapper
-  namespace: tless
+  namespace: accless
 spec:
   job:
     spec:
@@ -93,24 +91,21 @@ spec:
               # in a tag's digest. So, while we are heavily developing, we
               # should stick to specifying the image via tag digest. Eventually,
               # we can move to a pinned tag
-              # image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
-              image: ghcr.io/coco-serverless/tless-knative-worker@sha256:b88d473092ecd6f98c59717223717129fc249df04556377b24224b3349fc7495
+              image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
               ports:
                 - containerPort: 8080
               workingDir: /workflows/word-count/knative
-              command: [ "./target/release/tless-cloudevent-handler" ]
+              command: [ "./target/release/accless-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
-                - name: TLESS_MODE
-                  value: "${TLESS_MODE}"
+                - name: ACCLESS_MODE
+                  value: "${ACCLESS_MODE}"
         metadata:
-          labels:
-            tless.workflows/name: word-count-mapper
           annotations:
-            # NOTE: we may have to enable this annotation in Kata's config file
-            # under hypervisor.qemu.enable_annotations (add 'default_memory')
-            io.katacontainers.config.hypervisor.default_memory: "6144"
+            io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
+          labels:
+            accless.workflows/name: word-count-mapper
 ---
 # For this last service, we want to give it a high-grace period to make sure
 # that the same instance processes all of the events
@@ -118,34 +113,32 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: word-count-reducer
-  namespace: tless
+  namespace: accless
 spec:
   template:
     spec:
       runtimeClassName: ${RUNTIME_CLASS_NAME}
       containers:
-        - image: ghcr.io/coco-serverless/tless-knative-worker:${TLESS_VERSION}
+        - image: sc2cr.io/accless-knative-worker:${ACCLESS_VERSION}
           ports:
             - containerPort: 8080
           workingDir: /workflows/word-count/knative
-          command: [ "./target/release/tless-cloudevent-handler" ]
+          command: [ "./target/release/accless-cloudevent-handler" ]
           env:
-            - name: TLESS_MODE
-              value: "${TLESS_MODE}"
+            - name: ACCLESS_MODE
+              value: "${ACCLESS_MODE}"
     metadata:
       labels:
-        tless.workflows/name: word-count-reducer
+        accless.workflows/name: word-count-reducer
       annotations:
+        io.containerd.cri.runtime-handler: ${RUNTIME_CLASS_NAME}
         autoscaling.knative.dev/scale-to-zero-pod-retention-period: "1m"
-        # NOTE: we may have to enable this annotation in Kata's config file
-        # under hypervisor.qemu.enable_annotations (add 'default_memory')
-        io.katacontainers.config.hypervisor.default_memory: "6144"
 ---
 apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-one-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1
@@ -166,7 +159,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-two-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1
@@ -182,7 +175,7 @@ apiVersion: messaging.knative.dev/v1
 kind: Subscription
 metadata:
   name: edge-three-subscription
-  namespace: tless
+  namespace: accless
 spec:
   channel:
     apiVersion: messaging.knative.dev/v1

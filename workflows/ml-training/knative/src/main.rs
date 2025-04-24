@@ -33,8 +33,8 @@ impl S3Data {
     const BUCKET: S3Data = S3Data { data: "tless" };
 }
 
-pub fn get_tless_mode() -> String {
-    match env::var("TLESS_MODE") {
+pub fn get_accless_mode() -> String {
+    match env::var("ACCLESS_MODE") {
         Ok(value) => match value.as_str() {
             "on" => "on".to_string(),
             _ => "off".to_string(),
@@ -65,7 +65,7 @@ pub fn get_json_from_event(event: &Event) -> Value {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
         Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
-        _ => panic!("tless(driver): error: must be json data"),
+        _ => panic!("accless(driver): error: must be json data"),
     }
     .unwrap()
 }
@@ -106,7 +106,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .arg(data_dir)
@@ -157,7 +157,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .arg(pca_id.to_string())
                 .arg(format!("ml-training/outputs/partition/pca-{pca_id}"))
                 .arg(((num_train_funcs / num_pca_funcs) as i64).to_string())
@@ -205,7 +205,7 @@ pub fn process_event(mut event: Event) -> Event {
                 .env("S3_PASSWORD", S3Data::PASSWORD.data)
                 .env("S3_PORT", S3Data::PORT.data)
                 .env("S3_USER", S3Data::USER.data)
-                .env("TLESS_MODE", get_tless_mode())
+                .env("ACCLESS_MODE", get_accless_mode())
                 .arg(pca_id.to_string())
                 .arg(rf_id.to_string())
                 .arg(format!("ml-training/outputs/pca-{pca_id}/rf-{rf_id}-data"))
@@ -256,7 +256,7 @@ pub fn process_event(mut event: Event) -> Event {
                     .env("S3_PASSWORD", S3Data::PASSWORD.data)
                     .env("S3_PORT", S3Data::PORT.data)
                     .env("S3_USER", S3Data::USER.data)
-                    .env("TLESS_MODE", get_tless_mode())
+                    .env("ACCLESS_MODE", get_accless_mode())
                     .arg("ml-training/outputs/rf-")
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
@@ -314,7 +314,7 @@ pub fn process_event(mut event: Event) -> Event {
             // This is the channel where PCA will post the CE too (given that
             // PCA is a JobSink)
             let mut scaled_event = event.clone();
-            scaled_event.set_type("http://pca-to-rf-kn-channel.tless.svc.cluster.local");
+            scaled_event.set_type("http://pca-to-rf-kn-channel.accless.svc.cluster.local");
 
             for i in 1..num_pca_funcs {
                 // scaled_event.set_id((run_magic + i).to_string());
@@ -410,7 +410,7 @@ pub fn process_event(mut event: Event) -> Event {
             // to modify anything else other than the rigth channel to post
             // the event to
 
-            event.set_type("http://rf-to-validation-kn-channel.tless.svc.cluster.local");
+            event.set_type("http://rf-to-validation-kn-channel.accless.svc.cluster.local");
 
             event
         }

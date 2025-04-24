@@ -1,18 +1,16 @@
 #include "accless.h"
 // Both tless::aes256gcm and tles::sha256 are declared in this header
-#include "tless_aes.h"
-#ifdef __faasm
-// For the time being, this library is only needed in Faasm
-#include "tless_jwt.h"
-#endif
 #include "dag.h"
 #include "tless_abe.h"
+#include "tless_aes.h"
+#include "tless_jwt.h"
 #include "utils.h"
 
-// Faasm includes
 #ifdef __faasm
+// Faasm includes
 #include <faasm/core.h>
 #else
+#include "attestation/attestation.h"
 #include "s3/S3Wrapper.hpp"
 #endif
 
@@ -84,9 +82,9 @@ bool on() {
 //
 // In both cases, we get an attestation report and send it to the MAA for
 // validation.
-static bool validHardwareAttestation(std::string& jwtStrOut) {
+static bool validHardwareAttestation(std::string &jwtStrOut) {
 #ifdef __faasm
-    // Get SGX quote and send it to MAA, get JWT in return
+    // Get SGX quote and send it to the attestation service, get JWT in return
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("get-hw-att-begin", NOW));
 #endif
@@ -94,6 +92,11 @@ static bool validHardwareAttestation(std::string& jwtStrOut) {
     int32_t jwtSize;
     __accless_get_attestation_jwt(&jwt, &jwtSize);
     std::string jwtStr(jwt);
+#else
+    // TODO: instead of a nullopt we can pass a public key here
+    auto snpReport = accless::attestation::getSnpReport(std::nullopt);
+    std::string jwtStr = accless::attestation::asGetJwtFromReport(snpReport);
+#endif
 
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("get-hw-att-end", NOW));
@@ -104,37 +107,42 @@ static bool validHardwareAttestation(std::string& jwtStrOut) {
 #endif
 
     // Verify JWT signature
-    // TODO: verify should happen for both Faasm and Knative
     bool valid = tless::jwt::verify(jwtStr);
     if (!valid) {
-        std::cout << "accless: error: failed to verify the signature in the JWT" << std::endl;
+        std::cout << "accless: error: failed to verify the signature in the JWT"
+                  << std::endl;
         return false;
     }
 
     // Check signed JWT comes from the expected attestation service
-    if (!tless::jwt::checkProperty(jwt, "aud", ATT_PROVIDER_AUD)) {
+    if (!tless::jwt::checkProperty(jwtStr, "aud", ATT_PROVIDER_AUD)) {
         std::cout << "accless: error: failed to validate JWT AUD" << std::endl;
         return false;
-    } else if (!tless::jwt::checkProperty(jwt, "sub", ATT_PROVIDER_SUB)) {
+    } else if (!tless::jwt::checkProperty(jwtStr, "sub", ATT_PROVIDER_SUB)) {
         std::cout << "accless: error: failed to validate JWT AUD" << std::endl;
         return false;
-    } else if (!tless::jwt::checkProperty(jwt, "tee", "sgx")) {
+#ifdef __faasm
+    } else if (!tless::jwt::checkProperty(jwtStr, "tee", "sgx")) {
+#else
+    } else if (!tless::jwt::checkProperty(jwtStr, "tee", "snp")) {
+#endif
         std::cout << "accless: error: failed to validate tee" << std::endl;
         return false;
     }
 
+#ifdef __faasm
     // Sanity check: compare the MRENCLAVE with the one in the JWT. We rely
     // on the untrusted host to actually validate the JWT, so we want to
     // make sure that this JWT includes our actual MRENCLAVE. We need to convert
     // the raw bytes from the measurement to a hex string
     std::vector<uint8_t> mrEnclave(MRENCLAVE_SIZE);
     __accless_get_mrenclave(mrEnclave.data(), mrEnclave.size());
-    std::string mrEnclaveHex =
-        accless::utils::byteArrayToHexString(mrEnclave.data(), mrEnclave.size());
+    std::string mrEnclaveHex = accless::utils::byteArrayToHexString(
+        mrEnclave.data(), mrEnclave.size());
     /* TODO: attestation-service still cannot parse SGX reports
     if (!tless::jwt::checkProperty(jwt, "sgx-mrenclave", mrEnclaveHex)) {
-        std::cout << "accless: error: failed to validate MrEnclave" << std::endl;
-        return false;
+        std::cout << "accless: error: failed to validate MrEnclave" <<
+    std::endl; return false;
     }
     */
 #else
@@ -198,8 +206,8 @@ bool checkChain(const std::string &workflow, const std::string &function,
 
     // Also calculate the hex-digest of the serialized DAG
     std::vector<uint8_t> hashedDag = tless::sha256::hash(serializedDag);
-    std::string dagHexDigest =
-        accless::utils::byteArrayToHexString(hashedDag.data(), hashedDag.size());
+    std::string dagHexDigest = accless::utils::byteArrayToHexString(
+        hashedDag.data(), hashedDag.size());
 
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-exec-req", NOW));
@@ -233,7 +241,8 @@ bool checkChain(const std::string &workflow, const std::string &function,
     timePoints.push_back(std::make_pair("begin-fetch-dec-cpabe", NOW));
 #endif
 
-    std::string teeSymKeyBase64 = tless::jwt::getProperty(jwtStr, "aes_key_b64");
+    std::string teeSymKeyBase64 =
+        tless::jwt::getProperty(jwtStr, "aes_key_b64");
     auto teeSymKey = accless::utils::base64Decode(teeSymKeyBase64);
 
     // Fetch the (encrypted) CP-ABE context from S3
@@ -251,8 +260,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
                                   ctCtx.begin() + AES256CM_NONCE_SIZE);
     std::vector<uint8_t> ctCtxTrimmed(ctCtx.begin() + AES256CM_NONCE_SIZE,
                                       ctCtx.end());
-    auto ptCtx =
-        tless::aes256gcm::decrypt(teeSymKey, nonceCtx, ctCtxTrimmed);
+    auto ptCtx = tless::aes256gcm::decrypt(teeSymKey, nonceCtx, ctCtxTrimmed);
 
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-dec-cpabe", NOW));

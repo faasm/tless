@@ -9,12 +9,13 @@ const AZURE_RESOURCE_GROUP: &str = "faasm";
 const AZURE_USERNAME: &str = "tless";
 const AZURE_LOCATION: &str = "eastus";
 
-// TODO: re-factor w/ out SNP
-const AZURE_SNP_VM_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
-const AZURE_SNP_VM_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
+const AZURE_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
+const AZURE_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
 
 const AZURE_SGX_VM_IMAGE: &str =
     "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202301140";
+const AZURE_SNP_CC_VM_SIZE: &str =
+    "/CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubu2204-snp-host-upm/Versions/latest";
 
 //  Specifies order in which to delete resource types
 const RESOURCE_TYPE_PRECEDENCE: [&str; 4] = [
@@ -32,7 +33,7 @@ impl Azure {
     // Misc Helpers
     // -------------------------------------------------------------------------
 
-    #[warn(unused_imports)]
+    #[allow(dead_code)]
     fn create_self_signed_cert(key_out_path: &str, cert_out_path: &str) {
         let openssl_cmd = format!(
             "openssl req -newkey rsa:2048 -nodes -keyout {key_out_path} \
@@ -82,7 +83,7 @@ impl Azure {
 
     /// Activate a managed HSM by providing three certificates for the security
     /// domain
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     fn activate_managed_hsm(mhsm_name: &str) {
         let key_dir = Env::proj_root().join("azure").join("keys");
         fs::create_dir_all(&key_dir).expect("invrs: failed to create key directory");
@@ -278,8 +279,8 @@ impl Azure {
         let az_cmd = format!(
             "az vm create --resource-group {AZURE_RESOURCE_GROUP} \
             --name {vm_name} --admin-username {AZURE_USERNAME} --location \
-            {AZURE_LOCATION} --ssh-key-value {AZURE_SNP_VM_SSH_PUB_KEY} \
-            --image {AZURE_SGX_VM_IMAGE} --size {vm_sku} --os-disk-size-gb 63 \
+            {AZURE_LOCATION} --ssh-key-value {AZURE_SSH_PUB_KEY} \
+            --image {AZURE_SGX_VM_IMAGE} --size {vm_sku} --os-disk-size-gb 128 \
             --public-ip-sku Standard --os-disk-delete-option delete \
             --data-disk-delete-option delete --nic-delete-option delete"
         );
@@ -315,7 +316,7 @@ impl Azure {
         let cinit_content = fs::read(cloud_init_file).expect("error: reading cloud-init file");
         let custom_data = base64::engine::general_purpose::STANDARD.encode(cinit_content);
 
-        let pub_key = fs::read_to_string(shellexpand::tilde(AZURE_SNP_VM_SSH_PUB_KEY).into_owned())
+        let pub_key = fs::read_to_string(shellexpand::tilde(AZURE_SSH_PUB_KEY).into_owned())
             .expect("invrs: error loading ssh pub key");
         let az_cmd = format!(
             "az deployment group create --resource-group {AZURE_RESOURCE_GROUP} \
@@ -341,6 +342,33 @@ impl Azure {
 
         let az_cmd = format!("az deployment group delete -g {AZURE_RESOURCE_GROUP} -n {vm_name}",);
         Self::run_cmd(&az_cmd, "error deleting snp guest");
+    }
+
+    // ------------------------------ SNP cc-VMs -------------------------------
+
+    // SNP child-chapable VMs are regular VMs that support creating SNP
+    // protected child VMs. Note that the parent VM is _not_ running in an SNP
+    // guest, only the child
+    // https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/general-purpose/dcasccv5-series
+    pub fn create_snp_cc_vm(vm_name: &str, vm_sku: &str) {
+        info!("creating snp cc-vm: {vm_name} (sku: {vm_sku})");
+        let az_cmd = format!(
+            "az vm create --resource-group {AZURE_RESOURCE_GROUP} \
+            --name {vm_name} --admin-username {AZURE_USERNAME} --location \
+            {AZURE_LOCATION} --ssh-key-value {AZURE_SSH_PUB_KEY} \
+            --image {AZURE_SNP_CC_VM_SIZE} --size {vm_sku} --os-disk-size-gb 128 \
+            --accelerated-networking true --accept-term"
+        );
+        Self::run_cmd(&az_cmd, "error deploying snp cc-vm");
+    }
+
+    pub fn delete_snp_cc_vm(vm_name: &str) {
+        // First delete VM
+        Self::vm_op("delete", vm_name, &["--yes"]);
+
+        // Then delete all attached resources
+        let all_resources = Self::list_all_resources("resource", Some(vm_name));
+        Self::delete_resources(all_resources);
     }
 
     // ---------------------------- Managed HSM --------------------------------
@@ -495,13 +523,13 @@ impl Azure {
 
     pub fn build_scp_command(vm_name: &str) -> String {
         format!(
-            "scp -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
+            "scp -i {AZURE_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
             Self::get_vm_ip(vm_name),
         )
     }
     pub fn build_ssh_command(vm_name: &str) {
         println!(
-            "ssh -A -i {AZURE_SNP_VM_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
+            "ssh -A -i {AZURE_SSH_PRIV_KEY} {AZURE_USERNAME}@{}",
             Self::get_vm_ip(vm_name),
         )
     }

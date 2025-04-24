@@ -1,91 +1,57 @@
 #include "S3Wrapper.hpp"
 
-#include <aws/s3/S3Errors.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
-#include <aws/s3/model/DeleteObjectRequest.h>
-#include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/ListObjectsRequest.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
-#include <aws/s3/model/ListObjectsV2Result.h>
-#include <aws/s3/model/PutObjectRequest.h>
-
-using namespace Aws::S3::Model;
-using namespace Aws::Client;
-using namespace Aws::Auth;
+#include <fmt/format.h>
+#include <miniocpp/client.h>
+#include <sstream>
 
 namespace s3 {
 
-static Aws::SDKOptions options;
+enum class S3Error {
+    BucketAlreadyOwnedByYou,
+    BucketNotEmpty,
+    NoSuchBucket,
+    NoSuchKey,
+    // Used as a catch-all, ideally remove
+    UnrecognisedError,
+};
 
-template <typename R> R reqFactory(const std::string &bucket) {
-    R req;
-    req.SetBucket(bucket);
-    return req;
-}
+std::unordered_map<std::string, S3Error> errorToStringMap = {
+    {"BucketAlreadyOwnedByYou", S3Error::BucketAlreadyOwnedByYou},
+    {"BucketNotEmpty", S3Error::BucketNotEmpty},
+    {"NoSuchBucket", S3Error::NoSuchBucket},
+    {"NoSuchKey", S3Error::NoSuchKey},
+};
 
-template <typename R>
-R reqFactory(const std::string &bucket, const std::string &key) {
-    R req = reqFactory<R>(bucket);
-    req.SetKey(key);
-    return req;
+S3Error parseError(const std::string &errorStr) {
+    if (errorToStringMap.find(errorStr) == errorToStringMap.end()) {
+        std::cerr << "accless(s3): unrecognised error: " << errorStr
+                  << std::endl;
+        return S3Error::UnrecognisedError;
+    }
+
+    return errorToStringMap.at(errorStr);
 }
 
 #define CHECK_ERRORS(response, bucketName, keyName)                            \
     {                                                                          \
-        if (!response.IsSuccess()) {                                           \
-            const auto &err = response.GetError();                             \
+        if (!response) {                                                       \
             if (std::string(bucketName).empty()) {                             \
-                std::cerr << "General S3 error: " << bucketName << std::endl;  \
-            } else if (std::string(keyName).empty()) {                         \
-                std::cerr << "S3 error with bucket: " << bucketName            \
+                std::cerr << "accless(s3): general s3 error: "                 \
+                          << response.code << "(" << response.message << ")"   \
                           << std::endl;                                        \
+            } else if (std::string(keyName).empty()) {                         \
+                std::cerr << "accless(s3): error with bucket: " << bucketName  \
+                          << ": " << response.code << "(" << response.message  \
+                          << ")" << std::endl;                                 \
             } else {                                                           \
-                std::cerr << "S3 error with bucket/key:" << bucketName << "/"  \
-                          << keyName << std::endl;                             \
+                std::cerr << "accless(s3): error with bucket/key "             \
+                          << bucketName << "/" << keyName << ": "              \
+                          << response.code << "(" << response.message << ")"   \
+                          << std::endl;                                        \
             }                                                                  \
-            std::cerr << "S3 error: " << err.GetExceptionName().c_str()        \
-                      << err.GetMessage().c_str() << std::endl;                \
             throw std::runtime_error("S3 error");                              \
         }                                                                      \
-    }
-
-std::shared_ptr<AWSCredentialsProvider> getCredentialsProvider() {
-    return Aws::MakeShared<ProfileConfigFileAWSCredentialsProvider>("local");
-}
-
-ClientConfiguration getClientConf(long timeout) {
-    // There are a couple of conflicting pieces of info on how to configure
-    // the AWS C++ SDK for use with minio:
-    // https://stackoverflow.com/questions/47105289/how-to-override-endpoint-in-aws-sdk-cpp-to-connect-to-minio-server-at-localhost
-    // https://github.com/aws/aws-sdk-cpp/issues/587
-    ClientConfiguration config;
-
-    char *s3Host = std::getenv("S3_HOST");
-    if (s3Host == nullptr) {
-        std::cerr << "tless(s3): error: S3_HOST env. var not set!" << std::endl;
-        throw std::runtime_error("S3 error");
-    }
-    std::string s3HostStr(s3Host);
-
-    char *s3Port = std::getenv("S3_PORT");
-    if (s3Port == nullptr) {
-        std::cerr << "tless(s3): error: S3_PORT env. var not set!" << std::endl;
-        throw std::runtime_error("S3 error");
-    }
-    std::string s3PortStr(s3Port);
-
-    config.region = "";
-    config.verifySSL = false;
-    config.endpointOverride = s3HostStr + ":" + s3PortStr;
-    config.connectTimeoutMs = S3_CONNECT_TIMEOUT_MS;
-    config.requestTimeoutMs = timeout;
-
-    // Use HTTP, not HTTPS
-    config.scheme = Aws::Http::Scheme::HTTP;
-
-    return config;
-}
+    };
 
 void initS3Wrapper() {
     char *s3Host = std::getenv("S3_HOST");
@@ -104,8 +70,6 @@ void initS3Wrapper() {
 
     std::cout << "tless(s3): initialising s3 setup at " << s3HostStr << ":"
               << s3PortStr << std::endl;
-
-    Aws::InitAPI(options);
 
     char *s3Bucket = std::getenv("S3_BUCKET");
     if (s3Bucket == nullptr) {
@@ -131,59 +95,68 @@ void initS3Wrapper() {
               << s3PortStr << std::endl;
 }
 
-void shutdownS3Wrapper() { Aws::ShutdownAPI(options); }
+void shutdownS3Wrapper() { ; }
 
 S3Wrapper::S3Wrapper()
-    : clientConf(getClientConf(S3_REQUEST_TIMEOUT_MS)),
-      client(AWSCredentials(std::getenv("S3_USER"), std::getenv("S3_PASSWORD")),
-             clientConf, AWSAuthV4Signer::PayloadSigningPolicy::Never, false) {}
+    : baseUrl(minio::s3::BaseUrl(
+          fmt::format("{}:{}", std::getenv("S3_HOST"), std::getenv("S3_PORT")),
+          false, {})),
+      provider(minio::creds::StaticProvider(std::getenv("S3_USER"),
+                                            std::getenv("S3_PASSWORD"))),
+      client(baseUrl, &provider) {}
 
 void S3Wrapper::createBucket(const std::string &bucketName) {
     std::cout << "tless(s3): creating bucket " << bucketName << std::endl;
+    minio::s3::MakeBucketArgs args;
+    args.bucket = bucketName;
+    auto response = client.MakeBucket(args);
 
-    auto request = reqFactory<CreateBucketRequest>(bucketName);
-    auto response = client.CreateBucket(request);
-
-    if (!response.IsSuccess()) {
-        const auto &err = response.GetError();
-
-        auto errType = err.GetErrorType();
-        if (errType == Aws::S3::S3Errors::BUCKET_ALREADY_OWNED_BY_YOU ||
-            errType == Aws::S3::S3Errors::BUCKET_ALREADY_EXISTS) {
+    if (!response) {
+        auto error = parseError(response.code);
+        if (error == S3Error::BucketAlreadyOwnedByYou) {
             std::cout << "tless(s3): bucket already exists " << bucketName
                       << std::endl;
-        } else {
-            CHECK_ERRORS(response, bucketName, "");
+            return;
         }
+
+        CHECK_ERRORS(response, bucketName, "");
     }
 }
 
-void S3Wrapper::deleteBucket(const std::string &bucketName) {
+void S3Wrapper::deleteBucket(const std::string &bucketName, bool recursive) {
     std::cout << "tless(s3): deleting bucket " << bucketName << std::endl;
+    minio::s3::RemoveBucketArgs args;
+    args.bucket = bucketName;
+    auto response = client.RemoveBucket(args);
 
-    auto request = reqFactory<DeleteBucketRequest>(bucketName);
-    auto response = client.DeleteBucket(request);
-
-    if (!response.IsSuccess()) {
-        const auto &err = response.GetError();
-        auto errType = err.GetErrorType();
-        if (errType == Aws::S3::S3Errors::NO_SUCH_BUCKET) {
+    if (!response) {
+        auto error = parseError(response.code);
+        if (error == S3Error::NoSuchBucket) {
             std::cout << "tless(s3): bucket already deleted " << bucketName
                       << std::endl;
-        } else if (err.GetExceptionName() == "BucketNotEmpty") {
+            return;
+        }
+
+        if (error == S3Error::BucketNotEmpty) {
+            if (recursive) {
+                std::cout << "tless(s3): error in recursive loop" << std::endl;
+                throw std::runtime_error("Erroneous recurvie loop!");
+            }
+
             std::cout << "tless(s3): bucket not empty, deleting keys "
                       << bucketName << std::endl;
 
             std::vector<std::string> keys = listKeys(bucketName);
-            for (const auto &k : keys) {
-                deleteKey(bucketName, k);
+            for (const auto &key : keys) {
+                deleteKey(bucketName, key);
             }
 
             // Recursively delete
-            deleteBucket(bucketName);
-        } else {
-            CHECK_ERRORS(response, bucketName, "");
+            deleteBucket(bucketName, true);
+            return;
         }
+
+        CHECK_ERRORS(response, bucketName, "");
     }
 }
 
@@ -191,12 +164,9 @@ std::vector<std::string> S3Wrapper::listBuckets() {
     auto response = client.ListBuckets();
     CHECK_ERRORS(response, "", "");
 
-    Aws::Vector<Bucket> bucketObjects = response.GetResult().GetBuckets();
-
     std::vector<std::string> bucketNames;
-    for (auto const &bucketObject : bucketObjects) {
-        const Aws::String &awsStr = bucketObject.GetName();
-        bucketNames.emplace_back(awsStr.c_str(), awsStr.size());
+    for (auto const &bucketObject : response.buckets) {
+        bucketNames.emplace_back(bucketObject.name);
     }
 
     return bucketNames;
@@ -204,156 +174,141 @@ std::vector<std::string> S3Wrapper::listBuckets() {
 
 std::vector<std::string> S3Wrapper::listKeys(const std::string &bucketName,
                                              const std::string &prefix) {
-    Aws::S3::Model::ListObjectsV2Request request;
-    request.WithBucket(bucketName).WithPrefix(prefix);
+    minio::s3::ListObjectsArgs args;
+    args.bucket = bucketName;
+    if (!prefix.empty()) {
+        args.prefix = prefix;
+    }
+    args.recursive = true;
+    auto response = client.ListObjects(args);
 
-    bool moreObjects = true;
-    Aws::String continuationToken;
-
-    // Use API v2 to support receiving more than 1000 keys
     std::vector<std::string> keys;
-    while (moreObjects) {
-        if (!continuationToken.empty()) {
-            request.SetContinuationToken(continuationToken);
-        }
-
-        auto response = client.ListObjectsV2(request);
-        if (!response.IsSuccess()) {
-            const auto &err = response.GetError();
-            auto errType = err.GetErrorType();
-
-            if (errType == Aws::S3::S3Errors::NO_SUCH_BUCKET) {
-                return keys;
-            }
-
-            CHECK_ERRORS(response, bucketName, "");
-        }
-
-        const auto &result = response.GetResult();
-        for (const auto &object : result.GetContents()) {
-            keys.push_back(object.GetKey());
-        }
-
-        moreObjects = result.GetIsTruncated();
-        if (moreObjects) {
-            continuationToken = result.GetNextContinuationToken();
+    for (; response; response++) {
+        minio::s3::Item item = *response;
+        if (!item.name.empty()) {
+            keys.push_back(item.name);
         }
     }
-
-    /*
-    if (!response.IsSuccess()) {
-        const auto& err = response.GetError();
-        auto errType = err.GetErrorType();
-
-        if (errType == Aws::S3::S3Errors::NO_SUCH_BUCKET) {
-            return keys;
-        }
-
-        CHECK_ERRORS(response, bucketName, "");
-    }
-
-    Aws::Vector<Object> keyObjects = response.GetResult().GetContents();
-    if (keyObjects.empty()) {
-        return keys;
-    }
-
-    for (auto const& keyObject : keyObjects) {
-        const Aws::String& awsStr = keyObject.GetKey();
-        keys.emplace_back(awsStr.c_str());
-    }
-    */
 
     return keys;
 }
 
 void S3Wrapper::deleteKey(const std::string &bucketName,
                           const std::string &keyName) {
-    auto request = reqFactory<DeleteObjectRequest>(bucketName, keyName);
-    auto response = client.DeleteObject(request);
+    minio::s3::RemoveObjectArgs args;
+    args.bucket = bucketName;
+    args.object = keyName;
 
-    if (!response.IsSuccess()) {
-        const auto &err = response.GetError();
-        auto errType = err.GetErrorType();
+    auto response = client.RemoveObject(args);
 
-        if (errType == Aws::S3::S3Errors::NO_SUCH_KEY) {
+    if (!response) {
+        auto error = parseError(response.code);
+
+        if (error == S3Error::NoSuchKey) {
             std::cout << "tless(s3): key already deleted " << bucketName << "/"
                       << keyName << std::endl;
-        } else if (errType == Aws::S3::S3Errors::NO_SUCH_BUCKET) {
+            return;
+        }
+
+        if (error == S3Error::NoSuchBucket) {
             std::cout << "tless(s3): bucket already deleted " << bucketName
                       << "/" << keyName << std::endl;
-        } else {
-            CHECK_ERRORS(response, bucketName, keyName);
+            return;
         }
+
+        CHECK_ERRORS(response, bucketName, keyName);
     }
 }
+
+class ByteStreamBuf : public std::streambuf {
+  public:
+    ByteStreamBuf(const std::vector<uint8_t> &data) {
+        // Set the beginning and end of the buffer
+        char *begin =
+            reinterpret_cast<char *>(const_cast<uint8_t *>(data.data()));
+        this->setg(begin, begin, begin + data.size());
+    }
+};
 
 void S3Wrapper::addKeyBytes(const std::string &bucketName,
                             const std::string &keyName,
                             const std::vector<uint8_t> &data) {
-    // See example:
-    // https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/cpp/example_code/s3/put_object_buffer.cpp
-    auto request = reqFactory<PutObjectRequest>(bucketName, keyName);
+    ByteStreamBuf buffer(data);
+    std::istream iss(&buffer);
 
-    const std::shared_ptr<Aws::IOStream> dataStream =
-        Aws::MakeShared<Aws::StringStream>((char *)data.data());
-    dataStream->write((char *)data.data(), data.size());
-    dataStream->flush();
+    minio::s3::PutObjectArgs args(iss, data.size(), 0);
+    args.bucket = bucketName;
+    args.object = keyName;
 
-    request.SetBody(dataStream);
+    auto response = client.PutObject(args);
 
-    auto response = client.PutObject(request);
     CHECK_ERRORS(response, bucketName, keyName);
 }
 
 void S3Wrapper::addKeyStr(const std::string &bucketName,
                           const std::string &keyName, const std::string &data) {
-    // See example:
-    // https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/cpp/example_code/s3/put_object_buffer.cpp
-    auto request = reqFactory<PutObjectRequest>(bucketName, keyName);
+    std::istringstream iss(data);
 
-    const std::shared_ptr<Aws::IOStream> dataStream =
-        Aws::MakeShared<Aws::StringStream>("");
-    *dataStream << data;
-    dataStream->flush();
+    minio::s3::PutObjectArgs args(iss, data.size(), 0);
+    args.bucket = bucketName;
+    args.object = keyName;
 
-    request.SetBody(dataStream);
-    auto response = client.PutObject(request);
+    auto response = client.PutObject(args);
+
     CHECK_ERRORS(response, bucketName, keyName);
 }
 
 std::vector<uint8_t> S3Wrapper::getKeyBytes(const std::string &bucketName,
                                             const std::string &keyName,
                                             bool tolerateMissing) {
-    auto request = reqFactory<GetObjectRequest>(bucketName, keyName);
-    GetObjectOutcome response = client.GetObject(request);
+    std::vector<uint8_t> data;
 
-    if (!response.IsSuccess()) {
-        const auto &err = response.GetError();
-        auto errType = err.GetErrorType();
+    minio::s3::GetObjectArgs args;
+    args.bucket = bucketName;
+    args.object = keyName;
 
-        if (tolerateMissing && (errType == Aws::S3::S3Errors::NO_SUCH_KEY)) {
-            std::vector<uint8_t> empty;
-            return empty;
+    args.datafunc = [&data](minio::http::DataFunctionArgs args) -> bool {
+        data.insert(data.end(), args.datachunk.begin(), args.datachunk.end());
+        return true;
+    };
+
+    auto response = client.GetObject(args);
+    if (!response) {
+        auto error = parseError(response.code);
+        if (tolerateMissing && (error == S3Error::NoSuchKey)) {
+            return std::vector<uint8_t>();
         }
 
         CHECK_ERRORS(response, bucketName, keyName);
     }
 
-    std::vector<uint8_t> rawData(response.GetResult().GetContentLength());
-    response.GetResult().GetBody().read((char *)rawData.data(), rawData.size());
-    return rawData;
+    return data;
 }
 
 std::string S3Wrapper::getKeyStr(const std::string &bucketName,
-                                 const std::string &keyName) {
-    auto request = reqFactory<GetObjectRequest>(bucketName, keyName);
-    GetObjectOutcome response = client.GetObject(request);
-    CHECK_ERRORS(response, bucketName, keyName);
+                                 const std::string &keyName,
+                                 bool tolerateMissing) {
+    std::string data;
 
-    std::ostringstream ss;
-    auto *responseStream = response.GetResultWithOwnership().GetBody().rdbuf();
-    ss << responseStream;
+    minio::s3::GetObjectArgs args;
+    args.bucket = bucketName;
+    args.object = keyName;
 
-    return ss.str();
+    args.datafunc = [&data](minio::http::DataFunctionArgs args) -> bool {
+        data.append(args.datachunk);
+        return true;
+    };
+
+    auto response = client.GetObject(args);
+    if (!response) {
+        auto error = parseError(response.code);
+        if (tolerateMissing && (error == S3Error::NoSuchKey)) {
+            return "";
+        }
+
+        CHECK_ERRORS(response, bucketName, keyName);
+    }
+
+    return data;
 }
 } // namespace s3

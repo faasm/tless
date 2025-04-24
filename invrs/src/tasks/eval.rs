@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::tasks::color::{get_color_from_label, FONT_SIZE};
+use crate::tasks::color::{get_color_from_label, FONT_SIZE, STROKE_WIDTH};
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
@@ -24,7 +24,7 @@ pub enum EvalBaseline {
     SgxFaasm,
     AcclessFaasm,
     Knative,
-    CcKnative,
+    SnpKnative,
     AcclessKnative,
 }
 
@@ -35,7 +35,7 @@ impl fmt::Display for EvalBaseline {
             EvalBaseline::SgxFaasm => write!(f, "sgx-faasm"),
             EvalBaseline::AcclessFaasm => write!(f, "accless-faasm"),
             EvalBaseline::Knative => write!(f, "knative"),
-            EvalBaseline::CcKnative => write!(f, "cc-knative"),
+            EvalBaseline::SnpKnative => write!(f, "snp-knative"),
             EvalBaseline::AcclessKnative => write!(f, "accless-knative"),
         }
     }
@@ -50,7 +50,7 @@ impl FromStr for EvalBaseline {
             "sgx-faasm" => Ok(EvalBaseline::SgxFaasm),
             "accless-faasm" => Ok(EvalBaseline::AcclessFaasm),
             "knative" => Ok(EvalBaseline::Knative),
-            "cc-knative" => Ok(EvalBaseline::CcKnative),
+            "snp-knative" => Ok(EvalBaseline::SnpKnative),
             "accless-knative" => Ok(EvalBaseline::AcclessKnative),
             _ => Err(()),
         }
@@ -64,7 +64,7 @@ impl EvalBaseline {
             EvalBaseline::SgxFaasm,
             EvalBaseline::AcclessFaasm,
             EvalBaseline::Knative,
-            EvalBaseline::CcKnative,
+            EvalBaseline::SnpKnative,
             EvalBaseline::AcclessKnative,
         ];
         VARIANTS.iter()
@@ -76,7 +76,7 @@ impl EvalBaseline {
             EvalBaseline::SgxFaasm => get_color_from_label("dark-green"),
             EvalBaseline::AcclessFaasm => get_color_from_label("accless"),
             EvalBaseline::Knative => get_color_from_label("dark-blue"),
-            EvalBaseline::CcKnative => get_color_from_label("dark-yellow"),
+            EvalBaseline::SnpKnative => get_color_from_label("dark-yellow"),
             EvalBaseline::AcclessKnative => get_color_from_label("accless"),
         }
     }
@@ -270,6 +270,7 @@ impl Eval {
             .expect("invrs(eval): failed to convert kube command output to string")
     }
 
+    #[allow(dead_code)]
     fn wait_for_pods(namespace: &str, label: &str, num_expected: usize) {
         loop {
             thread::sleep(time::Duration::from_secs(2));
@@ -299,6 +300,7 @@ impl Eval {
         }
     }
 
+    #[allow(dead_code)]
     fn wait_for_pod(namespace: &str, label: &str) {
         Self::wait_for_pods(namespace, label, 1);
     }
@@ -333,11 +335,21 @@ impl Eval {
         String::from_utf8(result.stdout).expect("Failed to convert envsubst output to string")
     }
 
-    fn deploy_workflow(workflow: &AvailableWorkflow, baseline: &EvalBaseline) {
-        let mut workflow_yaml = Workflows::get_root();
-        workflow_yaml.push(format!("{workflow}"));
-        workflow_yaml.push("knative");
-        workflow_yaml.push("workflow.yaml");
+    fn deploy_workflow(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+    ) {
+        let workflow_yaml = match exp {
+            EvalExperiment::ColdStart => Env::proj_root()
+                .join("ubench")
+                .join("cold-start")
+                .join("service.yaml"),
+            _ => Workflows::get_root()
+                .join(format!("{workflow}"))
+                .join("knative")
+                .join("workflow.yaml"),
+        };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
             BTreeMap::from([
@@ -345,15 +357,17 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
+                            "kata-qemu-snp-sc2"
+                        }
                         _ => panic!("woops"),
                     },
                 ),
-                ("TLESS_VERSION", &Env::get_version().unwrap()),
+                ("ACCLESS_VERSION", &env::var("ACCLESS_VERSION").unwrap()),
                 (
-                    "TLESS_MODE",
+                    "ACCLESS_MODE",
                     match baseline {
-                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
@@ -383,34 +397,24 @@ impl Eval {
             .wait_with_output()
             .expect("invrs(eval): failed to run kubectl command");
 
-        // Specific per-workflow wait command
-        match workflow {
-            AvailableWorkflow::Finra => {
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-private");
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-fetch-public");
-                Self::wait_for_pod("tless", "tless.workflows/name=finra-merge");
-            }
-            AvailableWorkflow::MlTraining => {
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-partition");
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-training-validation");
-            }
-            AvailableWorkflow::MlInference => {
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-load");
-                Self::wait_for_pod("tless", "tless.workflows/name=ml-inference-partition");
-            }
-            AvailableWorkflow::WordCount => {
-                Self::wait_for_pod("tless", "tless.workflows/name=word-count-splitter");
-                Self::wait_for_pod("tless", "tless.workflows/name=word-count-reducer");
-            }
-        }
+        thread::sleep(time::Duration::from_secs(2));
     }
 
-    fn delete_workflow(workflow: &AvailableWorkflow, baseline: &EvalBaseline) {
-        // Common deploy mechanism
-        let mut workflow_yaml = Workflows::get_root();
-        workflow_yaml.push(format!("{workflow}"));
-        workflow_yaml.push("knative");
-        workflow_yaml.push("workflow.yaml");
+    fn delete_workflow(
+        workflow: &AvailableWorkflow,
+        exp: &EvalExperiment,
+        baseline: &EvalBaseline,
+    ) {
+        let workflow_yaml = match exp {
+            EvalExperiment::ColdStart => Env::proj_root()
+                .join("ubench")
+                .join("cold-start")
+                .join("service.yaml"),
+            _ => Workflows::get_root()
+                .join(format!("{workflow}"))
+                .join("knative")
+                .join("workflow.yaml"),
+        };
         let templated_yaml = Self::template_yaml(
             workflow_yaml,
             BTreeMap::from([
@@ -418,15 +422,17 @@ impl Eval {
                     "RUNTIME_CLASS_NAME",
                     match baseline {
                         EvalBaseline::Knative => "kata-qemu",
-                        EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => "kata-qemu-sev",
+                        EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
+                            "kata-qemu-snp-sc2"
+                        }
                         _ => panic!("woops"),
                     },
                 ),
                 ("TLESS_VERSION", &Env::get_version().unwrap()),
                 (
-                    "TLESS_MODE",
+                    "ACCLESS_MODE",
                     match baseline {
-                        EvalBaseline::Knative | EvalBaseline::CcKnative => "off",
+                        EvalBaseline::Knative | EvalBaseline::SnpKnative => "off",
                         EvalBaseline::AcclessKnative => "on",
                         _ => panic!("woops"),
                     },
@@ -460,10 +466,11 @@ impl Eval {
 
     async fn wait_for_scale_to_zero() {
         loop {
-            let output = Self::run_kubectl_cmd(&format!("-n tless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
+            let output = Self::run_kubectl_cmd(&format!("-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
             debug!("invrs: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
+            // One pod corresponds to the MinIO service
             if values.len() == 1 {
                 break;
             }
@@ -494,6 +501,20 @@ impl Eval {
                 .env("OVERRIDE_NUM_AUDIT_FUNCS", scale_up_factor.to_string())
                 .output()
                 .expect("invrs(eval): failed to execute trigger command"),
+            EvalExperiment::ColdStart => {
+                let cmd = Env::proj_root()
+                    .join("ubench")
+                    .join("cold-start")
+                    .join("curl_cmd.sh");
+                let output = Command::new(cmd.clone())
+                    .output()
+                    .expect("invrs(eval): failed to execute trigger command");
+
+                // Cold-start is done here
+                exp_result.end_time = Utc::now();
+
+                output
+            }
             _ => Command::new(trigger_cmd.clone())
                 .output()
                 .expect("invrs(eval): failed to execute trigger command"),
@@ -573,36 +594,33 @@ impl Eval {
                 }
             }
             AvailableWorkflow::WordCount => {
-                // First wait for the result key
-                let result_key = format!("{workflow}/outputs/aggregated-results.txt");
+                if exp != &EvalExperiment::ColdStart {
+                    // First wait for the result key
+                    let result_key = format!("{workflow}/outputs/aggregated-results.txt");
 
-                match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
-                    Some(time) => {
-                        // If succesful, remove the result key
-                        exp_result.end_time = time;
-                        S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
-                    }
-                    None => {
-                        error!("invrs(eval): timed-out waiting for Word Count workload to finish")
+                    match S3::wait_for_key(EVAL_BUCKET_NAME, result_key.as_str()).await {
+                        Some(time) => {
+                            // If succesful, remove the result key
+                            exp_result.end_time = time;
+                            S3::clear_object(EVAL_BUCKET_NAME, result_key.as_str()).await;
+                        }
+                        None => {
+                            error!(
+                                "invrs(eval): timed-out waiting for Word Count workload to finish"
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Common-clean-up
-        S3::clear_dir(
-            EVAL_BUCKET_NAME.to_string(),
-            "{workflow}/exec-tokens".to_string(),
-        )
-        .await;
-
         // Per-experiment, per-workflow clean-up
         match exp {
-            EvalExperiment::E2eLatencyCold => {
+            EvalExperiment::E2eLatencyCold | EvalExperiment::ColdStart => {
                 debug!("invrs: {exp}: waiting for scale-to-zero...");
                 Self::wait_for_scale_to_zero().await;
             }
-            _ => debug!("invrs: {exp}: noting to clean-up after single execution"),
+            _ => debug!("invrs: {exp}: nothing to clean-up after single execution"),
         }
 
         // Cautionary sleep between runs
@@ -619,25 +637,18 @@ impl Eval {
     ) -> anyhow::Result<()> {
         let baseline = args.baseline[args_offset].clone();
 
-        // First, deploy the common services
-        let mut k8s_common_path = Workflows::get_root();
-        k8s_common_path.push("k8s_common.yaml");
-        Self::run_kubectl_cmd(&format!("apply -f {}", k8s_common_path.display()));
-
-        // Wait for the MinIO pod to be ready
-        Self::wait_for_pod("tless", "tless.workflows/name=minio");
-
         // Get the MinIO URL
-        let minio_url = Self::run_kubectl_cmd("-n tless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
+        let minio_url = Self::run_kubectl_cmd("-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
         unsafe {
             env::set_var("MINIO_URL", minio_url);
         }
 
-        // Upload the state for all workflows for the experiment
         let workflow_iter = match exp {
             // For the scale-up latency, we only run the FINRA workflow
             EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
             EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
+            // TODO: remove me delete me
+            // EvalExperiment::E2eLatencyCold => [AvailableWorkflow::MlInference, AvailableWorkflow::WordCount].iter(),
             _ => AvailableWorkflow::iter_variants(),
         };
 
@@ -659,27 +670,16 @@ impl Eval {
                 workflow_str.as_str(),
             );
 
-            // Deploy workflow
-            Self::deploy_workflow(workflow, &baseline);
+            Self::deploy_workflow(workflow, &exp, &baseline);
 
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
                 Self::run_workflow_once(workflow, exp, scale_up_factor).await;
-                S3::clear_dir(
-                    EVAL_BUCKET_NAME.to_string(),
-                    format!("{workflow}/exec-tokens"),
-                )
-                .await;
             }
 
             // Do actual experiment
             for i in 0..args.num_repeats {
                 let mut result = Self::run_workflow_once(workflow, exp, scale_up_factor).await;
-                S3::clear_dir(
-                    EVAL_BUCKET_NAME.to_string(),
-                    format!("{workflow}/exec-tokens"),
-                )
-                .await;
                 result.iter = i;
                 Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
 
@@ -687,16 +687,15 @@ impl Eval {
             }
 
             // Delete workflow
-            Self::delete_workflow(workflow, &baseline);
+            Self::delete_workflow(workflow, &exp, &baseline);
 
             // Finish progress bar
             pb.finish();
         }
 
         // Experiment-wide clean-up
-        let mut k8s_common_path = Workflows::get_root();
-        k8s_common_path.push("k8s_common.yaml");
-        Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
+        // let k8s_common_path = Env::proj_root().join("k8s").join("common.yaml");
+        // Self::run_kubectl_cmd(&format!("delete -f {}", k8s_common_path.display()));
 
         Ok(())
     }
@@ -848,10 +847,10 @@ impl Eval {
     pub async fn run(exp: &EvalExperiment, args: &EvalRunArgs) -> anyhow::Result<()> {
         for i in 0..args.baseline.len() {
             match args.baseline[i] {
-                EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => {
+                EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            for scale_up_factor in 1..(10) {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -861,7 +860,7 @@ impl Eval {
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(args.scale_up_range + 1) {
+                            for scale_up_factor in vec![1, 10, 20, 40, 50, 60, 70, 80, 90, 100] {
                                 Self::run_faasm_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -878,14 +877,11 @@ impl Eval {
     // Plotting Functions
     // ------------------------------------------------------------------------
 
-    fn is_faasm_baseline(baseline: &EvalBaseline) -> bool {
-        match baseline {
-            EvalBaseline::Knative | EvalBaseline::CcKnative | EvalBaseline::AcclessKnative => false,
-            EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => true,
-        }
-    }
-
-    fn plot_e2e_latency(exp: &EvalExperiment, data_files: &Vec<PathBuf>) -> anyhow::Result<()> {
+    fn plot_e2e_latency(
+        plot_version: &str,
+        exp: &EvalExperiment,
+        data_files: &Vec<PathBuf>,
+    ) -> anyhow::Result<()> {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -894,21 +890,40 @@ impl Eval {
             time_ms: u64,
         }
 
+        let baselines = match plot_version {
+            "faasm" => {
+                vec![
+                    EvalBaseline::Faasm,
+                    EvalBaseline::SgxFaasm,
+                    EvalBaseline::AcclessFaasm,
+                ]
+            }
+            "knative" => {
+                vec![
+                    EvalBaseline::Knative,
+                    EvalBaseline::SnpKnative,
+                    EvalBaseline::AcclessKnative,
+                ]
+            }
+            _ => {
+                unreachable! {}
+            }
+        };
+
         // Initialize the structure to hold the data
         let mut data = BTreeMap::<AvailableWorkflow, BTreeMap<EvalBaseline, f64>>::new();
         for workflow in AvailableWorkflow::iter_variants() {
             let mut inner_map = BTreeMap::<EvalBaseline, f64>::new();
-            for baseline in EvalBaseline::iter_variants() {
+            for baseline in &baselines {
                 inner_map.insert(baseline.clone(), 0.0);
             }
             data.insert(workflow.clone(), inner_map);
         }
 
         let num_workflows = AvailableWorkflow::iter_variants().len();
-        let num_baselines = EvalBaseline::iter_variants().len();
+        let num_baselines = baselines.len();
         let mut y_max = 0.0;
-        // Each bar has width 1 and we add padding bars between workflows
-        let x_max = num_baselines * num_workflows + num_workflows + 1;
+        let x_max = (num_baselines * num_workflows + num_workflows) as f64 - 0.5;
 
         // Collect data
         for csv_file in data_files {
@@ -916,6 +931,8 @@ impl Eval {
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or_default();
+            debug!("file: {file_name}");
+
             let file_name_len = file_name.len();
             let file_name_no_ext = &file_name[0..file_name_len - 4];
 
@@ -925,6 +942,10 @@ impl Eval {
             let baseline: EvalBaseline = file_name_no_ext.split("_").collect::<Vec<&str>>()[0]
                 .parse()
                 .unwrap();
+
+            if !baselines.contains(&baseline) {
+                continue;
+            }
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -952,59 +973,72 @@ impl Eval {
         plot_path.push("eval");
         plot_path.push(format!("{exp}"));
         plot_path.push("plots");
-        plot_path.push(format!("{}.svg", exp.to_string().replace("-", "_")));
+        plot_path.push(format!("{plot_version}.svg"));
 
         // Plot data
-        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        let chart_width_px = 400;
+        let root = SVGBackend::new(&plot_path, (chart_width_px, 300)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
+        let x_min = -0.5;
+        let y_max = match plot_version {
+            "faasm" => 10.0,
+            "knative" => 5.0,
+            _ => unreachable!(),
+        };
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .build_cartesian_2d(0..x_max, 0f64..5f64)
+            .build_cartesian_2d(x_min..x_max as f64, 0f64..y_max)
             .unwrap();
 
         chart
             .configure_mesh()
-            // .y_desc("Slowdown vs Non-Confidential")
-            .y_label_style(("sans-serif", 20).into_font()) // Set y-axis label font and size
-            .x_desc("")
-            // .x_labels(0)
-            .x_label_formatter(&|_| format!(""))
+            .light_line_style(&WHITE)
             .y_labels(10)
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
+            .x_desc("")
+            .x_label_formatter(&|_| format!(""))
             .disable_x_mesh()
             .disable_x_axis()
             .y_label_formatter(&|y| format!("{:.0}", y))
-            /*
-            .light_line_style(ShapeStyle {
-                color: RGBColor(200, 200, 200).to_rgba().mix(0.5),
-                filled: true,
-                stroke_width: 1,
-            })
-            */
             .draw()
             .unwrap();
 
         // Manually draw the y-axis label with a custom font and size
         root.draw(&Text::new(
-            "Slowdown (vs non-confidential)",
-            (5, 260),
-            ("sans-serif", 20)
+            "Slowdown",
+            (5, 200),
+            ("sans-serif", FONT_SIZE)
                 .into_font()
                 .transform(FontTransform::Rotate270)
                 .color(&BLACK),
         ))
         .unwrap();
 
+        fn get_coordinate_for_workflow_label(workflow: &AvailableWorkflow) -> (f64, f64) {
+            // Replicate order in AvailableWorkflow::iter_variants()
+            let y_label = -0.25;
+            match workflow {
+                AvailableWorkflow::Finra => (0.0, y_label),
+                AvailableWorkflow::MlTraining => (3.5, y_label),
+                AvailableWorkflow::MlInference => (8.0, y_label),
+                AvailableWorkflow::WordCount => (12.75, y_label),
+            }
+        }
+
         // Draw bars
         for (w_idx, (workflow, workflow_data)) in data.iter().enumerate() {
-            let x_orig = w_idx * (num_baselines + 1);
+            let x_orig = (w_idx * (num_baselines + 1)) as f64;
 
-            // Work-out the slowest value for each set of baselines
-            let y_faasm: f64 = *workflow_data.get(&EvalBaseline::Faasm).unwrap();
-            let y_knative: f64 = *workflow_data.get(&EvalBaseline::Knative).unwrap();
+            // Work-out the fastest value for each set of baselines
+            let y_ref = match plot_version {
+                "faasm" => *workflow_data.get(&EvalBaseline::Faasm).unwrap(),
+                "knative" => *workflow_data.get(&EvalBaseline::Knative).unwrap(),
+                _ => unreachable!(),
+            };
 
             /* Un-comment to print the overhead claimed in the paper
             println!("{workflow}: knative overhead: {:.2} %",
@@ -1022,73 +1056,131 @@ impl Eval {
                     );
             */
 
+            // Draw bars
+            let margin_px = 2;
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (baseline, y))| {
-                    // Bar style
                     let bar_style = ShapeStyle {
                         color: baseline.get_color().into(),
                         filled: true,
                         stroke_width: 2,
                     };
 
-                    let this_y;
-                    if Self::is_faasm_baseline(baseline) {
-                        this_y = (y / y_faasm) as f64;
-                    } else {
-                        this_y = (y / y_knative) as f64;
-                    }
-
+                    let this_y = (y / y_ref) as f64;
                     let mut bar = Rectangle::new(
-                        [(x_orig + x, 0 as f64), (x_orig + x + 1, this_y as f64)],
+                        [
+                            (x_orig + x as f64, 0 as f64),
+                            (x_orig + x as f64 + 1.0, this_y as f64),
+                        ],
                         bar_style,
                     );
-                    bar.set_margin(0, 0, 2, 2);
+                    bar.set_margin(0, 0, margin_px, margin_px);
                     bar
                 }))
                 .unwrap();
 
-            for (x, (baseline, y)) in (0..).zip(workflow_data.iter()) {
-                let this_y;
-                if Self::is_faasm_baseline(baseline) {
-                    this_y = (y / y_faasm) as f64;
-                } else {
-                    this_y = (y / y_knative) as f64;
-                }
+            let x_axis_range = 0.0..x_max as f64;
+            let margin_units: f64 =
+                margin_px as f64 * (x_axis_range.end - x_axis_range.start) / chart_width_px as f64;
 
-                // Add text
-                let y_offset = match this_y > 5.0 {
-                    true => -0.1,
-                    false => 0.25,
+            // Draw solid lines arround bars
+            chart
+                .draw_series((0..).zip(workflow_data.iter()).map(|(x, (_, y))| {
+                    let this_y = (y / y_ref) as f64;
+                    PathElement::new(
+                        vec![
+                            (x_orig + x as f64 + margin_units, 0.0),
+                            (x_orig + x as f64 + 1.0 - margin_units, 0.0),
+                            (x_orig + x as f64 + 1.0 - margin_units, this_y as f64),
+                            (x_orig + x as f64 + margin_units, this_y as f64),
+                            (x_orig + x as f64 + margin_units, 0.0),
+                        ],
+                        &BLACK,
+                    )
+                }))
+                .unwrap();
+
+            for (x, (_baseline, y)) in (0..).zip(workflow_data.iter()) {
+                let this_y = (y / y_ref) as f64;
+
+                // Add text for bars that overflow
+                let y_offset = match plot_version {
+                    "faasm" => -3.0,
+                    "knative" => -1.5,
+                    _ => unreachable!(),
                 };
-                chart
+                let x_orig_pixel = chart
                     .plotting_area()
-                    .draw(&Text::new(
-                        format!("{:.1}", this_y),
-                        (x_orig + x, (this_y + y_offset) as f64),
-                        ("sans-serif", 15).into_font(),
+                    .map_coordinate(&(x_orig + x as f64, y_max + y_offset));
+                if this_y > y_max {
+                    let width = 20;
+                    let height = match plot_version {
+                        "faasm" => 50,
+                        "knative" => 35,
+                        _ => unreachable!(),
+                    };
+                    root.draw(&Rectangle::new(
+                        [
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1 - height),
+                        ],
+                        WHITE.filled(),
                     ))
                     .unwrap();
+                    root.draw(&PathElement::new(
+                        [
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1),
+                            (x_orig_pixel.0 + width, x_orig_pixel.1 - height),
+                            (x_orig_pixel.0, x_orig_pixel.1 - height),
+                            (x_orig_pixel.0, x_orig_pixel.1),
+                        ],
+                        &BLACK,
+                    ))
+                    .unwrap();
+                    chart
+                        .plotting_area()
+                        .draw(&Text::new(
+                            format!("{:.1}", this_y),
+                            (x_orig + x as f64, (y_max + y_offset) as f64),
+                            ("sans-serif", FONT_SIZE - 2)
+                                .into_font()
+                                .transform(FontTransform::Rotate270),
+                        ))
+                        .unwrap();
+                }
             }
 
             // Add label for the workflow
-            let x_workflow_label = x_orig + num_baselines / 2 - 1;
-            let label_px_coordinate = chart
-                .plotting_area()
-                .map_coordinate(&(x_workflow_label, -0.25));
             root.draw(&Text::new(
-                format!("{workflow}"),
-                label_px_coordinate,
-                ("sans-serif", 20).into_font(),
+                match workflow {
+                    AvailableWorkflow::Finra => format!("{workflow}"),
+                    AvailableWorkflow::MlTraining => "ml-train".to_string(),
+                    AvailableWorkflow::MlInference => "ml-inf".to_string(),
+                    AvailableWorkflow::WordCount => "wc".to_string(),
+                },
+                chart
+                    .plotting_area()
+                    .map_coordinate(&get_coordinate_for_workflow_label(workflow)),
+                ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
         }
 
-        // Add solid frames
-        // TODO: we could add whitespaces in the horizontal lines
+        // Add red line for slowdown
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![(0, 100 as f64), (x_max, 100 as f64)],
+                vec![(x_min, 1.0), (x_max, 1.0)],
+                RED.stroke_width(STROKE_WIDTH),
+            ))
+            .unwrap();
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_min, 100 as f64), (x_max, 100 as f64)],
                 &BLACK,
             ))
             .unwrap();
@@ -1102,47 +1194,79 @@ impl Eval {
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![(0, 0 as f64), (x_max, 0 as f64)],
+                vec![(x_min, 0 as f64), (x_max, 0 as f64)],
                 &BLACK,
             ))
             .unwrap();
 
+        fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
+            let legend_x_start = 10;
+            let legend_y_pos = 6;
+
+            match baseline {
+                EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 120, legend_y_pos),
+                EvalBaseline::AcclessFaasm => (legend_x_start + 280, legend_y_pos),
+                EvalBaseline::Knative => (legend_x_start, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 120, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 280, legend_y_pos),
+            }
+        }
+
         // Manually draw the legend outside the grid, above the chart
-        let legend_x_start = 50;
-        let legend_y_pos = 6; // Position above the chart
-
-        for (idx, baseline) in EvalBaseline::iter_variants().enumerate() {
+        for baseline in &baselines {
             // Calculate position for each legend item
-            let x_pos = legend_x_start + idx as i32 * 120;
-            let y_pos = legend_y_pos;
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
-            // Draw the color box (Rectangle)
+            // Draw the color box (Rectangle) + frame
             root.draw(&Rectangle::new(
                 [(x_pos, y_pos), (x_pos + 20, y_pos + 20)],
                 baseline.get_color().filled(),
             ))
             .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::CcKnative {
-                label = "sev-knative".to_string();
+            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm
+            {
+                label = "accless".to_string();
             }
 
             // Draw the baseline label (Text)
             root.draw(&Text::new(
                 label,
-                (x_pos + 30, y_pos + 5), // Adjust text position
-                ("sans-serif", 20).into_font(),
+                (x_pos + 30, y_pos + 1), // Adjust text position
+                ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
         }
 
         root.present()?;
+        println!("invrs: generated plot at: {}", plot_path.display());
 
         Ok(())
     }
 
-    fn plot_scale_up_latency(data_files: &Vec<PathBuf>) {
+    fn plot_scale_up_latency(plot_version: &str, data_files: &Vec<PathBuf>) {
         #[derive(Debug, Deserialize)]
         #[serde(rename_all = "PascalCase")]
         struct Record {
@@ -1151,12 +1275,37 @@ impl Eval {
             time_ms: u64,
         }
 
-        const NUM_MAX_FUNCS: usize = 10;
+        const NUM_POINTS: usize = 10;
+        let num_parallel_funcs = match plot_version {
+            "knative" => vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "faasm" => vec![1, 10, 20, 40, 50, 60, 70, 80, 90, 100],
+            _ => panic!(),
+        };
+
+        let baselines = match plot_version {
+            "faasm" => {
+                vec![
+                    EvalBaseline::Faasm,
+                    EvalBaseline::SgxFaasm,
+                    EvalBaseline::AcclessFaasm,
+                ]
+            }
+            "knative" => {
+                vec![
+                    EvalBaseline::Knative,
+                    EvalBaseline::SnpKnative,
+                    EvalBaseline::AcclessKnative,
+                ]
+            }
+            _ => {
+                unreachable! {}
+            }
+        };
 
         // Collect data
-        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_MAX_FUNCS]>::new();
-        for baseline in EvalBaseline::iter_variants() {
-            data.insert(baseline.clone(), [0; NUM_MAX_FUNCS]);
+        let mut data = BTreeMap::<EvalBaseline, [u64; NUM_POINTS]>::new();
+        for baseline in &baselines {
+            data.insert(baseline.clone(), [0; NUM_POINTS]);
         }
 
         for csv_file in data_files {
@@ -1164,14 +1313,24 @@ impl Eval {
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or_default();
+            debug!("file name: {file_name}");
+
             let file_name_len = file_name.len();
             let file_name_no_ext = &file_name[0..file_name_len - 4];
             let parts: Vec<&str> = file_name_no_ext.split("_").collect();
             let workload_parts: Vec<&str> = parts[1].split("-").collect();
 
             let baseline: EvalBaseline = parts[0].parse().unwrap();
+            if !baselines.contains(&baseline) {
+                continue;
+            }
+
             let _workload: &str = workload_parts[0];
             let scale_up_factor: usize = workload_parts[1].parse().unwrap();
+
+            if !num_parallel_funcs.contains(&scale_up_factor) {
+                continue;
+            }
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -1181,64 +1340,60 @@ impl Eval {
             let mut count = 0;
             let avg_times = data.get_mut(&baseline).unwrap();
 
+            let idx = num_parallel_funcs
+                .iter()
+                .position(|&x| x == scale_up_factor)
+                .unwrap();
             for result in reader.deserialize() {
                 let record: Record = result.unwrap();
 
-                avg_times[scale_up_factor - 1] += record.time_ms;
+                avg_times[idx] += record.time_ms;
                 count += 1;
             }
 
-            avg_times[scale_up_factor - 1] = avg_times[scale_up_factor - 1] / count;
+            avg_times[idx] = avg_times[idx] / count;
         }
 
-        let y_max: f64 = 200.0;
+        let y_max: f64 = 125.0;
         let mut plot_path = Env::proj_root();
         plot_path.push("eval");
         plot_path.push(format!("{}", EvalExperiment::ScaleUpLatency));
         plot_path.push("plots");
         fs::create_dir_all(plot_path.clone()).unwrap();
-        plot_path.push(format!(
-            "{}.svg",
-            EvalExperiment::ScaleUpLatency.to_string().replace("-", "_")
-        ));
+        plot_path.push(format!("{plot_version}.svg"));
 
         // Plot data
-        let root = SVGBackend::new(&plot_path, (800, 300)).into_drawing_area();
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
+        let x_max = num_parallel_funcs[num_parallel_funcs.len() - 1];
         let mut chart = ChartBuilder::on(&root)
             .x_label_area_size(40)
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
             .margin_left(40)
-            .build_cartesian_2d(0..(NUM_MAX_FUNCS) as u32, 0f64..y_max as f64)
+            .margin_right(20)
+            .build_cartesian_2d(0..(x_max) as u32, 0f64..y_max as f64)
             .unwrap();
 
         chart
             .configure_mesh()
-            .x_label_style(("sans-serif", 20).into_font())
-            .y_label_style(("sans-serif", 20).into_font())
+            .light_line_style(&WHITE)
+            .x_labels(8)
+            .y_labels(6)
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
             .x_desc("")
             .y_label_formatter(&|y| format!("{:.0}", y))
             .draw()
             .unwrap();
 
-        // Add solid frames
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(vec![(0, y_max), (10, y_max)], &BLACK))
-            .unwrap();
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(vec![(10, 0.0), (10, y_max)], &BLACK))
-            .unwrap();
-
         // Manually draw the X/Y-axis label with a custom font and size
         root.draw(&Text::new(
             "Execution time [s]",
-            (5, 220),
-            ("sans-serif", 20)
+            (5, 245),
+            ("sans-serif", FONT_SIZE)
                 .into_font()
                 .transform(FontTransform::Rotate270)
                 .color(&BLACK),
@@ -1246,8 +1401,8 @@ impl Eval {
         .unwrap();
         root.draw(&Text::new(
             "# of audit functions",
-            (400, 280),
-            ("sans-serif", 20).into_font().color(&BLACK),
+            (120, 280),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
         ))
         .unwrap();
 
@@ -1256,15 +1411,15 @@ impl Eval {
                 .draw_series(LineSeries::new(
                     (0..values.len())
                         .zip(values.iter())
-                        .map(|(x, y)| ((x + 1) as u32, *y as f64 / 1000.0)),
-                    baseline.get_color().stroke_width(3),
+                        .map(|(x, y)| (num_parallel_funcs[x] as u32, *y as f64 / 1000.0)),
+                    baseline.get_color().stroke_width(STROKE_WIDTH),
                 ))
                 .unwrap();
 
             chart
                 .draw_series((0..values.len()).zip(values.iter()).map(|(x, y)| {
                     Circle::new(
-                        ((x + 1) as u32, *y as f64 / 1000.0),
+                        (num_parallel_funcs[x] as u32, *y as f64 / 1000.0),
                         5,
                         baseline.get_color().filled(),
                     )
@@ -1272,21 +1427,37 @@ impl Eval {
                 .unwrap();
         }
 
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(0, y_max), (x_max as u32, y_max)],
+                &BLACK,
+            ))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_max as u32, 0.0), (x_max as u32, y_max)],
+                &BLACK,
+            ))
+            .unwrap();
+
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
-            let legend_x_start = 70;
+            let legend_x_start = 10;
             let legend_y_pos = 6;
 
             match baseline {
                 EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
-                EvalBaseline::SgxFaasm => (legend_x_start + 100, legend_y_pos),
-                EvalBaseline::AcclessFaasm => (legend_x_start + 220, legend_y_pos),
-                EvalBaseline::Knative => (legend_x_start + 350, legend_y_pos),
-                EvalBaseline::CcKnative => (legend_x_start + 450, legend_y_pos),
-                EvalBaseline::AcclessKnative => (legend_x_start + 580, legend_y_pos),
+                EvalBaseline::SgxFaasm => (legend_x_start + 120, legend_y_pos),
+                EvalBaseline::AcclessFaasm => (legend_x_start + 280, legend_y_pos),
+                EvalBaseline::Knative => (legend_x_start, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 120, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 280, legend_y_pos),
             }
         }
 
-        for baseline in EvalBaseline::iter_variants() {
+        for baseline in &baselines {
             // Calculate position for each legend item
             let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
@@ -1296,22 +1467,44 @@ impl Eval {
                 baseline.get_color().filled(),
             ))
             .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
+            root.draw(&PathElement::new(
+                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                &BLACK,
+            ))
+            .unwrap();
 
             let mut label = format!("{baseline}");
-            if baseline == &EvalBaseline::CcKnative {
-                label = "sev-knative".to_string();
+            if baseline == &EvalBaseline::AcclessKnative || baseline == &EvalBaseline::AcclessFaasm
+            {
+                label = "accless".to_string();
             }
 
             // Draw the baseline label (Text)
             root.draw(&Text::new(
                 label,
                 (x_pos + 30, y_pos + 5),
-                ("sans-serif", 20).into_font(),
+                ("sans-serif", FONT_SIZE).into_font(),
             ))
             .unwrap();
         }
 
         root.present().unwrap();
+        println!("invrs: generated plot at: {}", plot_path.display());
     }
 
     fn compute_cdf(samples: &Vec<u64>) -> Vec<(f64, f64)> {
@@ -1349,7 +1542,7 @@ impl Eval {
             "knative" => {
                 vec![
                     EvalBaseline::Knative,
-                    EvalBaseline::CcKnative,
+                    EvalBaseline::SnpKnative,
                     EvalBaseline::AcclessKnative,
                 ]
             }
@@ -1373,6 +1566,9 @@ impl Eval {
 
             let file_name_len = file_name.len();
             let baseline: EvalBaseline = file_name[0..file_name_len - 4].parse().unwrap();
+            if !baselines.contains(&baseline) {
+                continue;
+            }
 
             // Open the CSV and deserialize records
             let mut reader = ReaderBuilder::new()
@@ -1399,71 +1595,12 @@ impl Eval {
         root.fill(&WHITE).unwrap();
 
         // X axis in ms
-        let x_max = 2000;
+        let x_max = match plot_version {
+            "faasm" => 2000,
+            "knative" => 20000,
+            _ => panic!(),
+        };
         let y_max: f64 = 100.0;
-        let mut chart = ChartBuilder::on(&root)
-            .x_label_area_size(40)
-            .y_label_area_size(40)
-            .margin(10)
-            .margin_top(50)
-            .margin_left(40)
-            .margin_right(25)
-            .margin_bottom(20)
-            .build_cartesian_2d((0..x_max).log_scale(), 0f64..y_max as f64)
-            .unwrap();
-
-        chart
-            .configure_mesh()
-            .light_line_style(&WHITE)
-            .x_labels(8)
-            .y_labels(6)
-            .y_label_formatter(&|v| format!("{:.0}", v))
-            .x_label_style(("sans-serif", FONT_SIZE).into_font())
-            .y_label_style(("sans-serif", FONT_SIZE).into_font())
-            .x_desc("")
-            .draw()
-            .unwrap();
-
-        // Manually draw the X/Y-axis label with a custom font and size
-        root.draw(&Text::new(
-            "CDF [%]",
-            (5, 200),
-            ("sans-serif", FONT_SIZE)
-                .into_font()
-                .transform(FontTransform::Rotate270)
-                .color(&BLACK),
-        ))
-        .unwrap();
-        root.draw(&Text::new(
-            "Latency [ms]",
-            (175, 275),
-            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
-        ))
-        .unwrap();
-
-        for (baseline, values) in data {
-            // Draw line
-            let values_cdf = Self::compute_cdf(&values);
-            chart
-                .draw_series(LineSeries::new(
-                    values_cdf.into_iter().map(|(x, y)| (x as i32, y * 100.0)),
-                    EvalBaseline::get_color(&baseline).stroke_width(5),
-                ))
-                .unwrap();
-        }
-
-        // Add solid frames
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
-            .unwrap();
-        chart
-            .plotting_area()
-            .draw(&PathElement::new(
-                vec![(x_max, 0.0), (x_max, y_max)],
-                &BLACK,
-            ))
-            .unwrap();
 
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
             let legend_x_start = 10;
@@ -1473,56 +1610,238 @@ impl Eval {
                 EvalBaseline::Faasm => (legend_x_start, legend_y_pos),
                 EvalBaseline::SgxFaasm => (legend_x_start + 110, legend_y_pos),
                 EvalBaseline::AcclessFaasm => (legend_x_start + 270, legend_y_pos),
-                _ => todo!(),
+                EvalBaseline::Knative => (legend_x_start, legend_y_pos),
+                EvalBaseline::SnpKnative => (legend_x_start + 110, legend_y_pos),
+                EvalBaseline::AcclessKnative => (legend_x_start + 270, legend_y_pos),
             }
         }
 
-        // for id_x in 0..EscrowBaseline::iter_variants().len() {
-        for baseline in &baselines {
-            // Calculate position for each legend item
-            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+        if plot_version == "faasm" {
+            let mut chart = ChartBuilder::on(&root)
+                .x_label_area_size(40)
+                .y_label_area_size(40)
+                .margin(10)
+                .margin_top(50)
+                .margin_left(40)
+                .margin_right(25)
+                .margin_bottom(20)
+                .build_cartesian_2d((0..x_max).log_scale(), 0f64..y_max as f64)
+                .unwrap();
 
-            // Draw the color box (Rectangle) + frame
-            let square_side = 20;
-            root.draw(&Rectangle::new(
-                [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
-                EvalBaseline::get_color(&baseline).filled(),
-            ))
-            .unwrap();
-            root.draw(&PathElement::new(
-                vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                &BLACK,
-            ))
-            .unwrap();
-            root.draw(&PathElement::new(
-                vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                &BLACK,
-            ))
-            .unwrap();
-            root.draw(&PathElement::new(
-                vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                &BLACK,
-            ))
-            .unwrap();
-            root.draw(&PathElement::new(
-                vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                &BLACK,
-            ))
-            .unwrap();
+            chart
+                .configure_mesh()
+                .light_line_style(&WHITE)
+                .x_labels(8)
+                .y_labels(6)
+                .y_label_formatter(&|v| format!("{:.0}", v))
+                .x_label_style(("sans-serif", FONT_SIZE).into_font())
+                .y_label_style(("sans-serif", FONT_SIZE).into_font())
+                .x_desc("")
+                .draw()
+                .unwrap();
 
-            // Draw the baseline label (Text)
+            // Manually draw the X/Y-axis label with a custom font and size
             root.draw(&Text::new(
-                match baseline {
-                    EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => format!("accless"),
-                    _ => format!("{baseline}"),
-                },
-                (x_pos + 30, y_pos + 2), // Adjust text position
-                ("sans-serif", FONT_SIZE).into_font(),
+                "CDF [%]",
+                (5, 200),
+                ("sans-serif", FONT_SIZE)
+                    .into_font()
+                    .transform(FontTransform::Rotate270)
+                    .color(&BLACK),
             ))
             .unwrap();
+            root.draw(&Text::new(
+                "Latency [ms]",
+                (175, 275),
+                ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+            ))
+            .unwrap();
+
+            for (baseline, values) in data {
+                // Draw line
+                let values_cdf = Self::compute_cdf(&values);
+                chart
+                    .draw_series(LineSeries::new(
+                        values_cdf.into_iter().map(|(x, y)| (x as i32, y * 100.0)),
+                        EvalBaseline::get_color(&baseline).stroke_width(STROKE_WIDTH),
+                    ))
+                    .unwrap();
+            }
+
+            // Add solid frames
+            chart
+                .plotting_area()
+                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+                .unwrap();
+            chart
+                .plotting_area()
+                .draw(&PathElement::new(
+                    vec![(x_max, 0.0), (x_max, y_max)],
+                    &BLACK,
+                ))
+                .unwrap();
+
+            for baseline in &baselines {
+                // Calculate position for each legend item
+                let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+                // Draw the color box (Rectangle) + frame
+                let square_side = 20;
+                root.draw(&Rectangle::new(
+                    [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
+                    EvalBaseline::get_color(&baseline).filled(),
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+
+                // Draw the baseline label (Text)
+                root.draw(&Text::new(
+                    match baseline {
+                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
+                            format!("accless")
+                        }
+                        _ => format!("{baseline}"),
+                    },
+                    (x_pos + 30, y_pos + 2), // Adjust text position
+                    ("sans-serif", FONT_SIZE).into_font(),
+                ))
+                .unwrap();
+            }
+
+            root.present().unwrap();
+        } else {
+            let mut chart = ChartBuilder::on(&root)
+                .x_label_area_size(40)
+                .y_label_area_size(40)
+                .margin(10)
+                .margin_top(50)
+                .margin_left(40)
+                .margin_right(25)
+                .margin_bottom(20)
+                .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
+                .unwrap();
+
+            chart
+                .configure_mesh()
+                .light_line_style(&WHITE)
+                .x_labels(8)
+                .y_labels(6)
+                .y_label_formatter(&|v| format!("{:.0}", v))
+                .x_label_style(("sans-serif", FONT_SIZE).into_font())
+                .y_label_style(("sans-serif", FONT_SIZE).into_font())
+                .x_desc("")
+                .draw()
+                .unwrap();
+
+            // Manually draw the X/Y-axis label with a custom font and size
+            root.draw(&Text::new(
+                "CDF [%]",
+                (5, 200),
+                ("sans-serif", FONT_SIZE)
+                    .into_font()
+                    .transform(FontTransform::Rotate270)
+                    .color(&BLACK),
+            ))
+            .unwrap();
+            root.draw(&Text::new(
+                "Latency [ms]",
+                (175, 275),
+                ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+            ))
+            .unwrap();
+
+            for (baseline, values) in data {
+                // Draw line
+                let values_cdf = Self::compute_cdf(&values);
+                chart
+                    .draw_series(LineSeries::new(
+                        values_cdf.into_iter().map(|(x, y)| (x as i32, y * 100.0)),
+                        EvalBaseline::get_color(&baseline).stroke_width(STROKE_WIDTH),
+                    ))
+                    .unwrap();
+            }
+
+            // Add solid frames
+            chart
+                .plotting_area()
+                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+                .unwrap();
+            chart
+                .plotting_area()
+                .draw(&PathElement::new(
+                    vec![(x_max, 0.0), (x_max, y_max)],
+                    &BLACK,
+                ))
+                .unwrap();
+
+            for baseline in &baselines {
+                // Calculate position for each legend item
+                let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+
+                // Draw the color box (Rectangle) + frame
+                let square_side = 20;
+                root.draw(&Rectangle::new(
+                    [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
+                    EvalBaseline::get_color(&baseline).filled(),
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+                root.draw(&PathElement::new(
+                    vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+                    &BLACK,
+                ))
+                .unwrap();
+
+                // Draw the baseline label (Text)
+                root.draw(&Text::new(
+                    match baseline {
+                        EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
+                            format!("accless")
+                        }
+                        _ => format!("{baseline}"),
+                    },
+                    (x_pos + 30, y_pos + 2), // Adjust text position
+                    ("sans-serif", FONT_SIZE).into_font(),
+                ))
+                .unwrap();
+            }
+
+            root.present().unwrap();
         }
 
-        root.present().unwrap();
         println!("invrs: generated plot at: {}", plot_path.display());
     }
 
@@ -1533,24 +1852,33 @@ impl Eval {
         match exp {
             EvalExperiment::ColdStart => {
                 Self::plot_cold_start_cdf("faasm", &data_files);
-                // Self::plot_cold_start_cdf("knative", &data_files);
+                Self::plot_cold_start_cdf("knative", &data_files);
             }
             EvalExperiment::E2eLatency => {
-                Self::plot_e2e_latency(&exp, &data_files)?;
+                Self::plot_e2e_latency("faasm", &exp, &data_files)?;
+                Self::plot_e2e_latency("knative", &exp, &data_files)?;
             }
             EvalExperiment::E2eLatencyCold => {
-                Self::plot_e2e_latency(&exp, &data_files)?;
+                Self::plot_e2e_latency("faasm", &exp, &data_files)?;
+                Self::plot_e2e_latency("knative", &exp, &data_files)?;
             }
             EvalExperiment::ScaleUpLatency => {
-                Self::plot_scale_up_latency(&data_files);
+                Self::plot_scale_up_latency("faasm", &data_files);
+                Self::plot_scale_up_latency("knative", &data_files);
             }
         }
 
         Ok(())
     }
 
-    pub async fn upload_state(eval: &EvalExperiment) -> anyhow::Result<()> {
-        // TODO: must know the AS_URL here somehow
+    pub async fn upload_state(eval: &EvalExperiment, system: &str) -> anyhow::Result<()> {
+        // Get the MinIO URL
+        let minio_url = S3::get_url(system);
+        // TODO: get the correct AS URL too
+        unsafe {
+            env::set_var("MINIO_URL", minio_url);
+            env::set_var("AS_URL", "https://146.179.4.33:8443");
+        }
 
         // Work-out the workflows to execute for each experiment
         let workflow_iter = match eval {

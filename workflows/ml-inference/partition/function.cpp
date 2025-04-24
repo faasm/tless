@@ -9,10 +9,10 @@ extern "C"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <string>
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
     std::string s3dir;
     int numInfFuncs;
 
-    if (!tless::checkChain("ml-inference", "partition", 0)) {
+    if (!accless::checkChain("ml-inference", "partition", 0)) {
         std::cerr << "ml-inference(partition): error checking TLess chain" << std::endl;
         return 1;
     }

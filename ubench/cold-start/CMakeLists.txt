@@ -26,3 +26,10 @@ endif()
 
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${HEADERS})
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC ${LIBRARIES})
+
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    message(STATUS "HERE")
+    add_executable(${CMAKE_PROJECT_TARGET}-server ./src/server.cpp)
+    target_include_directories(${CMAKE_PROJECT_TARGET}-server PUBLIC ${HEADERS})
+    target_link_libraries(${CMAKE_PROJECT_TARGET}-server PUBLIC ${LIBRARIES})
+endif ()

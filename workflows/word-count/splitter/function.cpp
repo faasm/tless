@@ -8,10 +8,10 @@ extern "C"
 #else
 #include <cstdlib>
 #include <fstream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <stdio.h>
@@ -28,7 +28,7 @@ extern "C"
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("word-count", "splitter", 0)) {
+    if (!accless::checkChain("word-count", "splitter", 0)) {
         std::cerr << "word-count(splitter): error checking TLess chain" << std::endl;
         return 1;
     }
@@ -109,7 +109,7 @@ int main(int argc, char** argv)
                   << s3file
                   << std::endl;
         std::string mapperInput = std::to_string(i) + ":" + s3file;
-        int splitterId = tless::chain("word-count", "splitter", 0, "mapper", i, mapperInput);
+        int splitterId = accless::chain("word-count", "splitter", 0, "mapper", i, mapperInput);
         splitterCallIds.push_back(splitterId);
 #else
         std::cout << "file: " << s3file << std::endl;

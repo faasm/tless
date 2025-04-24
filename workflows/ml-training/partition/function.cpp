@@ -9,10 +9,10 @@ extern "C"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include "libs/s3/S3Wrapper.hpp"
+#include "s3/S3Wrapper.hpp"
 #endif
 
-#include "tless.h"
+#include "accless.h"
 
 #include <iostream>
 #include <string>
@@ -59,7 +59,7 @@ std::string join(const std::vector<std::string>& stringList, const std::string& 
  */
 int main(int argc, char** argv)
 {
-    if (!tless::checkChain("ml-training", "partition", 0)) {
+    if (!accless::checkChain("ml-training", "partition", 0)) {
         std::cerr << "ml-training(partition): error checking TLess chain" << std::endl;
         return 1;
     }
@@ -220,8 +220,7 @@ int main(int argc, char** argv)
         std::string key = "ml-training/outputs/partition/pca-" + std::to_string(i);
         std::string pcaInput = std::to_string(i) + ":" + key + ":" + std::to_string(numTrainPerPca);
 #ifdef __faasm
-        // int pcaId = faasmChainNamed("pca", (uint8_t*) pcaInput.c_str(), pcaInput.size());
-        int pcaId = tless::chain("ml-training", "partition", 0, "pca", i, pcaInput);
+        int pcaId = accless::chain("ml-training", "partition", 0, "pca", i, pcaInput);
         pcaFuncsIds.push_back(std::to_string(pcaId));
 #endif
     }
