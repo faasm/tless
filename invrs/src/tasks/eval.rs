@@ -986,7 +986,7 @@ impl Eval {
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .build_cartesian_2d(x_min..x_max as f64, 0f64..y_max)
+            .build_cartesian_2d(x_min..x_max, 0f64..y_max)
             .unwrap();
 
         chart
@@ -1065,7 +1065,7 @@ impl Eval {
                     let mut bar = Rectangle::new(
                         [
                             (x_orig + x as f64, 0 as f64),
-                            (x_orig + x as f64 + 1.0, this_y as f64),
+                            (x_orig + x as f64 + 1.0, this_y),
                         ],
                         bar_style,
                     );
@@ -1074,20 +1074,20 @@ impl Eval {
                 }))
                 .unwrap();
 
-            let x_axis_range = 0.0..x_max as f64;
+            let x_axis_range = 0.0..x_max;
             let margin_units: f64 =
                 margin_px as f64 * (x_axis_range.end - x_axis_range.start) / chart_width_px as f64;
 
             // Draw solid lines arround bars
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (_, y))| {
-                    let this_y = (y / y_ref) as f64;
+                    let this_y = y / y_ref;
                     PathElement::new(
                         vec![
                             (x_orig + x as f64 + margin_units, 0.0),
                             (x_orig + x as f64 + 1.0 - margin_units, 0.0),
-                            (x_orig + x as f64 + 1.0 - margin_units, this_y as f64),
-                            (x_orig + x as f64 + margin_units, this_y as f64),
+                            (x_orig + x as f64 + 1.0 - margin_units, this_y),
+                            (x_orig + x as f64 + margin_units, this_y),
                             (x_orig + x as f64 + margin_units, 0.0),
                         ],
                         BLACK,
@@ -1096,7 +1096,7 @@ impl Eval {
                 .unwrap();
 
             for (x, (_baseline, y)) in (0..).zip(workflow_data.iter()) {
-                let this_y = (y / y_ref) as f64;
+                let this_y = y / y_ref;
 
                 // Add text for bars that overflow
                 let y_offset = match plot_version {
@@ -1137,7 +1137,7 @@ impl Eval {
                         .plotting_area()
                         .draw(&Text::new(
                             format!("{:.1}", this_y),
-                            (x_orig + x as f64, (y_max + y_offset) as f64),
+                            (x_orig + x as f64, y_max + y_offset),
                             ("sans-serif", FONT_SIZE - 2)
                                 .into_font()
                                 .transform(FontTransform::Rotate270),
