@@ -461,6 +461,9 @@ async fn main() -> anyhow::Result<()> {
             // Now format rust code
             let dirs = [
                 "accless/libs/jwt",
+                // We skip formatting rabe as the upstream fork is not
+                // formatted
+                // "accless/libs/rabe",
                 "attestation-service",
                 "invrs",
                 "workflows/finra/knative",

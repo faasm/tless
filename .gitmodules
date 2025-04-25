@@ -1,0 +1,3 @@
+[submodule "accless/libs/rabe"]
+	path = accless/libs/rabe
+	url = https://github.com/faasm/rabe.git
