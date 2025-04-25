@@ -9,7 +9,7 @@ use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::ToStream;
 use once_cell::sync::Lazy;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::{env, fs, thread, time};
@@ -55,7 +55,7 @@ pub async fn wait_for_key(key_name: &str) {
 
     // Return fast if the bucket does not exist
     let exists: bool = client
-        .bucket_exists(&BucketExistsArgs::new(&S3Data::BUCKET.data).unwrap())
+        .bucket_exists(&BucketExistsArgs::new(S3Data::BUCKET.data).unwrap())
         .await
         .unwrap();
 
@@ -69,19 +69,19 @@ pub async fn wait_for_key(key_name: &str) {
     // Loop until the object appears
     loop {
         let mut objects = client
-            .list_objects(&S3Data::BUCKET.data)
+            .list_objects(S3Data::BUCKET.data)
             .recursive(true)
             .prefix(Some(key_name.to_string()))
             .to_stream()
             .await;
 
-        while let Some(result) = objects.next().await {
+        if let Some(result) = objects.next().await {
             match result {
                 Ok(_) => return,
                 Err(e) => match e {
-                    Error::S3Error(s3_error) => match s3_error.code.as_str() {
-                        _ => panic!("{WORKFLOW_NAME}: error: {}", s3_error.message),
-                    },
+                    Error::S3Error(s3_error) => {
+                        panic!("{WORKFLOW_NAME}: error: {}", s3_error.message)
+                    }
                     _ => panic!("{WORKFLOW_NAME}: error: {}", e),
                 },
             }
@@ -111,7 +111,7 @@ pub fn post_event(dest: String, event: Event) -> JoinHandle<()> {
 pub fn get_json_from_event(event: &Event) -> Value {
     match event.data() {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
-        Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
+        Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
         _ => panic!("accless(driver): error: must be json data"),
     }
@@ -342,7 +342,7 @@ pub fn process_event(mut event: Event) -> Event {
 
             // Update the event for the zero-th id (the one we return as part
             // of the method)
-            scaled_event.set_id((run_magic + 0).to_string());
+            scaled_event.set_id(run_magic.to_string());
             scaled_event.set_data(
                 "aplication/json",
                 json!({"audit-id": 0, "num-audit": num_audit}),

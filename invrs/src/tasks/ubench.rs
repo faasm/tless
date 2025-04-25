@@ -192,7 +192,7 @@ allow {{
             ])
             .output()?;
 
-        fs::write(&Self::get_attestation_token(), output.stdout)?;
+        fs::write(Self::get_attestation_token(), output.stdout)?;
 
         Ok(())
     }
@@ -358,7 +358,7 @@ impl Ubench {
             }
         }
 
-        return csv_files;
+        csv_files
     }
 
     fn plot_escrow_xput_ubench(data_files: &Vec<PathBuf>) {
@@ -417,8 +417,8 @@ impl Ubench {
             let num_repeats: f64 = (count / REQUEST_COUNTS_TRUSTEE.len()) as f64;
 
             let average_times = data.get_mut(&baseline).unwrap();
-            for i in 0..average_times.len() {
-                average_times[i] = average_times[i] / num_repeats;
+            for time in average_times {
+                *time /= num_repeats;
             }
         }
 
@@ -443,12 +443,12 @@ impl Ubench {
             .margin_left(50)
             .margin_right(25)
             .margin_bottom(20)
-            .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
+            .build_cartesian_2d(0..x_max, 0f64..y_max)
             .unwrap();
 
         chart
             .configure_mesh()
-            .light_line_style(&WHITE)
+            .light_line_style(WHITE)
             .x_labels(8)
             .y_labels(6)
             .x_label_style(("sans-serif", FONT_SIZE).into_font())
@@ -528,14 +528,11 @@ impl Ubench {
         // Add solid frames
         chart
             .plotting_area()
-            .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+            .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], BLACK))
             .unwrap();
         chart
             .plotting_area()
-            .draw(&PathElement::new(
-                vec![(x_max, 0.0), (x_max, y_max)],
-                &BLACK,
-            ))
+            .draw(&PathElement::new(vec![(x_max, 0.0), (x_max, y_max)], BLACK))
             .unwrap();
 
         fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
@@ -563,22 +560,22 @@ impl Ubench {
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -632,7 +629,7 @@ impl Ubench {
         // Draw meshes
         chart
             .configure_mesh()
-            .light_line_style(&WHITE)
+            .light_line_style(WHITE)
             .x_label_style(("sans-serif", FONT_SIZE).into_font())
             .x_labels(8)
             .y_labels(6)
@@ -735,14 +732,14 @@ impl Ubench {
             .plotting_area()
             .draw(&PathElement::new(
                 vec![(0, 1.0), (num_max_users, 1.0)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
                 vec![(num_max_users, 0.0), (num_max_users, 1.0)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -759,7 +756,7 @@ impl Ubench {
 
         for baseline in &[EscrowBaseline::Trustee, EscrowBaseline::Accless] {
             // Calculate position for each legend item
-            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
             // Draw the color box (Rectangle)
             root.draw(&Rectangle::new(
@@ -775,7 +772,7 @@ impl Ubench {
                     (x_pos, y_pos + 20),
                     (x_pos, y_pos),
                 ],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -795,7 +792,7 @@ impl Ubench {
     pub async fn run(ubench: &MicroBenchmarks, run_args: &UbenchRunArgs) {
         match ubench {
             MicroBenchmarks::EscrowCost => panic!("escrow-cost is not meant to be ran"),
-            MicroBenchmarks::EscrowXput => Self::run_escrow_ubench(&run_args).await.unwrap(),
+            MicroBenchmarks::EscrowXput => Self::run_escrow_ubench(run_args).await.unwrap(),
         }
     }
 

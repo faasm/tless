@@ -6,7 +6,6 @@ use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
 use crate::tasks::s3::S3;
 use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
-use env_logger;
 use log::error;
 use std::{path::Path, process};
 
@@ -458,6 +457,68 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
+
+            // Now format rust code
+            let dirs = [
+                "accless/libs/jwt",
+                "attestation-service",
+                "invrs",
+                "workflows/finra/knative",
+                "workflows/word-count/knative",
+                "workflows/ml-inference/knative",
+                "workflows/ml-training/knative",
+            ];
+            for dir in dirs {
+                let cwd = Env::proj_root().join(dir);
+
+                // cargo fmt
+                let mut fmt_cmd = process::Command::new("cargo");
+                fmt_cmd.arg("fmt");
+                if *check {
+                    fmt_cmd.arg("--").arg("--check");
+                }
+                fmt_cmd.current_dir(&cwd);
+
+                match fmt_cmd.status() {
+                    Ok(status) if status.success() => {}
+                    Ok(status) => {
+                        error!(
+                            "cargo fmt failed on {} with status {}",
+                            cwd.clone().display(),
+                            status
+                        );
+                        process::exit(1);
+                    }
+                    Err(err) => {
+                        error!("Failed to run cargo fmt on {}: {}", cwd.display(), err);
+                        process::exit(1);
+                    }
+                }
+
+                // cargo clippy
+                let mut clippy_cmd = process::Command::new("cargo");
+                clippy_cmd.arg("clippy");
+                if *check {
+                    clippy_cmd.arg("--").arg("-D").arg("warnings");
+                }
+                clippy_cmd.current_dir(&cwd);
+
+                match clippy_cmd.status() {
+                    Ok(status) if status.success() => {}
+                    Ok(status) => {
+                        error!(
+                            "cargo clippy failed on {} with status {}",
+                            cwd.clone().display(),
+                            status
+                        );
+                        process::exit(1);
+                    }
+                    Err(err) => {
+                        error!("Failed to run cargo clippy on {}: {}", cwd.display(), err);
+                        process::exit(1);
+                    }
+                }
+            }
         }
         Command::Ubench { ubench_command } => match ubench_command {
             UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
@@ -477,16 +538,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         },
-        // FIXME: move all S3 methods to &str
         Command::S3 { s3_command } => match s3_command {
             S3Command::ClearBucket { bucket_name } => {
-                S3::clear_bucket(bucket_name.to_string()).await;
+                S3::clear_bucket(bucket_name).await;
             }
             S3Command::ClearDir {
                 bucket_name,
                 prefix,
             } => {
-                S3::clear_dir(bucket_name.to_string(), prefix.to_string()).await;
+                S3::clear_dir(bucket_name, prefix).await;
             }
             S3Command::GetDir {
                 bucket_name,
@@ -510,19 +570,14 @@ async fn main() -> anyhow::Result<()> {
                 bucket_name,
                 prefix,
             } => {
-                S3::list_keys(bucket_name.to_string(), prefix).await;
+                S3::list_keys(bucket_name, &prefix.as_deref()).await;
             }
             S3Command::UploadDir {
                 bucket_name,
                 host_path,
                 s3_path,
             } => {
-                S3::upload_dir(
-                    bucket_name.to_string(),
-                    host_path.to_string(),
-                    s3_path.to_string(),
-                )
-                .await;
+                S3::upload_dir(bucket_name, host_path, s3_path).await;
             }
             S3Command::UploadKey {
                 bucket_name,
@@ -554,6 +609,8 @@ async fn main() -> anyhow::Result<()> {
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
+
+                    #[allow(clippy::single_element_loop)]
                     for file in ["cert.pem"] {
                         let scp_cmd_in =
                             format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");

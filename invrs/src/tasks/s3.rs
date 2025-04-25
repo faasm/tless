@@ -52,7 +52,7 @@ impl S3 {
         path
     }
 
-    pub async fn clear_bucket(bucket_name: String) {
+    pub async fn clear_bucket(bucket_name: &str) {
         debug!("invrs(s3): removing s3 bucket: {bucket_name}");
 
         // First, remove all objects in the bucket
@@ -60,7 +60,7 @@ impl S3 {
 
         // Return fast if the bucket does not exist
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
@@ -70,7 +70,7 @@ impl S3 {
         }
 
         let mut objects = client
-            .list_objects(&bucket_name)
+            .list_objects(bucket_name)
             .recursive(true)
             .to_stream()
             .await;
@@ -80,7 +80,7 @@ impl S3 {
                 Ok(resp) => {
                     for item in resp.contents {
                         client
-                            .remove_object(&bucket_name, item.name.as_str())
+                            .remove_object(bucket_name, item.name.as_str())
                             .send()
                             .await
                             .unwrap();
@@ -91,12 +91,12 @@ impl S3 {
         }
 
         client
-            .remove_bucket(&RemoveBucketArgs::new(&bucket_name).unwrap())
+            .remove_bucket(&RemoveBucketArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
     }
 
-    pub async fn clear_dir(bucket_name: String, prefix: String) {
+    pub async fn clear_dir(bucket_name: &str, prefix: &str) {
         debug!("invrs(s3): clearing s3 dir: {bucket_name}/{prefix}");
 
         // First, remove all objects in the bucket
@@ -104,7 +104,7 @@ impl S3 {
 
         // Return fast if the bucket does not exist
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
@@ -114,9 +114,9 @@ impl S3 {
         }
 
         let mut objects = client
-            .list_objects(&bucket_name)
+            .list_objects(bucket_name)
             .recursive(true)
-            .prefix(Some(prefix))
+            .prefix(Some(prefix.to_string()))
             .to_stream()
             .await;
 
@@ -125,7 +125,7 @@ impl S3 {
                 Ok(resp) => {
                     for item in resp.contents {
                         client
-                            .remove_object(&bucket_name, item.name.as_str())
+                            .remove_object(bucket_name, item.name.as_str())
                             .send()
                             .await
                             .unwrap();
@@ -139,7 +139,7 @@ impl S3 {
     pub async fn clear_object(bucket_name: &str, path: &str) {
         debug!("invrs(s3): clearing s3 key: {bucket_name}/{path}");
         Self::init_s3_client()
-            .remove_object(&bucket_name, path)
+            .remove_object(bucket_name, path)
             .send()
             .await
             .unwrap();
@@ -149,7 +149,7 @@ impl S3 {
         let client = Self::init_s3_client();
 
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
@@ -164,7 +164,7 @@ impl S3 {
         }
 
         let mut objects = Self::init_s3_client()
-            .list_objects(&bucket_name)
+            .list_objects(bucket_name)
             .recursive(true)
             .prefix(Some(s3_path.to_string()))
             .to_stream()
@@ -209,7 +209,7 @@ impl S3 {
 
         // Return fast if the bucket does not exist
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
@@ -244,7 +244,7 @@ impl S3 {
 
         // Return fast if the bucket does not exist
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
@@ -256,7 +256,7 @@ impl S3 {
         // Loop until the object appears, and return its last modified date
         loop {
             let mut objects = client
-                .list_objects(&bucket_name)
+                .list_objects(bucket_name)
                 .recursive(true)
                 .prefix(Some(key_name.to_string()))
                 .to_stream()
@@ -265,7 +265,7 @@ impl S3 {
             while let Some(result) = objects.next().await {
                 match result {
                     Ok(resp) => {
-                        for item in resp.contents {
+                        if let Some(item) = resp.contents.into_iter().next() {
                             debug!(
                                 "item: {} (last: {})",
                                 item.name,
@@ -275,9 +275,9 @@ impl S3 {
                         }
                     }
                     Err(e) => match e {
-                        Error::S3Error(s3_error) => match s3_error.code.as_str() {
-                            _ => panic!("invrs(s3): error: {}", s3_error.message),
-                        },
+                        Error::S3Error(s3_error) => {
+                            panic!("invrs(s3): error: {}", s3_error.message)
+                        }
                         _ => panic!("invrs(s3): error: {}", e),
                     },
                 }
@@ -331,16 +331,16 @@ impl S3 {
         }
     }
 
-    pub async fn list_keys(bucket_name: String, prefix: &Option<String>) {
+    pub async fn list_keys(bucket_name: &str, prefix: &Option<&str>) {
         debug!(
             "{}(s3): listing keys in bucket {bucket_name}",
             Env::SYS_NAME
         );
 
         let mut objects = Self::init_s3_client()
-            .list_objects(&bucket_name)
+            .list_objects(bucket_name)
             .recursive(true)
-            .prefix(prefix.clone())
+            .prefix(Some(prefix.unwrap().to_string()))
             .to_stream()
             .await;
 
@@ -365,38 +365,38 @@ impl S3 {
         let client = Self::init_s3_client();
 
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
         if !exists {
             client
-                .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+                .make_bucket(&MakeBucketArgs::new(bucket_name).unwrap())
                 .await
                 .unwrap();
         }
 
         let content = ObjectContent::from(Bytes::copy_from_slice(bytes));
         client
-            .put_object_content(&bucket_name, &s3_path, content)
+            .put_object_content(bucket_name, s3_path, content)
             .send()
             .await
             .unwrap();
     }
 
-    pub async fn upload_dir(bucket_name: String, host_path: String, s3_path: String) {
+    pub async fn upload_dir(bucket_name: &str, host_path: &str, s3_path: &str) {
         debug!("invrs(s3): uploading {host_path} to {bucket_name}/{s3_path}");
 
         let client = Self::init_s3_client();
 
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
         if !exists {
             client
-                .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+                .make_bucket(&MakeBucketArgs::new(bucket_name).unwrap())
                 .await
                 .unwrap();
         }
@@ -413,7 +413,7 @@ impl S3 {
             );
 
             client
-                .put_object_content(&bucket_name, &s3_file_path, content)
+                .put_object_content(bucket_name, &s3_file_path, content)
                 .send()
                 .await
                 .unwrap();
@@ -426,13 +426,13 @@ impl S3 {
         let client = Self::init_s3_client();
 
         let exists: bool = client
-            .bucket_exists(&BucketExistsArgs::new(&bucket_name).unwrap())
+            .bucket_exists(&BucketExistsArgs::new(bucket_name).unwrap())
             .await
             .unwrap();
 
         if !exists {
             client
-                .make_bucket(&MakeBucketArgs::new(&bucket_name).unwrap())
+                .make_bucket(&MakeBucketArgs::new(bucket_name).unwrap())
                 .await
                 .unwrap();
         }
@@ -445,7 +445,7 @@ impl S3 {
         // Upload it to S3
         let content = ObjectContent::from(file_contents);
         client
-            .put_object_content(&bucket_name, &s3_path, content)
+            .put_object_content(bucket_name, s3_path, content)
             .send()
             .await
             .unwrap();

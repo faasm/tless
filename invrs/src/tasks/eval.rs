@@ -189,7 +189,6 @@ impl Eval {
     ) {
         let mut file = fs::OpenOptions::new()
             .read(true)
-            .write(true)
             .append(true)
             .open(Self::get_data_file_name(
                 workflow,
@@ -224,7 +223,7 @@ impl Eval {
             }
         }
 
-        return csv_files;
+        csv_files
     }
 
     fn get_progress_bar(
@@ -466,7 +465,7 @@ impl Eval {
 
     async fn wait_for_scale_to_zero() {
         loop {
-            let output = Self::run_kubectl_cmd(&format!("-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}"));
+            let output = Self::run_kubectl_cmd("-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}");
             debug!("invrs: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
@@ -582,11 +581,7 @@ impl Eval {
                     Some(time) => {
                         exp_result.end_time = time;
                         // Remove all the outputs directory
-                        S3::clear_dir(
-                            EVAL_BUCKET_NAME.to_string(),
-                            "ml-inference/outputs".to_string(),
-                        )
-                        .await;
+                        S3::clear_dir(EVAL_BUCKET_NAME, "ml-inference/outputs").await;
                     }
                     None => {
                         error!("invrs(eval): timed-out waiting for ML training workload to finish")
@@ -626,7 +621,7 @@ impl Eval {
         // Cautionary sleep between runs
         thread::sleep(time::Duration::from_secs(5));
 
-        return exp_result;
+        exp_result
     }
 
     async fn run_knative_experiment(
@@ -656,7 +651,7 @@ impl Eval {
         // for workflow in vec![&AvailableWorkflow::MlInference] {
         for workflow in workflow_iter.clone() {
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
+            Self::init_data_file(workflow, exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
             let mut workflow_str = format!("{workflow}");
@@ -670,7 +665,7 @@ impl Eval {
                 workflow_str.as_str(),
             );
 
-            Self::deploy_workflow(workflow, &exp, &baseline);
+            Self::deploy_workflow(workflow, exp, &baseline);
 
             // Do warm-up rounds
             for _ in 0..args.num_warmup_repeats {
@@ -681,13 +676,13 @@ impl Eval {
             for i in 0..args.num_repeats {
                 let mut result = Self::run_workflow_once(workflow, exp, scale_up_factor).await;
                 result.iter = i;
-                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
+                Self::write_result_to_file(workflow, exp, &baseline, &result, scale_up_factor);
 
                 pb.inc(1);
             }
 
             // Delete workflow
-            Self::delete_workflow(workflow, &exp, &baseline);
+            Self::delete_workflow(workflow, exp, &baseline);
 
             // Finish progress bar
             pb.finish();
@@ -776,7 +771,7 @@ impl Eval {
             }
 
             // Initialise result file
-            Self::init_data_file(workflow, &exp, &baseline, scale_up_factor);
+            Self::init_data_file(workflow, exp, &baseline, scale_up_factor);
 
             // Prepare progress bar for each different experiment
             let mut workflow_str = format!("{workflow}");
@@ -829,7 +824,7 @@ impl Eval {
                     }
                 };
 
-                Self::write_result_to_file(workflow, &exp, &baseline, &result, scale_up_factor);
+                Self::write_result_to_file(workflow, exp, &baseline, &result, scale_up_factor);
 
                 // Clean-up
                 cleanup_single_execution(exp).await;
@@ -850,7 +845,7 @@ impl Eval {
                 EvalBaseline::Knative | EvalBaseline::SnpKnative | EvalBaseline::AcclessKnative => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in 1..(10) {
+                            for scale_up_factor in 1..10 {
                                 Self::run_knative_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -860,7 +855,7 @@ impl Eval {
                 EvalBaseline::Faasm | EvalBaseline::SgxFaasm | EvalBaseline::AcclessFaasm => {
                     match exp {
                         EvalExperiment::ScaleUpLatency => {
-                            for scale_up_factor in vec![1, 10, 20, 40, 50, 60, 70, 80, 90, 100] {
+                            for scale_up_factor in [1, 10, 20, 40, 50, 60, 70, 80, 90, 100] {
                                 Self::run_faasm_experiment(exp, args, i, scale_up_factor).await?;
                             }
                         }
@@ -991,16 +986,16 @@ impl Eval {
             .y_label_area_size(40)
             .margin(10)
             .margin_top(40)
-            .build_cartesian_2d(x_min..x_max as f64, 0f64..y_max)
+            .build_cartesian_2d(x_min..x_max, 0f64..y_max)
             .unwrap();
 
         chart
             .configure_mesh()
-            .light_line_style(&WHITE)
+            .light_line_style(WHITE)
             .y_labels(10)
             .y_label_style(("sans-serif", FONT_SIZE).into_font())
             .x_desc("")
-            .x_label_formatter(&|_| format!(""))
+            .x_label_formatter(&|_| String::new())
             .disable_x_mesh()
             .disable_x_axis()
             .y_label_formatter(&|y| format!("{:.0}", y))
@@ -1066,11 +1061,11 @@ impl Eval {
                         stroke_width: 2,
                     };
 
-                    let this_y = (y / y_ref) as f64;
+                    let this_y = y / y_ref;
                     let mut bar = Rectangle::new(
                         [
                             (x_orig + x as f64, 0 as f64),
-                            (x_orig + x as f64 + 1.0, this_y as f64),
+                            (x_orig + x as f64 + 1.0, this_y),
                         ],
                         bar_style,
                     );
@@ -1079,29 +1074,29 @@ impl Eval {
                 }))
                 .unwrap();
 
-            let x_axis_range = 0.0..x_max as f64;
+            let x_axis_range = 0.0..x_max;
             let margin_units: f64 =
                 margin_px as f64 * (x_axis_range.end - x_axis_range.start) / chart_width_px as f64;
 
             // Draw solid lines arround bars
             chart
                 .draw_series((0..).zip(workflow_data.iter()).map(|(x, (_, y))| {
-                    let this_y = (y / y_ref) as f64;
+                    let this_y = y / y_ref;
                     PathElement::new(
                         vec![
                             (x_orig + x as f64 + margin_units, 0.0),
                             (x_orig + x as f64 + 1.0 - margin_units, 0.0),
-                            (x_orig + x as f64 + 1.0 - margin_units, this_y as f64),
-                            (x_orig + x as f64 + margin_units, this_y as f64),
+                            (x_orig + x as f64 + 1.0 - margin_units, this_y),
+                            (x_orig + x as f64 + margin_units, this_y),
                             (x_orig + x as f64 + margin_units, 0.0),
                         ],
-                        &BLACK,
+                        BLACK,
                     )
                 }))
                 .unwrap();
 
             for (x, (_baseline, y)) in (0..).zip(workflow_data.iter()) {
-                let this_y = (y / y_ref) as f64;
+                let this_y = y / y_ref;
 
                 // Add text for bars that overflow
                 let y_offset = match plot_version {
@@ -1135,14 +1130,14 @@ impl Eval {
                             (x_orig_pixel.0, x_orig_pixel.1 - height),
                             (x_orig_pixel.0, x_orig_pixel.1),
                         ],
-                        &BLACK,
+                        BLACK,
                     ))
                     .unwrap();
                     chart
                         .plotting_area()
                         .draw(&Text::new(
                             format!("{:.1}", this_y),
-                            (x_orig + x as f64, (y_max + y_offset) as f64),
+                            (x_orig + x as f64, y_max + y_offset),
                             ("sans-serif", FONT_SIZE - 2)
                                 .into_font()
                                 .transform(FontTransform::Rotate270),
@@ -1180,23 +1175,17 @@ impl Eval {
         chart
             .plotting_area()
             .draw(&PathElement::new(
-                vec![(x_min, 100 as f64), (x_max, 100 as f64)],
-                &BLACK,
+                vec![(x_min, 100.0), (x_max, 100.0)],
+                BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
-            .draw(&PathElement::new(
-                vec![(x_max, 0 as f64), (x_max, 100 as f64)],
-                &BLACK,
-            ))
+            .draw(&PathElement::new(vec![(x_max, 0.0), (x_max, 100.0)], BLACK))
             .unwrap();
         chart
             .plotting_area()
-            .draw(&PathElement::new(
-                vec![(x_min, 0 as f64), (x_max, 0 as f64)],
-                &BLACK,
-            ))
+            .draw(&PathElement::new(vec![(x_min, 0.0), (x_max, 0.0)], BLACK))
             .unwrap();
 
         fn legend_label_pos_for_baseline(baseline: &EvalBaseline) -> (i32, i32) {
@@ -1216,7 +1205,7 @@ impl Eval {
         // Manually draw the legend outside the grid, above the chart
         for baseline in &baselines {
             // Calculate position for each legend item
-            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
             // Draw the color box (Rectangle) + frame
             root.draw(&Rectangle::new(
@@ -1226,22 +1215,22 @@ impl Eval {
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -1351,7 +1340,7 @@ impl Eval {
                 count += 1;
             }
 
-            avg_times[idx] = avg_times[idx] / count;
+            avg_times[idx] /= count;
         }
 
         let y_max: f64 = 125.0;
@@ -1374,12 +1363,12 @@ impl Eval {
             .margin_top(40)
             .margin_left(40)
             .margin_right(20)
-            .build_cartesian_2d(0..(x_max) as u32, 0f64..y_max as f64)
+            .build_cartesian_2d(0..(x_max) as u32, 0f64..y_max)
             .unwrap();
 
         chart
             .configure_mesh()
-            .light_line_style(&WHITE)
+            .light_line_style(WHITE)
             .x_labels(8)
             .y_labels(6)
             .x_label_style(("sans-serif", FONT_SIZE).into_font())
@@ -1432,14 +1421,14 @@ impl Eval {
             .plotting_area()
             .draw(&PathElement::new(
                 vec![(0, y_max), (x_max as u32, y_max)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
         chart
             .plotting_area()
             .draw(&PathElement::new(
                 vec![(x_max as u32, 0.0), (x_max as u32, y_max)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -1459,7 +1448,7 @@ impl Eval {
 
         for baseline in &baselines {
             // Calculate position for each legend item
-            let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+            let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
             // Draw the color box (Rectangle)
             root.draw(&Rectangle::new(
@@ -1469,22 +1458,22 @@ impl Eval {
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
             root.draw(&PathElement::new(
                 vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                &BLACK,
+                BLACK,
             ))
             .unwrap();
 
@@ -1507,9 +1496,9 @@ impl Eval {
         println!("invrs: generated plot at: {}", plot_path.display());
     }
 
-    fn compute_cdf(samples: &Vec<u64>) -> Vec<(f64, f64)> {
-        let mut sorted = samples.clone();
-        sorted.sort_unstable(); // more efficient for simple types like u64
+    fn compute_cdf(samples: &[u64]) -> Vec<(f64, f64)> {
+        let mut sorted = samples.to_owned();
+        sorted.sort_unstable();
 
         let n = sorted.len() as f64;
         sorted
@@ -1625,12 +1614,12 @@ impl Eval {
                 .margin_left(40)
                 .margin_right(25)
                 .margin_bottom(20)
-                .build_cartesian_2d((0..x_max).log_scale(), 0f64..y_max as f64)
+                .build_cartesian_2d((0..x_max).log_scale(), 0f64..y_max)
                 .unwrap();
 
             chart
                 .configure_mesh()
-                .light_line_style(&WHITE)
+                .light_line_style(WHITE)
                 .x_labels(8)
                 .y_labels(6)
                 .y_label_formatter(&|v| format!("{:.0}", v))
@@ -1671,45 +1660,42 @@ impl Eval {
             // Add solid frames
             chart
                 .plotting_area()
-                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], BLACK))
                 .unwrap();
             chart
                 .plotting_area()
-                .draw(&PathElement::new(
-                    vec![(x_max, 0.0), (x_max, y_max)],
-                    &BLACK,
-                ))
+                .draw(&PathElement::new(vec![(x_max, 0.0), (x_max, y_max)], BLACK))
                 .unwrap();
 
             for baseline in &baselines {
                 // Calculate position for each legend item
-                let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+                let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
                 // Draw the color box (Rectangle) + frame
                 let square_side = 20;
                 root.draw(&Rectangle::new(
                     [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
-                    EvalBaseline::get_color(&baseline).filled(),
+                    EvalBaseline::get_color(baseline).filled(),
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
 
@@ -1717,7 +1703,7 @@ impl Eval {
                 root.draw(&Text::new(
                     match baseline {
                         EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
-                            format!("accless")
+                            "accless".to_string()
                         }
                         _ => format!("{baseline}"),
                     },
@@ -1737,12 +1723,12 @@ impl Eval {
                 .margin_left(40)
                 .margin_right(25)
                 .margin_bottom(20)
-                .build_cartesian_2d(0..x_max, 0f64..y_max as f64)
+                .build_cartesian_2d(0..x_max, 0f64..y_max)
                 .unwrap();
 
             chart
                 .configure_mesh()
-                .light_line_style(&WHITE)
+                .light_line_style(WHITE)
                 .x_labels(8)
                 .y_labels(6)
                 .y_label_formatter(&|v| format!("{:.0}", v))
@@ -1783,45 +1769,42 @@ impl Eval {
             // Add solid frames
             chart
                 .plotting_area()
-                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], &BLACK))
+                .draw(&PathElement::new(vec![(0, y_max), (x_max, y_max)], BLACK))
                 .unwrap();
             chart
                 .plotting_area()
-                .draw(&PathElement::new(
-                    vec![(x_max, 0.0), (x_max, y_max)],
-                    &BLACK,
-                ))
+                .draw(&PathElement::new(vec![(x_max, 0.0), (x_max, y_max)], BLACK))
                 .unwrap();
 
             for baseline in &baselines {
                 // Calculate position for each legend item
-                let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
+                let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
                 // Draw the color box (Rectangle) + frame
                 let square_side = 20;
                 root.draw(&Rectangle::new(
                     [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
-                    EvalBaseline::get_color(&baseline).filled(),
+                    EvalBaseline::get_color(baseline).filled(),
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
                 root.draw(&PathElement::new(
                     vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
-                    &BLACK,
+                    BLACK,
                 ))
                 .unwrap();
 
@@ -1829,7 +1812,7 @@ impl Eval {
                 root.draw(&Text::new(
                     match baseline {
                         EvalBaseline::AcclessFaasm | EvalBaseline::AcclessKnative => {
-                            format!("accless")
+                            "accless".to_string()
                         }
                         _ => format!("{baseline}"),
                     },
@@ -1855,12 +1838,12 @@ impl Eval {
                 Self::plot_cold_start_cdf("knative", &data_files);
             }
             EvalExperiment::E2eLatency => {
-                Self::plot_e2e_latency("faasm", &exp, &data_files)?;
-                Self::plot_e2e_latency("knative", &exp, &data_files)?;
+                Self::plot_e2e_latency("faasm", exp, &data_files)?;
+                Self::plot_e2e_latency("knative", exp, &data_files)?;
             }
             EvalExperiment::E2eLatencyCold => {
-                Self::plot_e2e_latency("faasm", &exp, &data_files)?;
-                Self::plot_e2e_latency("knative", &exp, &data_files)?;
+                Self::plot_e2e_latency("faasm", exp, &data_files)?;
+                Self::plot_e2e_latency("knative", exp, &data_files)?;
             }
             EvalExperiment::ScaleUpLatency => {
                 Self::plot_scale_up_latency("faasm", &data_files);
@@ -1898,10 +1881,7 @@ impl Eval {
                 EVAL_BUCKET_NAME,
                 true,
                 // For cold start, we only need to upload the DAG
-                match eval {
-                    EvalExperiment::ColdStart => true,
-                    _ => false,
-                },
+                matches!(eval, EvalExperiment::ColdStart),
             )
             .await?;
         }
@@ -1915,7 +1895,7 @@ impl Eval {
 
         match eval {
             EvalExperiment::ColdStart => {
-                let ctr_path = format!("/code/tless/ubench/build-wasm/accless-ubench-cold-start");
+                let ctr_path = "/code/tless/ubench/build-wasm/accless-ubench-cold-start";
 
                 Self::run_faasmctl_cmd(
                     &format!("upload accless ubench-cold-start {docker_tag}:{ctr_path}")

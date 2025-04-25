@@ -33,7 +33,7 @@ pub fn post_event(dest: String, event: Event) -> JoinHandle<()> {
 pub fn get_json_from_event(event: &Event) -> Value {
     match event.data() {
         Some(cloudevents::Data::Json(json)) => Some(json.clone()),
-        Some(cloudevents::Data::String(text)) => serde_json::from_str(&text).ok(),
+        Some(cloudevents::Data::String(text)) => serde_json::from_str(text).ok(),
         Some(cloudevents::Data::Binary(bytes)) => serde_json::from_slice(bytes).ok(),
         _ => panic!("accless(driver): error: must be json data"),
     }
