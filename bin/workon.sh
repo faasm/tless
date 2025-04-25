@@ -35,6 +35,12 @@ export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
 export FAASM_VERSION=0.30.0
 
 # ----------------------------
+# Git config
+# ----------------------------
+
+git submodule update --init
+
+# ----------------------------
 # APT deps
 # ----------------------------
 
