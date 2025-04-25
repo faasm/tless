@@ -32,21 +32,19 @@ endif ()
 
 # Common libraries and headers that support WASM and native compilation
 add_subdirectory(./libs/jwt/cpp-bindings)
+add_subdirectory(./libs/rabe/cpp-bindings)
 
 set(ACCLESS_COMMON_HEADERS
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_LIST_DIR}/libs/jwt/cpp-bindings
+    ${CMAKE_CURRENT_LIST_DIR}/libs/rabe/cpp-bindings
 )
-set(ACCLESS_COMMON_LIBRARIES accless::jwt)
+set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::rabe)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # The WASM version of the library relies on a pre-populated sysroot as part
     # of a Faasm installation
-    set(ACCLESS_LIBRARIES
-        faasm
-        rabe-cpp
-        rabe
-    )
+    set(ACCLESS_LIBRARIES faasm)
 else ()
     # This lines do not suppress the warning
     set(MY_CUSTOM_RPATH "/usr/local/attestationcurl/lib;/usr/local/attestationssl/lib64")
@@ -69,14 +67,8 @@ else ()
         accless::attestation
         # We use the installed curl as part of azure-cvm-attestation
         /usr/local/attestationcurl/lib/libcurl.a
-        # Order matters: librabe-cpp must preceede librabe
-        "/usr/local/lib/rabe/librabe-cpp.a"
-        "/usr/local/lib/rabe/librabe.a"
     )
-    set(ACCLESS_HEADERS
-        ${CMAKE_CURRENT_LIST_DIR}/libs
-        "/usr/include/rabe"
-    )
+    set(ACCLESS_HEADERS ${CMAKE_CURRENT_LIST_DIR}/libs)
 endif()
 
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC

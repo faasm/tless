@@ -17,6 +17,10 @@ set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
 )
 
 add_library(${CMAKE_PROJECT_TARGET} attestation.cpp)
+target_compile_options(${CMAKE_PROJECT_TARGET} PUBLIC
+    # This warning comes from upstream code in the attestation library
+    -Wno-delete-abstract-non-virtual-dtor
+)
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC azguestattestation curl)
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${AZ_GUEST_ATTESTATION_INCLUDE_DIRS})
 

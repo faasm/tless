@@ -1,9 +1,8 @@
 #include "accless.h"
-// Both tless::aes256gcm and tles::sha256 are declared in this header
+#include "aes.h"
 #include "dag.h"
 #include "jwt.h"
-#include "tless_abe.h"
-#include "tless_aes.h"
+#include "rabe.h"
 #include "utils.h"
 
 #ifdef __faasm
@@ -205,7 +204,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
     auto dag = accless::dag::deserialize(serializedDag);
 
     // Also calculate the hex-digest of the serialized DAG
-    std::vector<uint8_t> hashedDag = tless::sha256::hash(serializedDag);
+    std::vector<uint8_t> hashedDag = accless::sha256::hash(serializedDag);
     std::string dagHexDigest = accless::utils::byteArrayToHexString(
         hashedDag.data(), hashedDag.size());
 
@@ -260,7 +259,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
                                   ctCtx.begin() + AES256CM_NONCE_SIZE);
     std::vector<uint8_t> ctCtxTrimmed(ctCtx.begin() + AES256CM_NONCE_SIZE,
                                       ctCtx.end());
-    auto ptCtx = tless::aes256gcm::decrypt(teeSymKey, nonceCtx, ctCtxTrimmed);
+    auto ptCtx = accless::aes256gcm::decrypt(teeSymKey, nonceCtx, ctCtxTrimmed);
 
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-dec-cpabe", NOW));
@@ -289,7 +288,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
     std::vector<uint8_t> ctCertChain(
         ctAesCertChain.begin() + AES256CM_NONCE_SIZE, ctAesCertChain.end());
     auto ptAesCertChain =
-        tless::aes256gcm::decrypt(teeSymKey, nonceCertChain, ctCertChain);
+        accless::aes256gcm::decrypt(teeSymKey, nonceCertChain, ctCertChain);
 
 #ifdef ACCLESS_UBENCH
     timePoints.push_back(std::make_pair("end-fetch-dec-cert-chain", NOW));
@@ -300,8 +299,8 @@ bool checkChain(const std::string &workflow, const std::string &function,
 #endif
 
     // Initialize CP-ABE context
-    auto &ctx = tless::abe::CpAbeContextWrapper::get(
-        tless::abe::ContextFetchMode::FromBytes, ptCtx);
+    auto &ctx = accless::abe::CpAbeContextWrapper::get(
+        accless::abe::ContextFetchMode::FromBytes, ptCtx);
 
     // Generate our set of attributes from the place we occupy in the dag
     std::vector<std::string> attributes = {teeIdentity, dagHexDigest};
