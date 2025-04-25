@@ -1,10 +1,9 @@
-# We inherit from the examples repo because it is likely that we want to use
-# off-the-shelve examples like tensorflow
-FROM ghcr.io/faasm/examples-build:0.6.0_0.4.0
+FROM ghcr.io/faasm/cpp-sysroot:0.6.0
 
 # Install rust
 RUN rm -rf /root/.rustup \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
+    && . "$HOME/.cargo/env" \
     && rustup target add wasm32-wasip1
 
 # Deps for Azure's cVM guest library: OpenSSL + libcurl + TPM2-TSS.
@@ -61,7 +60,9 @@ RUN rm -rf /code \
     && git checkout 59d4d2c2e2a004f132cf61fc9c15c3faa7d61336 \
     && git submodule update --init -f cpp \
     && pip3 install /code/faasm-examples/cpp \
-    && git clone https://github.com/faasm/tless /code/tless
+    && git clone https://github.com/faasm/tless /code/tless \
+    && cd /code/tless \
+    && git submodule update --init
 
 # Build specific libraries we need
 RUN cd /code/faasm-examples/cpp \
@@ -71,10 +72,8 @@ RUN cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh zlib \
     && cd /code/faasm-examples \
     && git submodule update --init ./examples/opencv \
-    && git submodule update --init ./examples/rabe \
     && ./bin/inv_wrapper.sh \
-        opencv opencv --native \
-        rabe rabe --native
+        opencv opencv --native
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
