@@ -1061,7 +1061,7 @@ impl Eval {
                         stroke_width: 2,
                     };
 
-                    let this_y = (y / y_ref) as f64;
+                    let this_y = y / y_ref;
                     let mut bar = Rectangle::new(
                         [
                             (x_orig + x as f64, 0 as f64),
