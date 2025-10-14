@@ -3,7 +3,7 @@ use base64::Engine;
 use log::info;
 use serde_json::Value;
 use shellexpand;
-use std::{fs, process::Command, process::ExitStatus};
+use std::{fs, collections::HashMap, process::Command, process::ExitStatus};
 
 const AZURE_RESOURCE_GROUP: &str = "faasm";
 const AZURE_USERNAME: &str = "tless";
@@ -12,8 +12,7 @@ const AZURE_LOCATION: &str = "eastus";
 const AZURE_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
 const AZURE_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
 
-const AZURE_SGX_VM_IMAGE: &str =
-    "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202301140";
+const AZURE_SGX_VM_IMAGE: &str = "Canonical:ubuntu-24_04-lts:server:latest";
 const AZURE_SNP_CC_VM_SIZE: &str =
     "/CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubu2204-snp-host-upm/Versions/latest";
 
@@ -482,7 +481,7 @@ impl Azure {
     pub fn provision_with_ansible(
         vm_deployment: &str,
         inventory_name: &str,
-        extra_vars: Option<&str>,
+        extra_vars: Option<HashMap<&str, &str>>,
     ) {
         let mut inventory_file = Env::ansible_root().join("inventory");
         fs::create_dir_all(&inventory_file).expect("invrs: failed to create inventory directory");
@@ -514,7 +513,10 @@ impl Azure {
                 .to_str()
                 .unwrap(),
             match extra_vars {
-                Some(val) => format!("-e {val}"),
+                Some(val) => {
+                    let json = serde_json::to_string(&val).unwrap();
+                    format!("-e {json}")
+                },
                 None => "".to_string(),
             }
         );

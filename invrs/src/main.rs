@@ -7,7 +7,7 @@ use crate::tasks::s3::S3;
 use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
 use clap::{Parser, Subcommand};
 use log::error;
-use std::{path::Path, process};
+use std::{collections::HashMap, path::Path, process};
 
 pub mod attestation_service;
 pub mod env;
@@ -604,10 +604,13 @@ async fn main() -> anyhow::Result<()> {
                     let client_ip = Azure::get_vm_ip("accless-cvm");
                     let server_ip = Azure::get_vm_ip("accless-as");
 
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("as_ip", server_ip.as_str())
+                    ]);
                     Azure::provision_with_ansible(
                         "accless",
                         "accless",
-                        Some(format!("as_ip={server_ip}").as_str()),
+                        Some(vars),
                     );
 
                     // Copy the necessary stuff from the server to the client
@@ -677,10 +680,13 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let service_ip = Azure::get_vm_ip("attestation-service");
 
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("as_ip", service_ip.as_str())
+                    ]);
                     Azure::provision_with_ansible(
                         "attestation-service",
                         "attestationservice",
-                        Some(format!("as_ip={service_ip}").as_str()),
+                        Some(vars),
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
@@ -739,10 +745,15 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
+                    let faasm_version = Env::get_faasm_version();
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("accless_version", version.as_str()),
+                        ("faasm_version", faasm_version.as_str()),
+                    ]);
                     Azure::provision_with_ansible(
                         "sgx-faasm",
                         "sgxfaasm",
-                        Some(format!("accless_version={version}").as_str()),
+                        Some(vars),
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
@@ -779,10 +790,11 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
+                    let vars: HashMap<&str, &str> = HashMap::from([("accless_version", version.as_str())]);
                     Azure::provision_with_ansible(
                         "snp-knative",
                         "snpknative",
-                        Some(format!("accless_version={version}").as_str()),
+                        Some(vars),
                     );
                 }
                 AzureSubCommand::ScpResults {} => {
@@ -828,10 +840,13 @@ async fn main() -> anyhow::Result<()> {
                     let client_ip = Azure::get_vm_ip("tless-trustee-client");
                     let server_ip = Azure::get_vm_ip("tless-trustee-server");
 
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("kbs_ip", server_ip.as_str())
+                    ]);
                     Azure::provision_with_ansible(
                         "tless-trustee",
                         "trustee",
-                        Some(format!("kbs_ip={server_ip}").as_str()),
+                        Some(vars),
                     );
 
                     // Copy the necessary stuff from the server to the client
