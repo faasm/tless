@@ -3,7 +3,7 @@ use base64::Engine;
 use log::info;
 use serde_json::Value;
 use shellexpand;
-use std::{fs, collections::HashMap, process::Command, process::ExitStatus};
+use std::{collections::HashMap, fs, process::Command, process::ExitStatus};
 
 const AZURE_RESOURCE_GROUP: &str = "faasm";
 const AZURE_USERNAME: &str = "tless";
@@ -516,7 +516,7 @@ impl Azure {
                 Some(val) => {
                     let json = serde_json::to_string(&val).unwrap();
                     format!("-e '{json}'")
-                },
+                }
                 None => "".to_string(),
             }
         );

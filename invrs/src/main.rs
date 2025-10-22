@@ -604,14 +604,8 @@ async fn main() -> anyhow::Result<()> {
                     let client_ip = Azure::get_vm_ip("accless-cvm");
                     let server_ip = Azure::get_vm_ip("accless-as");
 
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("as_ip", server_ip.as_str())
-                    ]);
-                    Azure::provision_with_ansible(
-                        "accless",
-                        "accless",
-                        Some(vars),
-                    );
+                    let vars: HashMap<&str, &str> = HashMap::from([("as_ip", server_ip.as_str())]);
+                    Azure::provision_with_ansible("accless", "accless", Some(vars));
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
@@ -680,9 +674,7 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let service_ip = Azure::get_vm_ip("attestation-service");
 
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("as_ip", service_ip.as_str())
-                    ]);
+                    let vars: HashMap<&str, &str> = HashMap::from([("as_ip", service_ip.as_str())]);
                     Azure::provision_with_ansible(
                         "attestation-service",
                         "attestationservice",
@@ -750,11 +742,7 @@ async fn main() -> anyhow::Result<()> {
                         ("accless_version", version.as_str()),
                         ("faasm_version", faasm_version.as_str()),
                     ]);
-                    Azure::provision_with_ansible(
-                        "sgx-faasm",
-                        "sgxfaasm",
-                        Some(vars),
-                    );
+                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars));
                 }
                 AzureSubCommand::ScpResults {} => {
                     // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
@@ -790,12 +778,9 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
-                    let vars: HashMap<&str, &str> = HashMap::from([("accless_version", version.as_str())]);
-                    Azure::provision_with_ansible(
-                        "snp-knative",
-                        "snpknative",
-                        Some(vars),
-                    );
+                    let vars: HashMap<&str, &str> =
+                        HashMap::from([("accless_version", version.as_str())]);
+                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars));
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
@@ -840,14 +825,8 @@ async fn main() -> anyhow::Result<()> {
                     let client_ip = Azure::get_vm_ip("tless-trustee-client");
                     let server_ip = Azure::get_vm_ip("tless-trustee-server");
 
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("kbs_ip", server_ip.as_str())
-                    ]);
-                    Azure::provision_with_ansible(
-                        "tless-trustee",
-                        "trustee",
-                        Some(vars),
-                    );
+                    let vars: HashMap<&str, &str> = HashMap::from([("kbs_ip", server_ip.as_str())]);
+                    Azure::provision_with_ansible("tless-trustee", "trustee", Some(vars));
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
