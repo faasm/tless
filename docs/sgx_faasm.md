@@ -1,7 +1,5 @@
 # SGX-Faasm
 
-TODO(docs): explain SGX-Faasm design
-
 SGX-Faasm is a port of the [Faasm](https://github.com/faasm/faasm) serverless
 runtime to execute serverless functions (inside WASM modules) inside SGX
 enclaves and, optionally, leverage Accless for access control.

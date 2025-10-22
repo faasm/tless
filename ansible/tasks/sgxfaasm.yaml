@@ -1,8 +1,7 @@
 ---
 
 - name: "Fetch all container images"
-  shell:
-    cmd: |
+  shell: |
       docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
       docker pull ghcr.io/faasm/upload:{{ faasm_version }}
       docker pull ghcr.io/faasm/worker:{{ faasm_version }}
@@ -25,9 +24,8 @@
     FAASM_WASM_VM: sgx
 
 # Build all the targets for the SGX and non-SGX baselines
-- name: "Deploy Faasm cluster"
-  shell:
-  cmd: |
+- name: "Build all Faasm targets"
+  shell: |
     source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Hardware"
     source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Disabled"
   args:
@@ -37,7 +35,7 @@
     FAASM_WASM_VM: sgx
 
 # Stop the cluster
-- name: "Deploy Faasm cluster"
+- name: "Delete Faasm cluster"
   shell: source ./bin/workon.sh && faasmctl delete
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"

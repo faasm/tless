@@ -515,11 +515,12 @@ impl Azure {
             match extra_vars {
                 Some(val) => {
                     let json = serde_json::to_string(&val).unwrap();
-                    format!("-e {json}")
+                    format!("-e '{json}'")
                 },
                 None => "".to_string(),
             }
         );
+        println!("FOO: {ansible_cmd}");
         Self::run_cmd_check_status(&ansible_cmd, "failed to run ansible playbook");
     }
 
