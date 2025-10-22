@@ -1,7 +1,7 @@
 use crate::attestation_service;
 use crate::tasks::s3::S3;
 use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Key};
+use aes_gcm::Aes256Gcm;
 use rabe;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
@@ -103,7 +103,7 @@ impl Dag {
 
         // Encrypt it with the shared symmetric key, so that any TEE can use
         // the CP-ABE encryption/decryption context
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&tee_sym_key));
+        let cipher = Aes256Gcm::new_from_slice(&tee_sym_key)?;
         let ctx_nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ctx_ct = cipher.encrypt(&ctx_nonce, serial_ctx).unwrap();
         let mut encrypted_ctx = ctx_nonce.to_vec();
