@@ -37,4 +37,8 @@ impl Env {
 
         Ok(version.trim().to_string())
     }
+
+    pub fn get_faasm_version() -> String {
+        std::env::var("FAASM_VERSION").unwrap()
+    }
 }

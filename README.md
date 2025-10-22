@@ -1,14 +1,26 @@
-# TLess Experiments
+<div align="center">
+  <h1><code>Accless</code></h1>
 
-This repository hosts the experiments for the TLess project, a system design
-for confidential serverless workflows.
+  <p>
+    <strong>Access Control for Confidential Serverless</strong>
+  </p>
+  <hr>
+</div>
 
-We implement TLess on top of two confidential FaaS runtimes representative of
-two points in the design space for confidential serverless:
-- [Faasm + SGX](https://github.com/faasm/faasm/tree/main/src/enclave): a port
-  of the [Faasm](https://github.com/faasm/faasm) to run WASM sandboxes inside SGX.
-- [CC-Knative](https:github.com/coco-serverless/coco-serverless): a port of the
-  [Knative](https://knative.dev) runtime to run Knative services as container functions inside confidential VMs (AMD SEV).
+Accless is a serverless access control system for confidential serverless
+applications. Accless takes a serverless application specified by a workflow
+graph, and derives an access control policy. It then uses
+[attribute-based encryption]() to encrypt the code and data for each function
+such that it can be decrypted if-and-only-if the function execution context,
+including its own roles and its upstream call-stack, pass the access control
+policy.
+
+Accless is integrated on top of two existing confidential serverless runtimes:
+- [Faasm](https://github.com/faasm/faasm) + SGX: we extend (and upstream) Faasm
+to support executing Faaslets inside SGX enclaves.
+- [Knative](https://knative.dev) + SNP: we use a port of Knative that can
+deploy services inside confidential VMs (as pods in k8s) based on [SC2](
+https://github.com/sc2-sys).
 
 To execute any code snippet in this repository, we will assume that you have
 activated your virtual environment:

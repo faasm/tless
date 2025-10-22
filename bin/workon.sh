@@ -32,7 +32,7 @@ alias kubectl=${COCO_SOURCE}/bin/kubectl
 
 # This is the path in the SGX-enabled machine we use for the experiments
 export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
-export FAASM_VERSION=0.30.0
+export FAASM_VERSION=0.33.0
 
 # ----------------------------
 # Git config

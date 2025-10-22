@@ -7,7 +7,7 @@
 
 - name: "Add Intel SGX repository"
   apt_repository:
-    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-archive-keyring.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu jammy main"
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-archive-keyring.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu noble main"
     filename: intel-sgx
     state: present
   become: yes
@@ -17,7 +17,7 @@
     update_cache: yes
   become: yes
 
-- name: "Install APT depdencencies"
+- name: "Install APT dependencies"
   become: yes
   apt:
     name:

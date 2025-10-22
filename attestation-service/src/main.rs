@@ -355,8 +355,16 @@ async fn verify_sgx_report(
 
     // WARNING: the SGX-SDK only implements AES 128, so we must use it here
     // instead of AES 256
-    let aes_key = aes_gcm::Key::<Aes128Gcm>::from_slice(&shared_secret[..16]);
-    let cipher = Aes128Gcm::new(aes_key);
+    let cipher = match Aes128Gcm::new_from_slice(&shared_secret[..16]) {
+        Ok(cipher) => cipher,
+        Err(e) => {
+            eprintln!("error initializing AES 128 GCM cipher: {:?}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "JWT encoding failed" })),
+            );
+        }
+    };
 
     let claims = JwtClaims {
         sub: "attested-client".to_string(),
@@ -385,9 +393,9 @@ async fn verify_sgx_report(
     // Encrypt the JWT
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
 
-    let ciphertext = match cipher.encrypt(nonce, jwt.as_bytes()) {
+    let ciphertext = match cipher.encrypt(&nonce, jwt.as_bytes()) {
         Ok(ct) => ct,
         Err(_) => {
             return (

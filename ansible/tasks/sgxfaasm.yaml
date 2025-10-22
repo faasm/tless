@@ -1,5 +1,16 @@
 ---
 
+- name: "Fetch all container images"
+  shell: |
+      docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
+      docker pull ghcr.io/faasm/upload:{{ faasm_version }}
+      docker pull ghcr.io/faasm/worker:{{ faasm_version }}
+      docker pull ghcr.io/faasm/worker-sgx:{{ faasm_version }}
+      docker pull ghcr.io/faasm/cli:{{ faasm_version }}
+      docker pull ghcr.io/faasm/cli-sgx:{{ faasm_version }}
+  args:
+    executable: /bin/bash
+
 - name: "Deploy Faasm cluster"
   shell: rm -rf ./venv-bm && source ./bin/workon.sh && faasmctl deploy.compose --mount-source . --workers=4
   args:
@@ -12,18 +23,11 @@
     # FAASM_ATTESTATION_SERVICE_URL: "{{ as_ip }}"
     FAASM_WASM_VM: sgx
 
-# Build all the targets for the SGX baselines (SGX-Faasm and Accless-Faasm)
-- name: "Deploy Faasm cluster"
-  shell: source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Hardware"
-  args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
-    executable: /bin/bash
-  environment:
-    FAASM_WASM_VM: sgx
-
-# Build all the targets for the non-SGX baseline (Faasm)
-- name: "Deploy Faasm cluster"
-  shell: source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Disabled"
+# Build all the targets for the SGX and non-SGX baselines
+- name: "Build all Faasm targets"
+  shell: |
+    source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Hardware"
+    source ./bin/workon.sh && faasmctl cli.faasm --cmd "./bin/inv_wrapper.sh dev.tools --build Release --sgx Disabled"
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
     executable: /bin/bash
@@ -31,17 +35,12 @@
     FAASM_WASM_VM: sgx
 
 # Stop the cluster
-- name: "Deploy Faasm cluster"
+- name: "Delete Faasm cluster"
   shell: source ./bin/workon.sh && faasmctl delete
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/faasm"
     executable: /bin/bash
   environment:
     FAASM_WASM_VM: sgx
-
-- name: "Fetch the cross-compilation toolchain image"
-  shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version}}
-  args:
-    executable: /bin/bash
 
 # TODO: build workflows here, and patch with the right certificate for the AS
