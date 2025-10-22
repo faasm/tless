@@ -4,6 +4,10 @@
   <p>
     <strong>Access Control for Confidential Serverless</strong>
   </p>
+
+  <p>
+    <a href="https://github.com/faasm/tless/actions/workflows/checks.yml"><img src="https://github.com/faasm/tless/actions/workflows/checks.yml/badge.svg" alt="Formatting Checks" /></a>
+  </p>
   <hr>
 </div>
 
