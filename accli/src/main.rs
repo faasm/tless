@@ -79,7 +79,14 @@ enum DagCommand {
 #[derive(Debug, Subcommand)]
 enum DevCommand {
     /// Bump the code version
-    BumpVersion {},
+    BumpVersion {
+        #[arg(long)]
+        major: bool,
+        #[arg(long)]
+        minor: bool,
+        #[arg(long)]
+        patch: bool,
+    },
     /// Run code formatting: clang-format, cargo fmt, and cargo clippy
     FormatCode {
         /// Dry-run and report errors if not formatted well
@@ -316,7 +323,14 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Dev { dev_command } => match dev_command {
-            DevCommand::BumpVersion {} => {}
+            DevCommand::BumpVersion { major, minor, patch } => {
+                let num_true = [*major, *minor, *patch].iter().filter(|&&x| x).count();
+                if num_true != 1 {
+                    log::error!("exactly one of --major, --minor, or --patch must be specified");
+                    process::exit(1);
+                }
+                Dev::bump_code_version(*major, *minor, *patch)?;
+            }
             DevCommand::FormatCode { check } => {
                 Dev::format_code(*check);
             }
