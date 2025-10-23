@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::tasks::color::{get_color_from_label, FONT_SIZE, STROKE_WIDTH};
+use crate::tasks::color::{FONT_SIZE, STROKE_WIDTH, get_color_from_label};
 use crate::tasks::docker::{Docker, DockerContainer};
 use crate::tasks::s3::S3;
 use crate::tasks::workflows::{AvailableWorkflow, Workflows};
@@ -274,7 +274,9 @@ impl Eval {
         loop {
             thread::sleep(time::Duration::from_secs(2));
 
-            let output = Self::run_kubectl_cmd(&format!("-n {namespace} get pods -l {label} -o jsonpath='{{..status.conditions[?(@.type==\"Ready\")].status}}'"));
+            let output = Self::run_kubectl_cmd(&format!(
+                "-n {namespace} get pods -l {label} -o jsonpath='{{..status.conditions[?(@.type==\"Ready\")].status}}'"
+            ));
             let values: Vec<&str> = output.split_whitespace().collect();
 
             debug!(
@@ -465,7 +467,9 @@ impl Eval {
 
     async fn wait_for_scale_to_zero() {
         loop {
-            let output = Self::run_kubectl_cmd("-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}");
+            let output = Self::run_kubectl_cmd(
+                "-n accless get pods -o jsonpath={{..status.conditions[?(@.type==\"Ready\")].status}}",
+            );
             debug!("invrs: waiting for a scale-down: out: {output}");
             let values: Vec<&str> = output.split_whitespace().collect();
 
@@ -633,7 +637,9 @@ impl Eval {
         let baseline = args.baseline[args_offset].clone();
 
         // Get the MinIO URL
-        let minio_url = Self::run_kubectl_cmd("-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}");
+        let minio_url = Self::run_kubectl_cmd(
+            "-n accless get services -o jsonpath={.items[?(@.metadata.name==\"minio\")].spec.clusterIP}",
+        );
         unsafe {
             env::set_var("MINIO_URL", minio_url);
         }

@@ -1,14 +1,11 @@
-use base64::{
-    Engine,
-    engine::general_purpose::URL_SAFE_NO_PAD
-};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use rsa::RsaPublicKey;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
-use rsa::RsaPublicKey;
 use serde_json::Value;
 use std::{
-    ffi::{c_char, CStr, CString},
+    ffi::{CStr, CString, c_char},
     ptr,
 };
 
@@ -59,25 +56,21 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     let payload: Value = serde_json::from_slice(&payload_bytes).unwrap();
 
     // Check in header
-    if let Some(obj) = header.as_object() {
-        if obj.contains_key(property) {
-            let value = obj
-                .get(property)
-                .and_then(|value| value.as_str().map(|s| s.to_string()))
-                .unwrap();
-            return value == exp_value;
-        }
+    if let Some(obj) = header.as_object() && obj.contains_key(property) {
+        let value = obj
+            .get(property)
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .unwrap();
+        return value == exp_value;
     }
 
     // Check in body
-    if let Some(obj) = payload.as_object() {
-        if obj.contains_key(property) {
-            let value = obj
-                .get(property)
-                .and_then(|value| value.as_str().map(|s| s.to_string()))
-                .unwrap();
-            return value == exp_value;
-        }
+    if let Some(obj) = payload.as_object() && obj.contains_key(property) {
+        let value = obj
+            .get(property)
+            .and_then(|value| value.as_str().map(|s| s.to_string()))
+            .unwrap();
+        return value == exp_value;
     }
 
     false

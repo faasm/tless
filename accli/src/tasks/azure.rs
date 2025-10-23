@@ -13,8 +13,7 @@ const AZURE_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
 const AZURE_SSH_PUB_KEY: &str = "~/.ssh/id_rsa.pub";
 
 const AZURE_SGX_VM_IMAGE: &str = "Canonical:ubuntu-24_04-lts:server:latest";
-const AZURE_SNP_CC_VM_SIZE: &str =
-    "/CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubu2204-snp-host-upm/Versions/latest";
+const AZURE_SNP_CC_VM_SIZE: &str = "/CommunityGalleries/cocopreview-91c44057-c3ab-4652-bf00-9242d5a90170/Images/ubu2204-snp-host-upm/Versions/latest";
 
 //  Specifies order in which to delete resource types
 const RESOURCE_TYPE_PRECEDENCE: [&str; 4] = [

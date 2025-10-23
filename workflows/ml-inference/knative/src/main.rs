@@ -8,7 +8,7 @@ use minio::s3::creds::StaticProvider;
 use minio::s3::error::Error;
 use minio::s3::http::BaseUrl;
 use minio::s3::types::ToStream;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 use std::{env, fs, thread, time};
 use tokio::task::JoinHandle;

@@ -79,8 +79,7 @@ enum DagCommand {
 #[derive(Debug, Subcommand)]
 enum DevCommand {
     /// Bump the code version
-    BumpVersion {
-    },
+    BumpVersion {},
     /// Run code formatting: clang-format, cargo fmt, and cargo clippy
     FormatCode {
         /// Dry-run and report errors if not formatted well
@@ -317,10 +316,10 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Dev { dev_command } => match dev_command {
-            DevCommand::BumpVersion { } => {},
+            DevCommand::BumpVersion {} => {}
             DevCommand::FormatCode { check } => {
                 Dev::format_code(*check);
-            },
+            }
         },
         Command::Docker { docker_command } => match docker_command {
             DockerCommand::Build { ctr, push, nocache } => {

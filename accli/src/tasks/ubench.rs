@@ -1,5 +1,5 @@
 use crate::env::Env;
-use crate::tasks::color::{get_color_from_label, FONT_SIZE, STROKE_WIDTH};
+use crate::tasks::color::{FONT_SIZE, STROKE_WIDTH, get_color_from_label};
 use anyhow::Result;
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;

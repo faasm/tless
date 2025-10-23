@@ -1,7 +1,7 @@
 use crate::Env;
-use anyhow::{bail, Context, Result};
-use base64::{engine::general_purpose, Engine as _};
-use reqwest::{tls, Client};
+use anyhow::{Context, Result, bail};
+use base64::{Engine as _, engine::general_purpose};
+use reqwest::{Client, tls};
 use std::{env, fs};
 
 fn get_as_url() -> Result<String> {

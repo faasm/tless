@@ -3,6 +3,7 @@ use anyhow::Result;
 use log::{error, info};
 use regex::Regex;
 use std::{
+    fmt,
     fs::{self, File},
     io::{self, Write},
     path::Path,
@@ -15,6 +16,12 @@ struct Version {
     major: u32,
     minor: u32,
     patch: u32,
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
 }
 
 impl Version {
@@ -30,7 +37,11 @@ impl Version {
         let minor = parts[1].parse()?;
         let patch = parts[2].parse()?;
 
-        Ok(Version { major, minor, patch })
+        Ok(Version {
+            major,
+            minor,
+            patch,
+        })
     }
 
     /// Increments the version based on the specified bump type.
@@ -48,12 +59,8 @@ impl Version {
         // If none are true, the version remains the same.
     }
 
-    /// Converts the Version struct back into a "X.Y.Z" string.
-    fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
-    }
-}
 
+}
 
 #[derive(Debug)]
 pub struct Dev {}
@@ -77,7 +84,9 @@ impl Dev {
         let re = Regex::new(r#"(version\s*=\s*)"(\d+\.\d+\.\d+)""#)?;
 
         let replacement = format!("$1\"{}\"", new_version);
-        let new_content = re.replace(&cargo_toml_content, replacement.as_str()).to_string();
+        let new_content = re
+            .replace(&cargo_toml_content, replacement.as_str())
+            .to_string();
 
         // Overwrite Cargo.toml with the new content
         fs::write(path, new_content)?;
@@ -179,68 +188,43 @@ impl Dev {
         }
 
         // Now format rust code
-        // FIXME: this should be derived from workspace
-        let dirs = [
-            "accless/libs/jwt",
-            // We skip formatting rabe as the upstream fork is not
-            // formatted
-            // "accless/libs/rabe",
-            "attestation-service",
-            "invrs",
-            "workflows/finra/knative",
-            "workflows/word-count/knative",
-            "workflows/ml-inference/knative",
-            "workflows/ml-training/knative",
-        ];
-        for dir in dirs {
-            let cwd = Env::proj_root().join(dir);
+        // cargo fmt
+        let mut fmt_cmd = process::Command::new("cargo");
+        fmt_cmd.arg("fmt");
+        if check {
+            fmt_cmd.arg("--").arg("--check");
+        }
+        fmt_cmd.current_dir(Env::proj_root());
 
-            // cargo fmt
-            let mut fmt_cmd = process::Command::new("cargo");
-            fmt_cmd.arg("fmt");
-            if check {
-                fmt_cmd.arg("--").arg("--check");
+        match fmt_cmd.status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => {
+                error!("cargo fmt failed with status {}", status);
+                process::exit(1);
             }
-            fmt_cmd.current_dir(&cwd);
-
-            match fmt_cmd.status() {
-                Ok(status) if status.success() => {}
-                Ok(status) => {
-                    error!(
-                        "cargo fmt failed on {} with status {}",
-                        cwd.clone().display(),
-                        status
-                    );
-                    process::exit(1);
-                }
-                Err(err) => {
-                    error!("Failed to run cargo fmt on {}: {}", cwd.display(), err);
-                    process::exit(1);
-                }
+            Err(err) => {
+                error!("failed to run cargo fmt (err={err:?})");
+                process::exit(1);
             }
+        }
 
-            // cargo clippy
-            let mut clippy_cmd = process::Command::new("cargo");
-            clippy_cmd.arg("clippy");
-            if check {
-                clippy_cmd.arg("--").arg("-D").arg("warnings");
+        // cargo clippy
+        let mut clippy_cmd = process::Command::new("cargo");
+        clippy_cmd.arg("clippy");
+        if check {
+            clippy_cmd.arg("--").arg("-D").arg("warnings");
+        }
+        clippy_cmd.current_dir(Env::proj_root());
+
+        match clippy_cmd.status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => {
+                error!("cargo clippy failed with status {}", status);
+                process::exit(1);
             }
-            clippy_cmd.current_dir(&cwd);
-
-            match clippy_cmd.status() {
-                Ok(status) if status.success() => {}
-                Ok(status) => {
-                    error!(
-                        "cargo clippy failed on {} with status {}",
-                        cwd.clone().display(),
-                        status
-                    );
-                    process::exit(1);
-                }
-                Err(err) => {
-                    error!("Failed to run cargo clippy on {}: {}", cwd.display(), err);
-                    process::exit(1);
-                }
+            Err(err) => {
+                error!("failed to run cargo clippy (error={err:?})");
+                process::exit(1);
             }
         }
     }

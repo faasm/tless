@@ -2,7 +2,7 @@ use cloudevents::binding::reqwest::RequestBuilderExt;
 use cloudevents::binding::warp::{filter, reply};
 use cloudevents::{AttributesReader, AttributesWriter, Event};
 use once_cell::sync::Lazy;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::{env, fs, io::BufRead, io::BufReader, thread, time};
