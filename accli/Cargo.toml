@@ -1,5 +1,5 @@
 [package]
-name = "invrs"
+name = "accli"
 version.workspace = true
 license-file.workspace = true
 edition.workspace = true

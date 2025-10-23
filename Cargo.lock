@@ -3,6 +3,40 @@
 version = 4
 
 [[package]]
+name = "accli"
+version = "0.7.0"
+dependencies = [
+ "aes-gcm",
+ "aes-gcm-siv",
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "clap",
+ "csv",
+ "env_logger 0.11.8",
+ "futures",
+ "futures-util",
+ "hex",
+ "indicatif",
+ "log",
+ "minio",
+ "plotters",
+ "rabe",
+ "rand 0.9.2",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "shell-words",
+ "shellexpand",
+ "subtle",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1745,40 +1779,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "invrs"
-version = "0.7.0"
-dependencies = [
- "aes-gcm",
- "aes-gcm-siv",
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "clap",
- "csv",
- "env_logger 0.11.8",
- "futures",
- "futures-util",
- "hex",
- "indicatif",
- "log",
- "minio",
- "plotters",
- "rabe",
- "rand 0.9.2",
- "reqwest 0.12.24",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "shell-words",
- "shellexpand",
- "subtle",
- "tokio",
- "walkdir",
 ]
 
 [[package]]

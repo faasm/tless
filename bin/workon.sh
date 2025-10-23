@@ -2,7 +2,6 @@
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-${(%):-%x}}" )" >/dev/null 2>&1 && pwd )"
 PROJ_ROOT="${THIS_DIR}/.."
-RUST_ROOT="${PROJ_ROOT}/invrs"
 
 pushd ${PROJ_ROOT}>>/dev/null
 
@@ -15,7 +14,7 @@ export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
-alias invrs="cargo run --release -p invrs -q --"
+alias accli="cargo run --release -p accli -q --"
 
 # ----------------------------
 # Knative vars (TODO FIXME consider changing)

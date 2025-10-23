@@ -22,8 +22,8 @@ deploy Faasm using docker-compose inside. To deploy and provision the server
 node, run:
 
 ```bash
-invrs azure sgx-faasm create
-invrs azure sgx-faasm provision
+accli azure sgx-faasm create
+accli azure sgx-faasm provision
 ```
 
 #### Knative Baselines
