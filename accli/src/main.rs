@@ -1,13 +1,17 @@
-use crate::env::Env;
-use crate::tasks::azure::Azure;
-use crate::tasks::dag::Dag;
-use crate::tasks::docker::{Docker, DockerContainer};
-use crate::tasks::eval::{Eval, EvalExperiment, EvalRunArgs};
-use crate::tasks::s3::S3;
-use crate::tasks::ubench::{MicroBenchmarks, Ubench, UbenchRunArgs};
+use crate::{
+    env::Env,
+    tasks::{
+        azure::Azure,
+        dag::Dag,
+        dev::Dev,
+        docker::{Docker, DockerContainer},
+        eval::{Eval, EvalExperiment, EvalRunArgs},
+        s3::S3,
+        ubench::{MicroBenchmarks, Ubench, UbenchRunArgs},
+    },
+};
 use clap::{Parser, Subcommand};
-use log::error;
-use std::{collections::HashMap, path::Path, process};
+use std::{collections::HashMap, process};
 
 pub mod attestation_service;
 pub mod env;
@@ -30,6 +34,11 @@ enum Command {
         #[command(subcommand)]
         dag_command: DagCommand,
     },
+    /// Development-related tasks
+    Dev {
+        #[command(subcommand)]
+        dev_command: DevCommand,
+    },
     /// Build and push different docker images
     Docker {
         #[command(subcommand)]
@@ -39,12 +48,6 @@ enum Command {
     Eval {
         #[command(subcommand)]
         eval_command: EvalCommand,
-    },
-    /// Run code formatting: clang-format, cargo fmt, and cargo clippy
-    FormatCode {
-        /// Dry-run and report errors if not formatted well
-        #[arg(long)]
-        check: bool,
     },
     /// Run microbenchmark
     Ubench {
@@ -70,6 +73,19 @@ enum DagCommand {
         name: String,
         /// Path to the YAML file describing the workflow
         yaml_path: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum DevCommand {
+    /// Bump the code version
+    BumpVersion {
+    },
+    /// Run code formatting: clang-format, cargo fmt, and cargo clippy
+    FormatCode {
+        /// Dry-run and report errors if not formatted well
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -300,6 +316,12 @@ async fn main() -> anyhow::Result<()> {
                 Dag::upload(name, yaml_path).await?;
             }
         },
+        Command::Dev { dev_command } => match dev_command {
+            DevCommand::BumpVersion { } => {},
+            DevCommand::FormatCode { check } => {
+                Dev::format_code(*check);
+            },
+        },
         Command::Docker { docker_command } => match docker_command {
             DockerCommand::Build { ctr, push, nocache } => {
                 for c in ctr {
@@ -390,139 +412,6 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         },
-        Command::FormatCode { check } => {
-            // First, format all CPP "projects"
-            if !process::Command::new("clang-format")
-                .arg("--version")
-                .output()
-                .map(|output| output.status.success())
-                .unwrap_or(false)
-            {
-                error!("clang-format must be installed and in your path");
-                process::exit(1);
-            }
-
-            let clang_format_cfg = Env::proj_root().join("config").join(".clang-format");
-
-            let extensions = ["cpp", "c", "h", "hpp"];
-
-            fn is_source_file(path: &Path, exts: &[&str]) -> bool {
-                path.is_file()
-                    && path
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .map(|ext| exts.contains(&ext))
-                        .unwrap_or(false)
-            }
-
-            fn is_excluded(entry: &walkdir::DirEntry) -> bool {
-                let excluded_dirs = ["build-wasm", "build-native", "target", "venv"];
-                entry.file_type().is_dir()
-                    && entry
-                        .file_name()
-                        .to_str()
-                        .map(|name| excluded_dirs.contains(&name))
-                        .unwrap_or(false)
-            }
-
-            for entry in walkdir::WalkDir::new(".")
-                .into_iter()
-                .filter_entry(|e| !is_excluded(e))
-                .filter_map(Result::ok)
-            {
-                let path = entry.path();
-                if is_source_file(path, &extensions) {
-                    let mut cmd = process::Command::new("clang-format");
-                    cmd.arg("-i").arg(path);
-                    cmd.arg(format!("--style=file:{}", clang_format_cfg.display()));
-
-                    if *check {
-                        cmd.arg("--dry-run").arg("--Werror").arg(path);
-                    }
-
-                    match cmd.status() {
-                        Ok(status) if status.success() => {}
-                        Ok(status) => {
-                            error!(
-                                "clang-format failed on {} with status {}",
-                                path.display(),
-                                status
-                            );
-                            process::exit(1);
-                        }
-                        Err(err) => {
-                            error!("Failed to run clang-format on {}: {}", path.display(), err);
-                            process::exit(1);
-                        }
-                    }
-                }
-            }
-
-            // Now format rust code
-            let dirs = [
-                "accless/libs/jwt",
-                // We skip formatting rabe as the upstream fork is not
-                // formatted
-                // "accless/libs/rabe",
-                "attestation-service",
-                "invrs",
-                "workflows/finra/knative",
-                "workflows/word-count/knative",
-                "workflows/ml-inference/knative",
-                "workflows/ml-training/knative",
-            ];
-            for dir in dirs {
-                let cwd = Env::proj_root().join(dir);
-
-                // cargo fmt
-                let mut fmt_cmd = process::Command::new("cargo");
-                fmt_cmd.arg("fmt");
-                if *check {
-                    fmt_cmd.arg("--").arg("--check");
-                }
-                fmt_cmd.current_dir(&cwd);
-
-                match fmt_cmd.status() {
-                    Ok(status) if status.success() => {}
-                    Ok(status) => {
-                        error!(
-                            "cargo fmt failed on {} with status {}",
-                            cwd.clone().display(),
-                            status
-                        );
-                        process::exit(1);
-                    }
-                    Err(err) => {
-                        error!("Failed to run cargo fmt on {}: {}", cwd.display(), err);
-                        process::exit(1);
-                    }
-                }
-
-                // cargo clippy
-                let mut clippy_cmd = process::Command::new("cargo");
-                clippy_cmd.arg("clippy");
-                if *check {
-                    clippy_cmd.arg("--").arg("-D").arg("warnings");
-                }
-                clippy_cmd.current_dir(&cwd);
-
-                match clippy_cmd.status() {
-                    Ok(status) if status.success() => {}
-                    Ok(status) => {
-                        error!(
-                            "cargo clippy failed on {} with status {}",
-                            cwd.clone().display(),
-                            status
-                        );
-                        process::exit(1);
-                    }
-                    Err(err) => {
-                        error!("Failed to run cargo clippy on {}: {}", cwd.display(), err);
-                        process::exit(1);
-                    }
-                }
-            }
-        }
         Command::Ubench { ubench_command } => match ubench_command {
             UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {

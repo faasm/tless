@@ -1,4 +1,7 @@
-use base64::{decode_config, URL_SAFE_NO_PAD};
+use base64::{
+    Engine,
+    engine::general_purpose::URL_SAFE_NO_PAD
+};
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
@@ -10,7 +13,7 @@ use std::{
 };
 
 fn base64_url_decode(input: &str) -> Vec<u8> {
-    decode_config(input, URL_SAFE_NO_PAD).unwrap()
+    URL_SAFE_NO_PAD.decode(input).unwrap()
 }
 
 fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
@@ -81,7 +84,7 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
 }
 
 #[allow(clippy::missing_safety_doc)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_property(
     jwt_cstr: *const c_char,
     prop_cstr: *const c_char,
@@ -128,7 +131,7 @@ pub unsafe extern "C" fn get_property(
 
 /// Free a C string returned from `get_property`
 #[allow(clippy::missing_safety_doc)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_string(s: *mut c_char) {
     if !s.is_null() {
         unsafe {
@@ -138,7 +141,7 @@ pub unsafe extern "C" fn free_string(s: *mut c_char) {
 }
 
 #[allow(clippy::missing_safety_doc)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn verify_jwt(jwt_cstr: *const c_char) -> bool {
     let x5c_certs = [
         // This is the certificate of the attestation service, which can be
@@ -154,7 +157,7 @@ MIIFCTCCAvGgAwIBAgIUIfCvnY9eL7gCAMnilTlwJTjV1ekwDQYJKoZIhvcNAQELBQAwFDESMBAGA1UE
 }
 
 #[allow(clippy::missing_safety_doc)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn check_property(
     jwt_cstr: *const c_char,
     property_cstr: *const c_char,

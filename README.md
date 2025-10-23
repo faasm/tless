@@ -43,17 +43,8 @@ accli --help
 accli azure --help
 ```
 
-## Pre-requisites
-
-Install `rust` and `rust-analyzer`. Then `rustup component add rust-analyzer`.
-
 ## Further reading
 
 * [Baselines](./docs/baselines.md) - baselines where we integrate Accless.
 * [Experiments](./experiments/README.md) - reproduce the results in the Accless paper.
 * [Workflows](./docs/workflows.md) - different workflow applications we run.
-
-## Experiments
-
-We run the following experiments:
-- [End-to-end latency](./eval/e2e-latency/README.md): measures the end-to-end execution latency for each workflow.
