@@ -68,7 +68,7 @@ def compile_driver(debug=False):
     """
     for workflow in list(WORKFLOWS.keys()):
         build_dir = join(WORKFLOWS_ROOT, workflow, "knative")
-        cargo_cmd = "cargo build -p {} --{}".format(workflow, "debug" if debug else "release")
+        cargo_cmd = "cargo build -p accless-{}-cloudevent-handler --{}".format(workflow, "debug" if debug else "release")
         run(cargo_cmd, shell=True, check=True, cwd=PROJ_ROOT)
 
 
