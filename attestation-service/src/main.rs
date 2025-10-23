@@ -131,18 +131,20 @@ fn sec1_pubkey_to_sgx(sec1_pubkey: &[u8]) -> anyhow::Result<Vec<u8>> {
 // SNP stuff
 // ----------------------------------------------------------------------------
 
+/*
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct VcekResponse {
     vcek_cert: String,
     certificate_chain: String,
 }
+*/
 
 /// This method can only be called from an Azure cVM
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     return Ok(vec![]);
 
-    #[allow(unreachable_code)]
+    /*
     match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
         .set("Metadata", "true")
         .call()
@@ -162,6 +164,7 @@ pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
             Ok(vec![])
         }
     }
+    */
 }
 
 fn generate_jwt_encoding_key() -> Result<EncodingKey, anyhow::Error> {

@@ -25,7 +25,5 @@ jobs:
         uses: actions/checkout@v4
       - name: "Install clang-format"
         run: sudo apt install -y clang-format
-      - name: "Cargo version"
-        run: cargo version
       - name: "Run formatting checks"
         run: ./bin/invrs_wrapper.sh format-code --check
