@@ -20,6 +20,13 @@ using namespace attest;
 #define SNP_GET_REPORT                                                         \
     _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_request_ioctl)
 
+/* Accless Attestation Library
+ *
+ * This library is only used for SNP attestation, and it supports fetching
+ * the SNP attestation report from either /dev/sev-guest, in a bare-metal
+ * deployment, or from a TPM when deployed in an Azure cVM. For the latter
+ * it relies on some Azure-provided libraries.
+ */
 namespace accless::attestation {
 void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
                  const char *function, const int line, const char *fmt, ...) {

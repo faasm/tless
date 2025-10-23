@@ -27,41 +27,31 @@ deploy services inside confidential VMs (as pods in k8s) based on [SC2](
 https://github.com/sc2-sys).
 
 To execute any code snippet in this repository, we will assume that you have
-activated your virtual environment:
+installed rust, and activated your virtual environment:
 
 ```bash
 source ./bin/workon.sh
+```
+
+only then you will have access to `accli`, Accless CLI tool:
+
+```bash
+# Print help message
+accli --help
+
+# All sub-commands accept the `help` command
+accli azure --help
 ```
 
 ## Pre-requisites
 
 Install `rust` and `rust-analyzer`. Then `rustup component add rust-analyzer`.
 
-## Baselines
+## Further reading
 
-TLess currently supports being deployed on top of two serverless runtimes,
-[Faasm](https://github.com/faasm/faasm) and [Knative](https://knative.dev).
-
-For instructions to deploy each one of them, see:
-- [Deploying on top of Faasm](./docs/tless_on_faasm.md)
-- [Deploying on top of Knative](./docs/tless_on_knative.md)
-
-## Workflows
-
-This repository implements four different workflows:
-- [FINRA](./workflows/finra/README.md) - Based on the AWS FINRA [case study](https://aws.amazon.com/solutions/case-studies/finra-data-validation/).
-- [ML Training](./workflows/ml-training/README.md) - Ported from [Orion](https://www.usenix.org/conference/osdi22/presentation/mahgoub) and [RMMap](https://dl.acm.org/doi/abs/10.1145/3627703.3629568).
-- [ML Inference](./workflows/ml-inference/README.md) - Ported from [RMMap](https://dl.acm.org/doi/abs/10.1145/3627703.3629568).
-- [Word Count](./workflows/word-count/README.md) - Ported from the MapReduce [example](https://github.com/ddps-lab/serverless-faas-workbench/tree/master/aws/cpu-memory/mapreduce) in the FunctionBench paper.
-
-### Progress Summary
-
-| Workflow\Baseline | Faasm | SGX-Faasm | TLess-Faasm | Knative | CC-Knative | TLess-Knative |
-|---|---|---|---|---|---|---|
-| FINRA | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| ML Training | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| ML Inference | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| Word Count | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+* [Baselines](./docs/baselines.md) - baselines where we integrate Accless.
+* [Experiments](./experiments/README.md) - reproduce the results in the Accless paper.
+* [Workflows](./docs/workflows.md) - different workflow applications we run.
 
 ## Experiments
 

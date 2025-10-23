@@ -15,7 +15,7 @@ export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/bin/env.sh
 
-alias invrs="cargo run --release --manifest-path ${RUST_ROOT}/Cargo.toml -q --"
+alias invrs="cargo run --release -p invrs -q --"
 
 # ----------------------------
 # Knative vars (TODO FIXME consider changing)

@@ -16,12 +16,14 @@ impl Env {
 
     pub fn ansible_root() -> PathBuf {
         let mut path = Self::proj_root();
+        path.push("config");
         path.push("ansible");
         path
     }
 
     pub fn docker_root() -> PathBuf {
         let mut path = Self::proj_root();
+        path.push("config");
         path.push("docker");
         path
     }

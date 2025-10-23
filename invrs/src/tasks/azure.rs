@@ -84,7 +84,7 @@ impl Azure {
     /// domain
     #[allow(dead_code)]
     fn activate_managed_hsm(mhsm_name: &str) {
-        let key_dir = Env::proj_root().join("azure").join("keys");
+        let key_dir = Env::proj_root().join("config").join("azure").join("keys");
         fs::create_dir_all(&key_dir).expect("invrs: failed to create key directory");
 
         Self::create_self_signed_cert(
@@ -303,12 +303,15 @@ impl Azure {
         info!("creating snp guest: {vm_name} (sku: {vm_sku})");
 
         let parameter_file = Env::proj_root()
+            .join("config")
             .join("azure")
             .join("snp_guest_parameters.json");
         let template_file = Env::proj_root()
+            .join("config")
             .join("azure")
             .join("snp_guest_template.json");
         let cloud_init_file = Env::proj_root()
+            .join("config")
             .join("azure")
             .join("snp_guest_cloud-init.txt");
 
@@ -428,6 +431,7 @@ impl Azure {
             "az keyvault key create --exportable true --vault-name {mhsm_name} \
             --kty RSA-HSM --name {key_name} --policy {}",
             Env::proj_root()
+                .join("config")
                 .join("azure")
                 .join("mhsm_skr_policy.json")
                 .display()
