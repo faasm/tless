@@ -323,7 +323,11 @@ async fn main() -> anyhow::Result<()> {
             }
         },
         Command::Dev { dev_command } => match dev_command {
-            DevCommand::BumpVersion { major, minor, patch } => {
+            DevCommand::BumpVersion {
+                major,
+                minor,
+                patch,
+            } => {
                 let num_true = [*major, *minor, *patch].iter().filter(|&&x| x).count();
                 if num_true != 1 {
                     log::error!("exactly one of --major, --minor, or --patch must be specified");

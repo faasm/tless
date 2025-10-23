@@ -30,7 +30,8 @@ fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
             .1;
         let certpem = certpem.parse_x509().unwrap();
         let public_key = certpem.public_key();
-        let rsa_pub_key = RsaPublicKey::from_pkcs1_der(&public_key.subject_public_key.data).unwrap();
+        let rsa_pub_key =
+            RsaPublicKey::from_pkcs1_der(&public_key.subject_public_key.data).unwrap();
         let is_valid = rsa::pkcs1v15::VerifyingKey::<Sha256>::new(rsa_pub_key).verify(
             header_and_payload.as_bytes(),
             &signature.try_into().unwrap(),
@@ -56,7 +57,9 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     let payload: Value = serde_json::from_slice(&payload_bytes).unwrap();
 
     // Check in header
-    if let Some(obj) = header.as_object() && obj.contains_key(property) {
+    if let Some(obj) = header.as_object()
+        && obj.contains_key(property)
+    {
         let value = obj
             .get(property)
             .and_then(|value| value.as_str().map(|s| s.to_string()))
@@ -65,7 +68,9 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     }
 
     // Check in body
-    if let Some(obj) = payload.as_object() && obj.contains_key(property) {
+    if let Some(obj) = payload.as_object()
+        && obj.contains_key(property)
+    {
         let value = obj
             .get(property)
             .and_then(|value| value.as_str().map(|s| s.to_string()))

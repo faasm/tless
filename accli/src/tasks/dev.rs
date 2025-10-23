@@ -58,8 +58,6 @@ impl Version {
         }
         // If none are true, the version remains the same.
     }
-
-
 }
 
 #[derive(Debug)]

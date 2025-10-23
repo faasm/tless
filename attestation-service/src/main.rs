@@ -142,7 +142,7 @@ struct VcekResponse {
 
 /// This method can only be called from an Azure cVM
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    return Ok(vec![]);
+    Ok(vec![])
 
     /*
     match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
