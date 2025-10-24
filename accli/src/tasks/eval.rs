@@ -1,8 +1,12 @@
-use crate::env::Env;
-use crate::tasks::color::{FONT_SIZE, STROKE_WIDTH, get_color_from_label};
-use crate::tasks::docker::{Docker, DockerContainer};
-use crate::tasks::s3::S3;
-use crate::tasks::workflows::{AvailableWorkflow, Workflows};
+use crate::{
+    env::Env,
+    tasks::{
+        color::{FONT_SIZE, STROKE_WIDTH, get_color_from_label},
+        docker::{Docker, DockerContainer},
+        s3::S3,
+        workflows::{AvailableWorkflow, Workflows},
+    },
+};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use clap::{Args, ValueEnum};
 use csv::ReaderBuilder;
@@ -11,10 +15,16 @@ use log::{debug, error};
 use plotters::prelude::*;
 use serde::Deserialize;
 use shell_words;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::str::FromStr;
-use std::{collections::BTreeMap, env, fmt, fs, io::Write, str, thread, time};
+use std::{
+    collections::BTreeMap,
+    env, fmt, fs,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+    str,
+    str::FromStr,
+    thread, time,
+};
 
 static EVAL_BUCKET_NAME: &str = "tless";
 
@@ -649,7 +659,8 @@ impl Eval {
             EvalExperiment::ScaleUpLatency => [AvailableWorkflow::Finra].iter(),
             EvalExperiment::ColdStart => [AvailableWorkflow::WordCount].iter(),
             // TODO: remove me delete me
-            // EvalExperiment::E2eLatencyCold => [AvailableWorkflow::MlInference, AvailableWorkflow::WordCount].iter(),
+            // EvalExperiment::E2eLatencyCold => [AvailableWorkflow::MlInference,
+            // AvailableWorkflow::WordCount].iter(),
             _ => AvailableWorkflow::iter_variants(),
         };
 

@@ -12,7 +12,7 @@ pushd ${PROJ_ROOT}>>/dev/null
 export PROJ_ROOT=${PROJ_ROOT}
 export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(accless) $PS1"
-source ${PROJ_ROOT}/bin/env.sh
+source ${PROJ_ROOT}/scripts/env.sh
 
 alias accli="cargo run --release -p accli -q --"
 
@@ -55,7 +55,7 @@ sudo apt install -y \
 VENV_PATH=${PROJ_ROOT}/venv
 
 if [ ! -d ${VENV_PATH} ]; then
-    ${PROJ_ROOT}/bin/create_venv.sh
+    ${PROJ_ROOT}/scripts/create_venv.sh
 fi
 
 export VIRTUAL_ENV_DISABLE_PROMPT=1

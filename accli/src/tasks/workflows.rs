@@ -1,11 +1,10 @@
-use crate::env::Env;
-use crate::tasks::dag::Dag;
-use crate::tasks::s3::S3;
+use crate::{
+    env::Env,
+    tasks::{dag::Dag, s3::S3},
+};
 use clap::ValueEnum;
 use log::debug;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::{env, fmt};
+use std::{env, fmt, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ValueEnum)]
 pub enum AvailableWorkflow {

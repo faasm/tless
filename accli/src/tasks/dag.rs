@@ -1,13 +1,13 @@
-use crate::attestation_service;
-use crate::tasks::s3::S3;
-use aes_gcm::Aes256Gcm;
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
+use crate::{attestation_service, tasks::s3::S3};
+use aes_gcm::{
+    Aes256Gcm,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+};
 use rabe;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::Read;
+use std::{fs::File, io::Read};
 
 // Struct a node in our workflow DAG
 #[derive(Debug, Serialize, Deserialize)]

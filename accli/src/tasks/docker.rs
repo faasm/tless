@@ -1,8 +1,10 @@
 use crate::env::Env;
 use clap::ValueEnum;
-use std::fmt;
-use std::process::{Command, Stdio};
-use std::str::FromStr;
+use std::{
+    fmt,
+    process::{Command, Stdio},
+    str::FromStr,
+};
 
 #[derive(Clone, Debug, ValueEnum, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DockerContainer {

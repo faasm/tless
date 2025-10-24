@@ -78,7 +78,8 @@ impl Dev {
         let cargo_toml_content = fs::read_to_string(path)?;
 
         // Regex to find 'version = "X.Y.Z"'
-        // It captures everything before and after the version string to replace only the version.
+        // It captures everything before and after the version string to replace only
+        // the version.
         let re = Regex::new(r#"(version\s*=\s*)"(\d+\.\d+\.\d+)""#)?;
 
         let replacement = format!("$1\"{}\"", new_version);
@@ -125,6 +126,9 @@ impl Dev {
         info!("Creating git tag: {}", tag_name);
         let mut tag_cmd = process::Command::new("git");
         tag_cmd.arg("tag").arg(&tag_name);
+        if force {
+            tag_cmd.arg("--force");
+        }
         let tag_output = tag_cmd.output()?;
 
         if !tag_output.status.success() {

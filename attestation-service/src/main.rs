@@ -1,5 +1,7 @@
-use aes_gcm::aead::{Aead, OsRng, rand_core::RngCore};
-use aes_gcm::{Aes128Gcm, KeyInit, Nonce};
+use aes_gcm::{
+    Aes128Gcm, KeyInit, Nonce,
+    aead::{Aead, OsRng, rand_core::RngCore},
+};
 use anyhow::Context;
 use axum::{
     Extension, Json, Router,
@@ -13,8 +15,10 @@ use hyper::server::conn::http1;
 use hyper_util::{rt::tokio::TokioIo, service::TowerToHyperService};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use p256::PublicKey;
-use ring::agreement::{self, ECDH_P256, UnparsedPublicKey};
-use ring::rand::SystemRandom;
+use ring::{
+    agreement::{self, ECDH_P256, UnparsedPublicKey},
+    rand::SystemRandom,
+};
 use rustls::{
     ServerConfig,
     crypto::CryptoProvider,
@@ -131,40 +135,36 @@ fn sec1_pubkey_to_sgx(sec1_pubkey: &[u8]) -> anyhow::Result<Vec<u8>> {
 // SNP stuff
 // ----------------------------------------------------------------------------
 
-/*
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct VcekResponse {
-    vcek_cert: String,
-    certificate_chain: String,
-}
-*/
+// #[derive(Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// struct VcekResponse {
+// vcek_cert: String,
+// certificate_chain: String,
+// }
 
 /// This method can only be called from an Azure cVM
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     Ok(vec![])
 
-    /*
-    match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
-        .set("Metadata", "true")
-        .call()
-    {
-        Ok(resp) => match resp.into_json::<VcekResponse>() {
-            Ok(data) => {
-                let pem = format!("{}\n{}", data.vcek_cert, data.certificate_chain);
-                Ok(pem.into_bytes())
-            }
-            Err(e) => {
-                eprintln!("WARNING: failed to parse VCECK response JSON: {e}");
-                Ok(vec![])
-            }
-        },
-        Err(e) => {
-            eprintln!("WARNING: failed to fetch VCECK certificates: {e}");
-            Ok(vec![])
-        }
-    }
-    */
+    // match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
+    // .set("Metadata", "true")
+    // .call()
+    // {
+    // Ok(resp) => match resp.into_json::<VcekResponse>() {
+    // Ok(data) => {
+    // let pem = format!("{}\n{}", data.vcek_cert, data.certificate_chain);
+    // Ok(pem.into_bytes())
+    // }
+    // Err(e) => {
+    // eprintln!("WARNING: failed to parse VCECK response JSON: {e}");
+    // Ok(vec![])
+    // }
+    // },
+    // Err(e) => {
+    // eprintln!("WARNING: failed to fetch VCECK certificates: {e}");
+    // Ok(vec![])
+    // }
+    // }
 }
 
 fn generate_jwt_encoding_key() -> Result<EncodingKey, anyhow::Error> {

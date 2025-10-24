@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "accli",
     "attestation-service",
+    "accless/libs/abe4",
     "accless/libs/jwt",
     "workflows/finra/knative",
     "workflows/word-count/knative",

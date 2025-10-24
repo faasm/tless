@@ -3,13 +3,15 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use log::{debug, error, info, warn};
-use minio::s3::args::*;
-use minio::s3::builders::ObjectContent;
-use minio::s3::client::{Client, ClientBuilder};
-use minio::s3::creds::StaticProvider;
-use minio::s3::error::Error;
-use minio::s3::http::BaseUrl;
-use minio::s3::types::{S3Api, ToStream};
+use minio::s3::{
+    args::*,
+    builders::ObjectContent,
+    client::{Client, ClientBuilder},
+    creds::StaticProvider,
+    error::Error,
+    http::BaseUrl,
+    types::{S3Api, ToStream},
+};
 use std::{
     env, fs,
     io::{Read, Write},

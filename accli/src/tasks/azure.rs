@@ -3,7 +3,11 @@ use base64::Engine;
 use log::info;
 use serde_json::Value;
 use shellexpand;
-use std::{collections::HashMap, fs, process::Command, process::ExitStatus};
+use std::{
+    collections::HashMap,
+    fs,
+    process::{Command, ExitStatus},
+};
 
 const AZURE_RESOURCE_GROUP: &str = "faasm";
 const AZURE_USERNAME: &str = "tless";
@@ -391,18 +395,17 @@ impl Azure {
         info!("creating managed hsm: {mhsm_name} (paired with vm: {vm_name})");
 
         // Create managed HSM
-        /* FIXME: allocating a mHSM can take between 15 to 30'. To avoid this,
-         * and for the time being, we run the tests with an AKV with the
-         * `premium` SKU.
-        let az_cmd = "az ad signed-in-user show --query id -o tsv";
-        let oid = Self::run_cmd_get_output(az_cmd, "error showing user id");
-        let az_cmd = format!(
-            "az keyvault create --hsm-name {mhsm_name} \
-            --resource-group {AZURE_RESOURCE_GROUP} \
-            --location {AZURE_LOCATION} --administrators {} \
-            --enable-rbac-authorization false \
-            --retention-days 7", oid.trim());
-        */
+        // FIXME: allocating a mHSM can take between 15 to 30'. To avoid this,
+        // and for the time being, we run the tests with an AKV with the
+        // `premium` SKU.
+        // let az_cmd = "az ad signed-in-user show --query id -o tsv";
+        // let oid = Self::run_cmd_get_output(az_cmd, "error showing user id");
+        // let az_cmd = format!(
+        // "az keyvault create --hsm-name {mhsm_name} \
+        // --resource-group {AZURE_RESOURCE_GROUP} \
+        // --location {AZURE_LOCATION} --administrators {} \
+        // --enable-rbac-authorization false \
+        // --retention-days 7", oid.trim());
         let az_cmd = format!(
             "az keyvault create --name {mhsm_name} \
             --resource-group {AZURE_RESOURCE_GROUP} --sku premium \
@@ -439,18 +442,18 @@ impl Azure {
     }
 
     pub fn delete_mhsm(mhsm_name: &str) {
-        /* FIXME: see above
-        let az_cmd = format!(
-            "az keyvault delete --hsm-name {mhsm_name} \
-            --resource-group {AZURE_RESOURCE_GROUP}");
-        */
+        // FIXME: see above
+        // let az_cmd = format!(
+        // "az keyvault delete --hsm-name {mhsm_name} \
+        // --resource-group {AZURE_RESOURCE_GROUP}");
         let az_cmd = format!(
             "az keyvault delete --name {mhsm_name} \
             --resource-group {AZURE_RESOURCE_GROUP}"
         );
         Self::run_cmd(&az_cmd, "error deleting mhsm");
 
-        // let az_cmd = format!("az keyvault purge --hsm-name {mhsm_name} --location {AZURE_LOCATION}");
+        // let az_cmd = format!("az keyvault purge --hsm-name {mhsm_name} --location
+        // {AZURE_LOCATION}");
         let az_cmd = format!("az keyvault purge --name {mhsm_name} --location {AZURE_LOCATION}");
         Self::run_cmd(&az_cmd, "error deleting mhsm");
     }

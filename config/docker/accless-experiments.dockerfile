@@ -80,9 +80,9 @@ RUN cd /code/faasm-examples/cpp \
         opencv opencv --native
 
 # Build workflow code (WASM for Faasm + Native for Knative)
-ENV PATH=${PATH}:/root/.cargo/bin
-RUN cd /code/tless \
-    # Activate faasmtools
-    && source /code/faasm-examples/cpp/bin/workon.sh \
-    && python3 ./ubench/build.py \
-    && python3 ./workflows/build.py
+# ENV PATH=${PATH}:/root/.cargo/bin
+# RUN cd /code/tless \
+    #     # Activate faasmtools
+#     && source /code/faasm-examples/cpp/bin/workon.sh \
+    #     && python3 ./ubench/build.py \
+    #     && python3 ./workflows/build.py

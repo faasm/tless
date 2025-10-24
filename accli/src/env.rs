@@ -1,7 +1,9 @@
-use std::env;
-use std::fs::File;
-use std::io::{self, BufReader, Read};
-use std::path::PathBuf;
+use std::{
+    env,
+    fs::File,
+    io::{self, BufReader, Read},
+    path::PathBuf,
+};
 
 pub struct Env {}
 
