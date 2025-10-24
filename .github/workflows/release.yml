@@ -24,6 +24,13 @@ jobs:
           username: faasm
           password: ${{ secrets.GHCR_PAT }}
 
+      - name: Tag the current version
+        run: |
+          source ./bin/workon.sh
+          accli dev tag --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push images
         run: |
           source ./bin/workon.sh
