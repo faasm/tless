@@ -3,4 +3,7 @@ mod hashing;
 mod policy;
 mod scheme;
 
-pub use scheme::{decrypt, encrypt, keygen, setup};
+/// Public API that we export.
+pub use curve::Gt;
+pub use policy::{Policy, UserAttribute};
+pub use scheme::{decrypt, encrypt, iota, keygen, tau, setup};

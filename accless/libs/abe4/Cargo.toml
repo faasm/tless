@@ -9,7 +9,7 @@ homepage.workspace = true
 
 [lib]
 name="accless_abe4"
-crate-type=["staticlib"]
+crate-type=["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
@@ -20,5 +20,4 @@ ark-mnt4-298.workspace = true
 ark-ec.workspace = true
 ark-ff.workspace = true
 ark-std.workspace = true
-rand.workspace = true
 sha2.workspace = true

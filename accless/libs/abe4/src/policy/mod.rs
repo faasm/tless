@@ -101,6 +101,10 @@ impl Policy {
         self.attrs.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.attrs.is_empty()
+    }
+
     pub fn get(&self, idx: usize) -> (UserAttribute, bool) {
         (self.attrs[idx].clone(), self.negs[idx])
     }

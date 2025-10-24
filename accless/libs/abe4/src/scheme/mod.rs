@@ -9,18 +9,18 @@ use types::{Ciphertext, MPK, MSK, USK};
 mod decrypt;
 mod encrypt;
 mod group_pairs;
-mod iota;
+pub mod iota;
 mod keygen;
 mod setup;
-mod tau;
+pub mod tau;
 mod types;
 
-pub fn setup(rng: impl rand::Rng + ark_std::rand::RngCore, auths: &Vec<&str>) -> (MSK, MPK) {
+pub fn setup(rng: impl ark_std::rand::RngCore, auths: &Vec<&str>) -> (MSK, MPK) {
     setup::setup(rng, auths)
 }
 
 pub fn keygen(
-    rng: impl rand::Rng + ark_std::rand::RngCore,
+    rng: impl ark_std::rand::RngCore,
     gid: &str,
     msk: &MSK,
     user_attrs: &[UserAttribute],
@@ -30,7 +30,7 @@ pub fn keygen(
 }
 
 pub fn encrypt(
-    rng: impl rand::Rng + ark_std::rand::RngCore,
+    rng: impl ark_std::rand::RngCore,
     mpk: &MPK,
     policy: &Policy,
     tau: &Tau,
