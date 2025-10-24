@@ -32,6 +32,22 @@ To-Do
 
 #### Application Workflows
 
+The [applications](../docs/workflows.md) we run as part of our experiments
+are written in C++ and support native compilation, for their execution in
+Knative, and cross-compilation to WebAssembly, for their execution with Faasm.
+
+To aid with cross-compilation, we provide a docker image to build the different
+application workflows with our cross-compilation toolchain. To build the
+container image you may run:
+
+```bash
+accli docker build -c experiments
+```
+
+FIXME: the JWT library has some hard-coded certs, so we need to re-build
+the experiments when we have already deployed an APS
+
 To-Do: how to build applications and how to generate the dataset!
+CONTINUE HERE!
 
 ### Macro-benchmarks
