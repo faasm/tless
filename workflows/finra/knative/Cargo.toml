@@ -1,16 +1,20 @@
 [package]
-name = "accless-cloudevent-handler"
-version = "0.1.0"
-edition = "2024"
+name = "accless-finra-cloudevent-handler"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Cloud-Event Handler for the FINRA Workflow"
+homepage.workspace = true
 
 [dependencies]
-cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", revision = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b", features = ["reqwest", "warp"] }
-futures-util = "0.3"
-minio = { git = "https://github.com/minio/minio-rs.git", rev = "b254b2f7aeaf18a1588a8800ff9b877b7885236e" }
-once_cell = "^1.19.0"
-rand = { version = "^0.9.0-alpha.2" }
-reqwest = { version = "^0.12" }
-serde_json = { version = "^1.0" }
-tokio = { version = "^1.0", features = ["full"] }
-uuid = { version = "^1.3", features = ["v4"] }
-warp = "^0.3"
+cloudevents-sdk = { workspace = true, features = ["reqwest", "warp"] }
+futures-util.workspace = true
+minio.workspace = true
+once_cell.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full"] }
+uuid = { workspace = true, features = ["v4"] }
+warp.workspace = true

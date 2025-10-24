@@ -130,7 +130,7 @@ then, SSH into the client and:
 cd git/faasm/tless
 # TODO: set this env. var as part of provisioning
 export TLESS_KBS_URL="https://${server_ip_from_above}:8080"
-source ./bin/workon.sh
+source ./scripts/workon.sh
 invrs ubench escrow-xput run --baseline trustee
 ```
 

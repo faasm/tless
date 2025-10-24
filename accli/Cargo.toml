@@ -1,0 +1,39 @@
+[package]
+name = "accli"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "CLI tool for Accless"
+homepage.workspace = true
+
+[dependencies]
+aes-gcm.workspace = true
+aes-gcm-siv.workspace = true
+anyhow.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+clap = { workspace = true, features = ["derive"] }
+csv.workspace = true
+env_logger.workspace = true
+futures.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+indicatif.workspace = true
+log.workspace = true
+minio.workspace = true
+plotters.workspace = true
+rabe.workspace = true
+rand.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_yaml.workspace = true
+shellexpand.workspace = true
+sha2.workspace = true
+shell-words.workspace = true
+subtle.workspace = true
+tokio = { workspace = true, features = ["full"] }
+walkdir.workspace = true

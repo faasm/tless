@@ -1,25 +1,29 @@
 [package]
 name = "attestation-service"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Reference attribute providing service implementation"
+homepage.workspace = true
 
 [dependencies]
-aes-gcm = "0.10.3"
-anyhow = "1"
-axum = "0.7"
-base64 = "0.22.1"
-bytes = "1"
-chrono = "0.4.40"
-hyper = { version = "1.6.0", features = ["http1", "server"] }
-hyper-util = { version = "0.1", features = ["tokio", "server", "http1", "service"] }
-jsonwebtoken = { version = "9" }
-p256 = "0.13.2"
-ring = "0.17.14"
-rustls = "0.23"
-rustls-pemfile = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-snpguest = { git = "https://github.com/faasm/snpguest.git" }
-tokio = { version = "1", features = ["full"] }
-tokio-rustls = "0.26.2"
-ureq = { version = "2", features = ["json"] }
+aes-gcm.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+hyper = { workspace = true, features = ["http1", "server"] }
+hyper-util = { workspace = true, features = ["tokio", "server", "http1", "service"] }
+jsonwebtoken.workspace = true
+p256.workspace = true
+ring.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+snpguest.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-rustls.workspace = true
+ureq = { workspace = true, features = ["json"] }

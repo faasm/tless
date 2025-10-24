@@ -1,18 +1,23 @@
-use cloudevents::binding::reqwest::RequestBuilderExt;
-use cloudevents::binding::warp::{filter, reply};
-use cloudevents::{AttributesReader, AttributesWriter, Event};
+use cloudevents::{
+    AttributesReader, AttributesWriter, Event,
+    binding::{
+        reqwest::RequestBuilderExt,
+        warp::{filter, reply},
+    },
+};
 use futures_util::StreamExt;
-use minio::s3::args::*;
-use minio::s3::client::ClientBuilder;
-use minio::s3::creds::StaticProvider;
-use minio::s3::error::Error;
-use minio::s3::http::BaseUrl;
-use minio::s3::types::ToStream;
+use minio::s3::{
+    args::*, client::ClientBuilder, creds::StaticProvider, error::Error, http::BaseUrl,
+    types::ToStream,
+};
 use once_cell::sync::Lazy;
 use serde_json::{Value, json};
-use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::{env, fs, thread, time};
+use std::{
+    env, fs,
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    thread, time,
+};
 use tokio::task::JoinHandle;
 use warp::Filter;
 

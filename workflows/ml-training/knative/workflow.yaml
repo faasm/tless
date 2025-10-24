@@ -62,7 +62,7 @@ spec:
           ports:
             - containerPort: 8080
           workingDir: /workflows/ml-training/knative
-          command: [ "./target/release/accless-cloudevent-handler" ]
+          command: [ "./accless-ml-training-cloudevent-handler" ]
           env:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"
@@ -95,7 +95,7 @@ spec:
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
-              command: [ "./target/release/accless-cloudevent-handler" ]
+              command: [ "./accless-ml-training-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
@@ -130,7 +130,7 @@ spec:
               ports:
                 - containerPort: 8080
               workingDir: /workflows/ml-training/knative
-              command: [ "./target/release/accless-cloudevent-handler" ]
+              command: [ "./accless-ml-training-cloudevent-handler" ]
               env:
                 - name: CE_FROM_FILE
                   value: "on"
@@ -156,7 +156,7 @@ spec:
           ports:
             - containerPort: 8080
           workingDir: /workflows/ml-training/knative
-          command: [ "./target/release/accless-cloudevent-handler" ]
+          command: [ "./accless-ml-training-cloudevent-handler" ]
           env:
             - name: ACCLESS_MODE
               value: "${ACCLESS_MODE}"

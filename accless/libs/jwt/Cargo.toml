@@ -1,7 +1,11 @@
 [package]
 name = "accless-jwt"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "JWT manipulation library"
+homepage.workspace = true
 
 [lib]
 name="accless_jwt"
@@ -9,9 +13,9 @@ crate-type=["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.97"
-base64 = "0.13"
-rsa = { version = "0.9.6", features = ["sha2"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-x509-parser = { version = "0.10.0" }
+anyhow.workspace = true
+base64.workspace = true
+rsa = { workspace = true, features = ["sha2"] }
+serde.workspace = true
+serde_json.workspace = true
+x509-parser.workspace = true
