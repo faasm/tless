@@ -93,6 +93,12 @@ enum DevCommand {
         #[arg(long)]
         check: bool,
     },
+    /// Tag the current commit with the version from the VERSION file
+    Tag {
+        /// Force push the tag
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -337,6 +343,9 @@ async fn main() -> anyhow::Result<()> {
             }
             DevCommand::FormatCode { check } => {
                 Dev::format_code(*check);
+            }
+            DevCommand::Tag { force } => {
+                Dev::tag_code(*force)?;
             }
         },
         Command::Docker { docker_command } => match docker_command {

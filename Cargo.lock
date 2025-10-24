@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "accless-finra-cloudevent-handler"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -20,7 +20,7 @@ dependencies = [
 
 [[package]]
 name = "accless-jwt"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -32,7 +32,7 @@ dependencies = [
 
 [[package]]
 name = "accless-ml-inference-cloudevent-handler"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "accless-ml-training-cloudevent-handler"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "accless-word-count-cloudevent-handler"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -80,7 +80,7 @@ dependencies = [
 
 [[package]]
 name = "accli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -312,7 +312,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "attestation-service"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "anyhow",

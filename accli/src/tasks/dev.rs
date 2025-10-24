@@ -116,6 +116,46 @@ impl Dev {
         Ok(())
     }
 
+    /// Tags the current commit with the version from the VERSION file.
+    pub fn tag_code(force: bool) -> Result<()> {
+        let version_file_path = Env::proj_root().join("VERSION");
+        let current_version_str = fs::read_to_string(&version_file_path)?;
+        let version = Version::parse(&current_version_str)?;
+        let tag_name = format!("v{}", version);
+
+        info!("Creating git tag: {}", tag_name);
+        let mut tag_cmd = process::Command::new("git");
+        tag_cmd.arg("tag").arg(&tag_name);
+        let tag_output = tag_cmd.output()?;
+
+        if !tag_output.status.success() {
+            error!(
+                "Failed to create git tag: {}",
+                String::from_utf8_lossy(&tag_output.stderr)
+            );
+            return Err(anyhow::anyhow!("Failed to create git tag"));
+        }
+
+        info!("Pushing git tag to origin: {}", tag_name);
+        let mut push_cmd = process::Command::new("git");
+        push_cmd.arg("push").arg("origin").arg(&tag_name);
+        if force {
+            push_cmd.arg("--force");
+        }
+        let push_output = push_cmd.output()?;
+
+        if !push_output.status.success() {
+            error!(
+                "Failed to push git tag: {}",
+                String::from_utf8_lossy(&push_output.stderr)
+            );
+            return Err(anyhow::anyhow!("Failed to push git tag"));
+        }
+
+        info!("Successfully tagged and pushed version {}", tag_name);
+        Ok(())
+    }
+
     /// Format all source code.
     pub fn format_code(check: bool) {
         // First, format all CPP "projects"
