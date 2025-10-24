@@ -1,8 +1,12 @@
-use super::{Expr, UserAttribute};
+use crate::policy::{
+    Expr, UserAttribute,
+    parser::lexer::{Token, lex},
+};
+use anyhow::Result;
 
 mod lexer;
 
-use lexer::{Token, lex};
+type ParsedPolicy = (Expr<(bool, UserAttribute)>, Vec<UserAttribute>, Vec<bool>);
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -76,15 +80,20 @@ impl Parser {
         }
     }
 
-    pub fn parse_policy(
-        input: &str,
-    ) -> Result<(Expr<(bool, UserAttribute)>, Vec<UserAttribute>, Vec<bool>), String> {
+    pub fn parse_policy(input: &str) -> Result<ParsedPolicy> {
         let tokens = lex(input);
         let mut parser = Parser::new(tokens);
 
         let res = parser.or();
         if parser.had_error {
-            return Err(parser.err_msg.as_ref().unwrap().clone());
+            match parser.err_msg.as_ref() {
+                Some(msg) => {
+                    return Err(anyhow::anyhow!(msg.clone()));
+                }
+                None => {
+                    return Err(anyhow::anyhow!("error parsing policy"));
+                }
+            }
         }
         match res {
             None => panic!("Unreachable"),
@@ -100,7 +109,11 @@ impl Parser {
             return Err(parser.err_msg.as_ref().unwrap().clone());
         }
         match res {
-            Some(Expr::Lit((_, user_attr))) => Ok((user_attr.auth, user_attr.lbl, user_attr.attr)),
+            Some(Expr::Lit((_, user_attr))) => Ok((
+                user_attr.authority().to_string(),
+                user_attr.label().to_string(),
+                user_attr.attribute().to_string(),
+            )),
             _ => panic!("Unreachable"),
         }
     }

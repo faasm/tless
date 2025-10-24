@@ -35,14 +35,15 @@ fn satisfies(user_attrs: &Vec<UserAttribute>, curr: &UserAttribute, is_neg: bool
     let mut matches = 0;
     let mut others = 0;
     for user_attr in user_attrs {
-        if user_attr.auth == curr.auth && user_attr.lbl == curr.lbl {
-            if user_attr.attr == curr.attr {
+        if user_attr.authority() == curr.authority() && user_attr.label() == curr.label() {
+            if user_attr.attribute() == curr.attribute() {
                 matches += 1;
             } else {
                 others += 1;
             }
         }
     }
+
     if !is_neg && matches > 0 {
         Some(1)
     } else if is_neg && matches == 0 && others > 0 {

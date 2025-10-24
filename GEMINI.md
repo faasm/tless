@@ -75,3 +75,5 @@ cargo build
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
   the file.
+- In rust code, do not allow the use of unwrap() or panic(). Instead, enforce
+  proper error handling.

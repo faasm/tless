@@ -75,10 +75,10 @@ pub fn decrypt(
             let mut c_4 = H::zero();
             for &j in js {
                 let ua = policy.get(j).0;
-                let auth = ua.auth;
-                let lbl = ua.lbl;
-                let attr = ua.attr;
-                let s_tilde = tau.get_tilde(&auth, &lbl, &attr);
+                let auth = ua.authority();
+                let lbl = ua.label();
+                let attr = ua.attribute();
+                let s_tilde = tau.get_tilde(auth, lbl, attr);
                 c_4 += ct.c_4_vec[s_tilde];
             }
             k *= pairing(k_1_1, c_4).0;

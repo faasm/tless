@@ -1,6 +1,4 @@
-use crate::policy::Policy;
-#[cfg(test)]
-use crate::policy::UserAttribute;
+use crate::policy::{Policy, UserAttribute};
 use std::collections::HashMap;
 
 pub struct Tau {
@@ -13,40 +11,51 @@ pub struct Tau {
 impl Tau {
     pub fn new(policy: &Policy) -> Self {
         let n = policy.len();
-        let mut user_attr_by_auth = HashMap::new();
-        let mut user_attrs_by_auth_lbl = HashMap::new();
+        let mut user_attributes_by_authority: HashMap<String, Vec<UserAttribute>> = HashMap::new();
+        let mut user_attributes_by_authority_label: HashMap<(String, String), Vec<UserAttribute>> =
+            HashMap::new();
+
         for i in 0..n {
-            let (ua, _) = policy.get(i);
-            let uas = user_attr_by_auth
-                .entry(String::from(&ua.auth))
-                .or_insert(Vec::new());
-            uas.push(ua.clone());
-            let key = (ua.auth.clone(), ua.lbl.clone());
-            let uas = user_attrs_by_auth_lbl.entry(key).or_insert(Vec::new());
-            uas.push(ua);
+            let (user_attribute, _) = policy.get(i);
+            user_attributes_by_authority
+                .entry(user_attribute.authority().to_string())
+                .or_default()
+                .push(user_attribute.clone());
+            let key = (
+                user_attribute.authority().to_string(),
+                user_attribute.label().to_string(),
+            );
+            user_attributes_by_authority_label
+                .entry(key)
+                .or_default()
+                .push(user_attribute);
         }
 
-        let mut storage_tilde = HashMap::new();
+        let mut storage_tilde: HashMap<(String, String, String), usize> = HashMap::new();
         let mut m_tilde = 0;
-        for (_, uas) in user_attr_by_auth {
-            let mut i = 0;
-            for ua in uas {
-                let key = (ua.auth, ua.lbl, ua.attr);
+        for (_, uas) in user_attributes_by_authority {
+            for (i, ua) in uas.into_iter().enumerate() {
+                let key = (
+                    ua.authority().to_string(),
+                    ua.label().to_string(),
+                    ua.attribute().to_string(),
+                );
                 storage_tilde.insert(key, i);
                 m_tilde = std::cmp::max(m_tilde, i);
-                i += 1;
             }
         }
 
-        let mut storage = HashMap::new();
+        let mut storage: HashMap<(String, String, String), usize> = HashMap::new();
         let mut m = 0;
-        for ((_, _), uas) in user_attrs_by_auth_lbl {
-            let mut i = 0;
-            for ua in uas {
-                let key = (ua.auth, ua.lbl, ua.attr);
+        for ((_, _), uas) in user_attributes_by_authority_label {
+            for (i, ua) in uas.into_iter().enumerate() {
+                let key = (
+                    ua.authority().to_string(),
+                    ua.label().to_string(),
+                    ua.attribute().to_string(),
+                );
                 storage.insert(key, i);
                 m = std::cmp::max(m, i);
-                i += 1;
             }
         }
 

@@ -1,13 +1,12 @@
 use crate::curve::{G1Config, GAffine, ScalarField};
+use ark_ec::{hashing::HashToCurve, short_weierstrass::Projective};
+use ark_ff::field_hashers::{DefaultFieldHasher, HashToField};
 use sha2::{Digest, Sha256};
+use swift_ec::SwiftECMap;
+use swift_hasher::SwiftMapToCurveBasedHasher;
 
 pub mod swift_ec;
 pub mod swift_hasher;
-
-use ark_ec::{hashing::HashToCurve, short_weierstrass::Projective};
-use ark_ff::field_hashers::{DefaultFieldHasher, HashToField};
-use swift_ec::SwiftECMap;
-use swift_hasher::SwiftMapToCurveBasedHasher;
 
 const DEFAULT_FIELD_HASHER_SEC_PARAM: usize = 128;
 const GID_DOMAIN: &str = "GID";
@@ -18,8 +17,8 @@ const HASH_SIGN_NEG: &str = "NEG";
 
 #[derive(Copy, Clone)]
 pub enum HashSign {
-    POS,
-    NEG,
+    Pos,
+    Neg,
 }
 
 fn sha256(data: impl AsRef<[u8]>) -> Vec<u8> {
@@ -54,8 +53,8 @@ pub fn hash_lbl(auth_id: &str, lbl: &str, sign: HashSign, i: u64) -> GAffine {
     >::new(domain)
     .unwrap();
     let sign = match sign {
-        HashSign::POS => HASH_SIGN_POS,
-        HashSign::NEG => HASH_SIGN_NEG,
+        HashSign::Pos => HASH_SIGN_POS,
+        HashSign::Neg => HASH_SIGN_NEG,
     };
     let mut input = Vec::new();
     input.extend_from_slice(&sha256(auth_id));

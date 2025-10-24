@@ -2,7 +2,7 @@ use crate::{
     curve::{G, H, ScalarField},
     policy::UserAttribute,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 // -----------------------------------------------------------------------------------------------
 // Structure and Trait Definitions
@@ -55,13 +55,14 @@ pub struct FullKey<T> {
     pub partial_keys: HashMap<String, T>,
 }
 
-/// Global identifier for different authorities.
-pub type GID = String;
 /// Master Public Key.
+#[allow(clippy::upper_case_acronyms)]
 pub type MPK = FullKey<PartialMPK>;
 /// Master Secret Key.
+#[allow(clippy::upper_case_acronyms)]
 pub type MSK = FullKey<PartialMSK>;
 /// User Secret Key.
+#[allow(clippy::upper_case_acronyms)]
 pub type USK = FullKey<PartialUSK>;
 
 // -----------------------------------------------------------------------------------------------
@@ -94,14 +95,15 @@ impl<T: PartialKey> FullKey<T> {
     }
 
     pub fn add_partial_key(&mut self, new_key: T) {
-        if self.partial_keys.contains_key(&new_key.get_authority()) {
-            panic!(
-                "Partial key for authority '{}' already exists",
-                new_key.get_authority()
-            );
-        } else {
-            self.partial_keys.insert(new_key.get_authority(), new_key);
-        }
+        match self.partial_keys.entry(new_key.get_authority()) {
+            Entry::Vacant(entry) => entry.insert(new_key),
+            Entry::Occupied(_) => {
+                panic!(
+                    "Partial key for authority '{}' already exists",
+                    new_key.get_authority()
+                );
+            }
+        };
     }
 
     pub fn get_partial_key(&self, auth: &str) -> Option<&T> {

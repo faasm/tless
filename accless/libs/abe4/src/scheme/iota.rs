@@ -7,11 +7,11 @@ pub struct Iota {
 }
 
 impl Iota {
-    pub fn new(user_attrs: &Vec<UserAttribute>) -> Self {
+    pub fn new(user_attrs: &[UserAttribute]) -> Self {
         let mut user_attr_by_auth = HashMap::new();
-        for ua in user_attrs.clone() {
+        for ua in user_attrs {
             let uas = user_attr_by_auth
-                .entry(String::from(&ua.auth))
+                .entry(ua.authority().to_string())
                 .or_insert(Vec::new());
             uas.push(ua);
         }
@@ -22,20 +22,20 @@ impl Iota {
         for (auth, uas) in user_attr_by_auth {
             let mut attrs_by_lbl = HashMap::new();
             for ua in uas {
-                let attrs = attrs_by_lbl.entry(ua.lbl).or_insert(Vec::new());
-                attrs.push(ua.attr);
+                let attrs = attrs_by_lbl
+                    .entry(ua.label().to_string())
+                    .or_insert(Vec::new());
+                attrs.push(ua.attribute().to_string());
             }
             let mut inner = HashMap::new();
             for (lbl, attrs) in attrs_by_lbl {
-                let mut i = 0;
-                for a in attrs {
-                    let key = (lbl.clone(), a);
+                for (i, a) in attrs.into_iter().enumerate() {
+                    let key: (String, String) = (lbl.clone().to_string(), a);
                     inner.insert(key, i);
                     m = std::cmp::max(m, i);
-                    i += 1;
                 }
             }
-            storage.insert(auth, inner);
+            storage.insert(auth.to_string(), inner);
         }
         Iota { storage, m }
     }

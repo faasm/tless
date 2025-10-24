@@ -1,7 +1,34 @@
+use anyhow::Result;
 use ark_std::iterable::Iterable;
 use core::fmt;
 use std::fmt::{Debug, Write};
 
+mod parser;
+mod secret_sharing;
+
+// -----------------------------------------------------------------------------------------------
+// Structure And Enum Definitions
+// -----------------------------------------------------------------------------------------------
+
+#[derive(Debug, PartialEq)]
+enum Expr<T> {
+    Lit(T),
+    And(Box<Expr<T>>, Box<Expr<T>>),
+    Or(Box<Expr<T>>, Box<Expr<T>>),
+}
+
+/// Structure representing a user attribute in decentralized CP-ABE. A user
+/// attribute is a triple of strings: (authority, label, attribute) indicating
+/// the authority that provides keys for this attribute, the attribute label,
+/// and the value itself.
+#[derive(PartialEq, Clone)]
+pub struct UserAttribute {
+    authority: String,
+    label: String,
+    attribute: String,
+}
+
+/// Structure representing an access control policy.
 #[derive(PartialEq)]
 pub struct Policy {
     expr: Expr<(bool, UserAttribute)>,
@@ -9,6 +36,66 @@ pub struct Policy {
     negs: Vec<bool>,
 }
 
+// -----------------------------------------------------------------------------------------------
+// Implementations
+// -----------------------------------------------------------------------------------------------
+
+impl UserAttribute {
+    pub fn new(auth: &str, lbl: &str, attr: &str) -> Self {
+        UserAttribute {
+            authority: String::from(auth),
+            label: String::from(lbl),
+            attribute: String::from(attr),
+        }
+    }
+
+    pub fn authority(&self) -> &str {
+        &self.authority
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn attribute(&self) -> &str {
+        &self.attribute
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let (auth, lbl, attr) = parser::Parser::parse_user_attr(s)?;
+        Ok(UserAttribute {
+            authority: auth,
+            label: lbl,
+            attribute: attr,
+        })
+    }
+
+    pub fn auth_lbl_attr(&self) -> (String, String, String) {
+        (
+            self.authority.clone(),
+            self.label.clone(),
+            self.attribute.clone(),
+        )
+    }
+
+    pub fn auth_attr(&self) -> (String, String) {
+        (self.authority.clone(), self.attribute.clone())
+    }
+
+    pub fn auth_lbl(&self) -> (String, String) {
+        (self.authority.clone(), self.label.clone())
+    }
+}
+
+impl Debug for UserAttribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.authority)?;
+        f.write_char('.')?;
+        f.write_str(&self.label)?;
+        f.write_char(':')?;
+        f.write_str(&self.attribute)
+    }
+}
 impl Policy {
     pub fn len(&self) -> usize {
         self.attrs.len()
@@ -18,7 +105,7 @@ impl Policy {
         (self.attrs[idx].clone(), self.negs[idx])
     }
 
-    pub fn parse(s: &str) -> Result<Self, String> {
+    pub fn parse(s: &str) -> Result<Self> {
         let (expr, attrs, negs) = parser::Parser::parse_policy(s)?;
         Ok(Policy { expr, attrs, negs })
     }
@@ -45,8 +132,8 @@ impl Policy {
         }
         let attrs = user_attrs.clone();
         let mut negs = vec![false; user_attrs.len()];
-        for i in 0..num_negs {
-            negs[i] = true;
+        for neg in negs.iter_mut() {
+            *neg = true;
         }
         Policy { expr, attrs, negs }
     }
@@ -60,6 +147,7 @@ impl Policy {
     }
 }
 
+/// Helper method to format an expression.
 fn fmt_expr(
     expr: &Expr<(bool, UserAttribute)>,
     f: &mut std::fmt::Formatter<'_>,
@@ -87,57 +175,3 @@ impl fmt::Debug for Policy {
         fmt_expr(&self.expr, f)
     }
 }
-
-#[derive(PartialEq, Clone)]
-pub struct UserAttribute {
-    pub auth: String,
-    pub lbl: String,
-    pub attr: String,
-}
-
-impl UserAttribute {
-    pub fn new(auth: &str, lbl: &str, attr: &str) -> Self {
-        UserAttribute {
-            auth: String::from(auth),
-            lbl: String::from(lbl),
-            attr: String::from(attr),
-        }
-    }
-
-    pub fn parse(s: &str) -> Result<Self, String> {
-        let (auth, lbl, attr) = parser::Parser::parse_user_attr(s)?;
-        Ok(UserAttribute { auth, lbl, attr })
-    }
-
-    pub fn auth_lbl_attr(&self) -> (String, String, String) {
-        (self.auth.clone(), self.lbl.clone(), self.attr.clone())
-    }
-
-    pub fn auth_attr(&self) -> (String, String) {
-        (self.auth.clone(), self.attr.clone())
-    }
-
-    pub fn auth_lbl(&self) -> (String, String) {
-        (self.auth.clone(), self.lbl.clone())
-    }
-}
-
-impl Debug for UserAttribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.auth)?;
-        f.write_char('.')?;
-        f.write_str(&self.lbl)?;
-        f.write_char(':')?;
-        f.write_str(&self.attr)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum Expr<T> {
-    Lit(T),
-    And(Box<Expr<T>>, Box<Expr<T>>),
-    Or(Box<Expr<T>>, Box<Expr<T>>),
-}
-
-mod parser;
-mod secret_sharing;

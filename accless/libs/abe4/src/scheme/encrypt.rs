@@ -1,7 +1,7 @@
 use crate::{
     curve::{G, Gt, H, ScalarField, pairing},
     hashing::{
-        HashSign::{NEG, POS},
+        HashSign::{Neg, Pos},
         hash_attr, hash_lbl,
     },
     policy::Policy,
@@ -65,15 +65,15 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
     let mut lbl_neg_1 = HashMap::new();
     for j in 0..n {
         let (user_attr, is_neg) = policy.get(j);
-        let auth = user_attr.auth;
-        let lbl = user_attr.lbl;
+        let auth = user_attr.authority().to_string();
+        let lbl = user_attr.label().to_string();
         let key = (auth.clone(), lbl.clone());
         if is_neg && !lbl_neg_0.contains_key(&key) {
-            lbl_neg_0.insert(key.clone(), hash_lbl(&auth, &lbl, NEG, 0));
-            lbl_neg_1.insert(key, hash_lbl(&auth, &lbl, NEG, 1));
+            lbl_neg_0.insert(key.clone(), hash_lbl(&auth, &lbl, Neg, 0));
+            lbl_neg_1.insert(key, hash_lbl(&auth, &lbl, Neg, 1));
         } else if !lbl_pos_0.contains_key(&key) {
-            lbl_pos_0.insert(key.clone(), hash_lbl(&auth, &lbl, POS, 0));
-            lbl_pos_1.insert(key.clone(), hash_lbl(&auth, &lbl, POS, 1));
+            lbl_pos_0.insert(key.clone(), hash_lbl(&auth, &lbl, Pos, 0));
+            lbl_pos_1.insert(key.clone(), hash_lbl(&auth, &lbl, Pos, 1));
         }
     }
     let mut c_1_vec = Vec::with_capacity(n);
@@ -81,9 +81,9 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
     let mut c_3_vec = Vec::with_capacity(n);
     for j in 0..n {
         let (user_attr, is_neg) = policy.get(j);
-        let auth = user_attr.auth;
-        let attr = user_attr.attr;
-        let lbl = user_attr.lbl;
+        let auth = user_attr.authority().to_string();
+        let attr = user_attr.attribute().to_string();
+        let lbl = user_attr.label().to_string();
         let mu = mu_vec[j];
         let lambda = lambda_vec[j];
         let s_tilde = s_vec[tau.get_tilde(&auth, &lbl, &attr)];
@@ -94,15 +94,9 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
         let h = H::generator();
         let key = (auth.clone(), lbl.clone());
         let (lbl_0, lbl_1) = if is_neg {
-            (
-                *lbl_neg_0.get(&key).unwrap(),
-                *lbl_neg_1.get(&key).unwrap(),
-            )
+            (*lbl_neg_0.get(&key).unwrap(), *lbl_neg_1.get(&key).unwrap())
         } else {
-            (
-                *lbl_pos_0.get(&key).unwrap(),
-                *lbl_pos_1.get(&key).unwrap(),
-            )
+            (*lbl_pos_0.get(&key).unwrap(), *lbl_pos_1.get(&key).unwrap())
         };
         if is_neg {
             c_1_vec.push(h.mul(mu) + b.mul(s_tilde));
@@ -116,9 +110,8 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
         c_3_vec.push(h.mul(lambda) + mpk.a.mul(s_tilde));
     }
     let mut c_4_vec = Vec::with_capacity(m + 1);
-    for j in 0..=m {
+    for s in s_vec.iter() {
         let h = H::generator();
-        let s = s_vec[j];
         c_4_vec.push(h.mul(s));
     }
     let k = pairing(G::generator(), H::generator()).mul(s).0;

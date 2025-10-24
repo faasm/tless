@@ -1,7 +1,10 @@
-use crate::{curve::Gt, policy::Policy};
+use crate::{
+    curve::Gt,
+    policy::{Policy, UserAttribute},
+};
 use iota::Iota;
 use tau::Tau;
-use types::{Ciphertext, GID, MPK, MSK, USK};
+use types::{Ciphertext, MPK, MSK, USK};
 
 mod decrypt;
 mod encrypt;
@@ -12,21 +15,26 @@ mod setup;
 mod tau;
 mod types;
 
-pub fn setup(rng: impl rand::Rng, auths: &Vec<GID>) -> (MSK, MPK) {
+pub fn setup(rng: impl rand::Rng + ark_std::rand::RngCore, auths: &Vec<&str>) -> (MSK, MPK) {
     setup::setup(rng, auths)
 }
 
 pub fn keygen(
-    rng: impl rand::Rng,
+    rng: impl rand::Rng + ark_std::rand::RngCore,
     gid: &str,
     msk: &MSK,
-    user_attrs: &Vec<crate::policy::UserAttribute>,
+    user_attrs: &[UserAttribute],
     iota: &Iota,
 ) -> USK {
     keygen::keygen(rng, gid, msk, user_attrs, iota)
 }
 
-pub fn encrypt(rng: impl rand::Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt, Ciphertext) {
+pub fn encrypt(
+    rng: impl rand::Rng + ark_std::rand::RngCore,
+    mpk: &MPK,
+    policy: &Policy,
+    tau: &Tau,
+) -> (Gt, Ciphertext) {
     encrypt::encrypt(rng, mpk, policy, tau)
 }
 
