@@ -26,12 +26,12 @@ jobs:
 
       - name: Tag the current version
         run: |
-          source ./bin/workon.sh
+          source ./scripts/workon.sh
           accli dev tag --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push images
         run: |
-          source ./bin/workon.sh
+          source ./scripts/workon.sh
           accli docker build-all --push
