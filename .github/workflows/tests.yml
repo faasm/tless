@@ -24,7 +24,10 @@ jobs:
       - name: "Checkout code"
         uses: actions/checkout@v4
       - name: "Run Rust unit tests"
-        run: cargo test
+        run: |
+          source ./scripts/workon.sh
+          # TODO: move to accli dev test
+          cargo test
 
   checks:
     if: github.event.pull_request.draft == false
