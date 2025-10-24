@@ -25,13 +25,9 @@ jobs:
           password: ${{ secrets.GHCR_PAT }}
 
       - name: Tag the current version
-        run: |
-          source ./scripts/workon.sh
-          accli dev tag --force
+        run: ./scripts/accli_wrapper.sh dev tag --force
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push images
-        run: |
-          source ./scripts/workon.sh
-          accli docker build-all --push
+        run: ./scripts/accli_wrapper.sh docker build-all --push
