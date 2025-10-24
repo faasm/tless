@@ -19,7 +19,7 @@ pub fn parity<F: Field>(element: &F) -> bool {
     element
         .to_base_prime_field_elements()
         .find(|&x| !x.is_zero())
-        .map_or(false, |x| x.into_bigint().is_odd())
+        .is_some_and(|x| x.into_bigint().is_odd())
 }
 
 pub trait SwiftConfig: SWCurveConfig {
@@ -31,7 +31,7 @@ impl<P: SwiftConfig> MapToCurve<Projective<P>> for SwiftECMap<P> {
     fn new() -> Result<Self, HashToCurveError> {
         let one = <P::BaseField as One>::one();
         let minus3 = -(one + one + one);
-        if minus3.legendre().is_qr() == false {
+        if !minus3.legendre().is_qr() {
             return Err(HashToCurveError::MapToCurveError(
                 "-3 should be a QR in the field".to_string(),
             ));
@@ -53,7 +53,7 @@ impl<P: SwiftConfig> MapToCurve<Projective<P>> for SwiftECMap<P> {
         let field_hasher = <DefaultFieldHasher<Sha256> as HashToField<P::BaseField>>::new(&[0]);
         let str = t1.to_string();
         // We need to hash again because trait only allows one field element.
-        let t2: P::BaseField = field_hasher.hash_to_field(&str.as_bytes(), 1)[0];
+        let t2: P::BaseField = field_hasher.hash_to_field(str.as_bytes(), 1)[0];
 
         // h_0 = t1^3, h1 = t2^2, h2 = h0 + b - h1, h3 = 2h1 + h2.
         let h0 = t1 * t1.square();

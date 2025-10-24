@@ -34,7 +34,7 @@ pub fn keygen(
         match msk.get_partial_key(&auth) {
             None => panic!("No partial MSK given for authority in user's attribute set"),
             Some(partial_msk) => {
-                let partial_usk = keygen_partial(&mut rng, gid, partial_msk, &uas, &iota);
+                let partial_usk = keygen_partial(&mut rng, gid, partial_msk, &uas, iota);
                 usk.add_partial_key(partial_usk);
             }
         }
@@ -100,10 +100,10 @@ pub fn keygen_partial(
     }
     for user_attr in user_attrs.iter() {
         let key = (msk.auth.clone(), user_attr.lbl.clone());
-        let lbl_pos_0 = lbl_pos_0.get(&key).unwrap().clone();
-        let lbl_pos_1 = lbl_pos_1.get(&key).unwrap().clone();
-        let lbl_neg_0 = lbl_neg_0.get(&key).unwrap().clone();
-        let lbl_neg_1 = lbl_neg_1.get(&key).unwrap().clone();
+        let lbl_pos_0 = *lbl_pos_0.get(&key).unwrap();
+        let lbl_pos_1 = *lbl_pos_1.get(&key).unwrap();
+        let lbl_neg_0 = *lbl_neg_0.get(&key).unwrap();
+        let lbl_neg_1 = *lbl_neg_1.get(&key).unwrap();
         let x_attr = hash_attr(&user_attr.attr);
         let iota = iota.get(&user_attr.auth, &user_attr.lbl, &user_attr.attr);
         let r = r_vec[iota];
@@ -118,7 +118,7 @@ pub fn keygen_partial(
         if !k_2_map.contains_key(&user_attr.lbl) {
             let r_lab = r_lab_map.get(&user_attr.lbl).unwrap();
             let key = (msk.auth.clone(), user_attr.lbl.clone());
-            let k_2 = lbl_neg_1.get(&key).unwrap().clone().mul(r_lab);
+            let k_2 = (*lbl_neg_1.get(&key).unwrap()).mul(r_lab);
             k_2_map.insert(user_attr.lbl.clone(), g + gid_not + k_2);
         }
     }

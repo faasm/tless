@@ -107,7 +107,7 @@ impl Parser {
 
     fn or(&mut self) -> Option<Expr<(bool, UserAttribute)>> {
         let mut lhs = self.and()?;
-        while let Some(_) = self.try_next(Token::Or) {
+        while self.try_next(Token::Or).is_some() {
             let rhs = self.and()?;
             if self.is_neg {
                 lhs = Expr::And(Box::new(lhs), Box::new(rhs));
@@ -120,7 +120,7 @@ impl Parser {
 
     fn and(&mut self) -> Option<Expr<(bool, UserAttribute)>> {
         let mut lhs = self.not()?;
-        while let Some(_) = self.try_next(Token::And) {
+        while self.try_next(Token::And).is_some() {
             let rhs = self.not()?;
             if self.is_neg {
                 lhs = Expr::Or(Box::new(lhs), Box::new(rhs))
@@ -132,7 +132,7 @@ impl Parser {
     }
 
     fn not(&mut self) -> Option<Expr<(bool, UserAttribute)>> {
-        if let Some(_) = self.try_next(Token::Not) {
+        if self.try_next(Token::Not).is_some() {
             self.is_neg = !self.is_neg;
             let exp = self.not()?;
             self.is_neg = !self.is_neg;
@@ -142,7 +142,7 @@ impl Parser {
     }
 
     fn prim(&mut self) -> Option<Expr<(bool, UserAttribute)>> {
-        if let Some(_) = self.try_next(Token::LParen) {
+        if self.try_next(Token::LParen).is_some() {
             let exp = self.or()?;
             self.require(Token::RParen);
             return Some(exp);

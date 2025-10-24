@@ -21,34 +21,34 @@ pub fn lex(input: &str) -> Vec<Token> {
     let input = input.as_bytes();
     while idx < input.len() {
         match input[idx] {
-            b' ' | b'\r' | b'\t' | b'\n' => idx = idx + 1,
+            b' ' | b'\r' | b'\t' | b'\n' => idx += 1,
             b'(' => {
                 tokens.push(Token::LParen);
-                idx = idx + 1
+                idx += 1
             }
             b')' => {
                 tokens.push(Token::RParen);
-                idx = idx + 1
+                idx += 1
             }
             b':' => {
                 tokens.push(Token::Colon);
-                idx = idx + 1
+                idx += 1
             }
             b'.' => {
                 tokens.push(Token::Dot);
-                idx = idx + 1
+                idx += 1
             }
             b'!' => {
                 tokens.push(Token::Not);
-                idx = idx + 1
+                idx += 1
             }
             b'&' => {
                 tokens.push(Token::And);
-                idx = idx + 1
+                idx += 1
             }
             b'|' => {
                 tokens.push(Token::Or);
-                idx = idx + 1
+                idx += 1
             }
             _ => {
                 let (token, i) = ident(input, idx);
@@ -57,13 +57,13 @@ pub fn lex(input: &str) -> Vec<Token> {
             }
         }
     }
-    return tokens;
+    tokens
 }
 
 fn ident(input: &[u8], start: usize) -> (Token, usize) {
     let mut end = start;
     while end < input.len() && (input[end].is_ascii_alphanumeric() || input[end] == b'_') {
-        end = end + 1;
+        end += 1;
     }
     let str = from_utf8(&input[start..end]).unwrap();
     if str.is_empty() {

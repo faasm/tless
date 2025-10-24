@@ -22,7 +22,7 @@ fn helper(
         }
         Expr::And(lhs, rhs) => {
             let mut idcs_l = idcs.clone();
-            *n = *n + 1;
+            *n += 1;
             idcs_l.push(*n);
             let idcs_r = vec![-*n];
             helper(n, result, idcs_l, lhs);

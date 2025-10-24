@@ -113,7 +113,7 @@ impl FullKey<PartialUSK> {
     pub fn get_user_attributes(&self) -> Vec<UserAttribute> {
         let mut user_attrs = Vec::new();
         for (auth, usk) in self.partial_keys.iter() {
-            for (lbl, attr) in usk.k_1_2_map.keys().into_iter() {
+            for (lbl, attr) in usk.k_1_2_map.keys() {
                 user_attrs.push(UserAttribute::new(auth, lbl, attr));
             }
         }

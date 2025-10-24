@@ -58,7 +58,7 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
     for _ in 0..=m {
         s_vec.push(ScalarField::rand(&mut rng));
     }
-    let (lambda_vec, mu_vec, n) = share_secret(&mut rng, s, &policy);
+    let (lambda_vec, mu_vec, n) = share_secret(&mut rng, s, policy);
     let mut lbl_pos_0 = HashMap::new();
     let mut lbl_pos_1 = HashMap::new();
     let mut lbl_neg_0 = HashMap::new();
@@ -95,13 +95,13 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
         let key = (auth.clone(), lbl.clone());
         let (lbl_0, lbl_1) = if is_neg {
             (
-                lbl_neg_0.get(&key).unwrap().clone(),
-                lbl_neg_1.get(&key).unwrap().clone(),
+                *lbl_neg_0.get(&key).unwrap(),
+                *lbl_neg_1.get(&key).unwrap(),
             )
         } else {
             (
-                lbl_pos_0.get(&key).unwrap().clone(),
-                lbl_pos_1.get(&key).unwrap().clone(),
+                *lbl_pos_0.get(&key).unwrap(),
+                *lbl_pos_1.get(&key).unwrap(),
             )
         };
         if is_neg {
@@ -128,5 +128,5 @@ pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt,
         c_3_vec,
         c_4_vec,
     };
-    return (k, ct);
+    (k, ct)
 }

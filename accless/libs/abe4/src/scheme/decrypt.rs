@@ -29,7 +29,7 @@ pub fn decrypt(
     policy: &Policy,
     ct: &Ciphertext,
 ) -> Option<Gt> {
-    let (eps_vec, eps_not_vec) = solve_lse(&usk, &policy)?;
+    let (eps_vec, eps_not_vec) = solve_lse(usk, policy)?;
     let mut k = Gt::ONE;
     let mut c_1 = H::zero();
     let mut c_3 = H::zero();
@@ -71,7 +71,7 @@ pub fn decrypt(
 
     if cost_a_pos < cost_b_pos {
         for ((auth, iota), js) in eps_by_auth_iota.iter() {
-            let k_1_1 = usk.get_partial_key(&auth).unwrap().k_1_1_vec[*iota].neg();
+            let k_1_1 = usk.get_partial_key(auth).unwrap().k_1_1_vec[*iota].neg();
             let mut c_4 = H::zero();
             for &j in js {
                 let ua = policy.get(j).0;
