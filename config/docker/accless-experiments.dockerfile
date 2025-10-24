@@ -1,10 +1,13 @@
-FROM ghcr.io/faasm/cpp-sysroot:0.6.0
+FROM ghcr.io/faasm/cpp-sysroot:0.8.0
 
 # Install rust
 RUN rm -rf /root/.rustup \
+    && apt update && apt install -y --no-install-recommends \
+        build-essential \
+        curl \
+        wget \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
-    && . "$HOME/.cargo/env" \
-    && rustup target add wasm32-wasip1
+    && . "$HOME/.cargo/env"
 
 # Deps for Azure's cVM guest library: OpenSSL + libcurl + TPM2-TSS.
 # The versions are taken from the pre-requisite script in the repo, and the
@@ -45,6 +48,7 @@ RUN wget https://www.openssl.org/source/openssl-3.3.2.tar.gz \
     && env \
         PKG_CONFIG_PATH=/usr/local/attestationcurl/lib/pkgconfig:/usr/local/attestationssl/lib64/pkgconfig \
         LDFLAGS='-Wl,-R/usr/local/attestationssl/lib64 -Wl,-R/usr/local/attestationcurl/lib' \
+        CPPFLAGS='-I/usr/local/attestationcurl/include' \
         ./configure --prefix=/usr/local/attestationtpm2-tss \
     && make -j$(nproc) \
     && make install \
@@ -57,7 +61,7 @@ RUN rm -rf /code \
     # Checkout to examples repo to a specific commit
     && git clone https://github.com/faasm/examples /code/faasm-examples \
     && cd /code/faasm-examples \
-    && git checkout 59d4d2c2e2a004f132cf61fc9c15c3faa7d61336 \
+    && git checkout 3cd09e9cf41979fe73c8a9417b661ba08b5b3a75 \
     && git submodule update --init -f cpp \
     && pip3 install /code/faasm-examples/cpp \
     && git clone https://github.com/faasm/tless /code/tless \
