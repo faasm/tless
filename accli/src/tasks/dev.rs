@@ -95,8 +95,7 @@ impl Dev {
     /// Bumps the version tag in both the VERSION file and Cargo.toml
     pub fn bump_code_version(major: bool, minor: bool, patch: bool) -> Result<()> {
         // Read current version from version file
-        let version_file_path = Env::proj_root().join("VERSION");
-        let current_version_str = fs::read_to_string(&version_file_path)?;
+        let current_version_str = Env::get_version()?;
 
         // 2. PARSE AND BUMP THE VERSION
         let mut version = Version::parse(&current_version_str)?;
@@ -107,6 +106,7 @@ impl Dev {
         info!("new version: {}", new_version_str);
 
         // Update the version file
+        let version_file_path = Env::proj_root().join("VERSION");
         Self::update_version_file(&version_file_path, &new_version_str)?;
 
         // Update the cargo.toml file
@@ -118,8 +118,7 @@ impl Dev {
 
     /// Tags the current commit with the version from the VERSION file.
     pub fn tag_code(force: bool) -> Result<()> {
-        let version_file_path = Env::proj_root().join("VERSION");
-        let current_version_str = fs::read_to_string(&version_file_path)?;
+        let current_version_str = Env::get_version()?;
         let version = Version::parse(&current_version_str)?;
         let tag_name = format!("v{}", version);
 

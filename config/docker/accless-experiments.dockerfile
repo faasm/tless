@@ -55,6 +55,7 @@ RUN wget https://www.openssl.org/source/openssl-3.3.2.tar.gz \
     && rm -rf /opt/tpm2-tss
 
 # Prepare repository structure
+ARG ACCLESS_VERSION
 RUN rm -rf /code \
     && mkdir -p /code \
     && cd /code \
@@ -63,8 +64,7 @@ RUN rm -rf /code \
     && cd /code/faasm-examples \
     && git checkout 3cd09e9cf41979fe73c8a9417b661ba08b5b3a75 \
     && git submodule update --init -f cpp \
-    && pip3 install /code/faasm-examples/cpp \
-    && git clone https://github.com/faasm/tless /code/tless \
+    && git clone -b v${ACCLESS_VERSION} https://github.com/faasm/tless /code/tless \
     && cd /code/tless \
     && git submodule update --init
 
@@ -82,5 +82,7 @@ RUN cd /code/faasm-examples/cpp \
 # Build workflow code (WASM for Faasm + Native for Knative)
 ENV PATH=${PATH}:/root/.cargo/bin
 RUN cd /code/tless \
+    # Activate faasmtools
+    && source /code/faasm-examples/cpp/bin/workon.sh \
     && python3 ./ubench/build.py \
     && python3 ./workflows/build.py

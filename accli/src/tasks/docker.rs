@@ -1,6 +1,5 @@
 use crate::env::Env;
 use clap::ValueEnum;
-use rand::Rng;
 use std::fmt;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
@@ -74,10 +73,7 @@ impl Docker {
             .arg("-f")
             .arg(dockerfile_path.to_string_lossy().into_owned())
             .arg("--build-arg")
-            .arg(format!("TLESS_VERSION={}", Env::get_version().unwrap()))
-            // TODO: delete this build arg
-            .arg("--build-arg")
-            .arg(format!("TMP_VER={}", rand::rng().random_range(0..1000)))
+            .arg(format!("ACCLESS_VERSION={}", Env::get_version().unwrap()))
             .arg(".");
 
         if nocache {

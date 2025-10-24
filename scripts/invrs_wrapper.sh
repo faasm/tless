@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-source ./bin/workon.sh
+source ./scripts/workon.sh
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-${(%):-%x}}" )" >/dev/null 2>&1 && pwd )"
 PROJ_ROOT="${THIS_DIR}/.."

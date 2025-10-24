@@ -30,7 +30,7 @@ To execute any code snippet in this repository, we will assume that you have
 installed rust, and activated your virtual environment:
 
 ```bash
-source ./bin/workon.sh
+source ./scripts/workon.sh
 ```
 
 only then you will have access to `accli`, Accless CLI tool:

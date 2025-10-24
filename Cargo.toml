@@ -26,7 +26,7 @@ base64 = "^0.22"
 bytes = "1.4"
 chrono = "^0.4.38"
 clap = { version = "4.0" }
-cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", revision = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b" }
+cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", rev = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b" }
 csv = "^1.1"
 env_logger = "0.11.8"
 futures = "^0.3"
