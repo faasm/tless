@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 license-file = "LICENSE"
 authors = ["Large-Scale Data & Systems Group - Imperial College London"]
 edition = "2024"
