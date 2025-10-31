@@ -21,4 +21,11 @@ fi
 pip_cmd install -U pip setuptools wheel
 pip_cmd install -r requirements.txt
 
+# If deployed inside a container, also install `faasmtools` for WASM
+# cross-compilation. Note that this path is hard-coded in:
+# ./config/docker/accless-experiments.dockerfile
+if [ -d /code/faasm-examples/cpp ]; then
+    pip_cmd install /code/faasm-examples/cpp
+fi
+
 popd >> /dev/null

@@ -75,5 +75,33 @@ cargo build
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
   the file.
-- In rust code, do not allow the use of unwrap() or panic(). Instead, enforce
-  proper error handling.
+
+### Rust Coding Guidelines
+
+- Do not allow the use of unwrap() or panic(). Instead, enforce proper error handling.
+- For each new method, make sure to add extensive documentation in the following format:
+```rust
+///
+/// # Description
+///
+/// <description>
+///
+/// # Arguments
+///
+/// - `arg1`: explanation
+/// - `arg2`: explanation
+///
+/// # Returns
+///
+/// <explanation of return value>
+///
+/// # Example Usage
+///
+/// <code snippet if applicable
+```
+- For each new function you add, make sure to add one or multiple unit tests.
+
+### C++ Coding Guidelines
+
+C++ code has certain dependencies, including a cross-compilation toolchain and
+system root, that we only ship inside a container.

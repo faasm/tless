@@ -3,7 +3,7 @@ from os import environ, makedirs
 from os.path import dirname, exists, join, realpath
 from shutil import rmtree
 from subprocess import run
-from sys import argv
+from sys import argv, exit
 
 UBENCH_ROOT = dirname(realpath(__file__))
 UBENCHS = {
@@ -51,6 +51,10 @@ def compile(wasm=False, native=False, debug=False, time=False):
 
 
 if __name__ == "__main__":
+    if "ACCLESS_DOCKER" not in environ or environ["ACCLESS_DOCKER"] != "on":
+        print("ERROR: microbenchmarks can only be built inside Accless' container")
+        exit(1)
+
     debug = False
     if len(argv) == 2 and argv[1] == "--debug":
         debug = True
