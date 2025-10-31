@@ -4,7 +4,13 @@ set -e
 
 THIS_DIR=$(dirname $(readlink -f $0))
 PROJ_ROOT=${THIS_DIR}/..
-VENV_PATH="${PROJ_ROOT}/venv"
+
+if [[ -z "$ACCLESS_DOCKER" ]]; then
+    VENV_PATH="${PROJ_ROOT}/venv-bm"
+else
+    VENV_PATH="${PROJ_ROOT}/venv"
+fi
+
 
 PIP=${VENV_PATH}/bin/pip3
 

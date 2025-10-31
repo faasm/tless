@@ -103,6 +103,8 @@ enum DevCommand {
 
 #[derive(Debug, Subcommand)]
 enum DockerCommand {
+    /// Build one of Accless' docker containers. Run build --help to see the
+    /// possibe options
     Build {
         #[arg(short, long, num_args = 1.., value_name = "CTR_NAME")]
         ctr: Vec<DockerContainer>,
@@ -111,6 +113,7 @@ enum DockerCommand {
         #[arg(long)]
         nocache: bool,
     },
+    /// Build all Accless docker containers
     BuildAll {
         #[arg(long)]
         push: bool,
@@ -119,6 +122,17 @@ enum DockerCommand {
     },
     /// Get a CLI interface to the experiments container
     Cli {},
+    /// Run a command inside the experiments container
+    Run {
+        /// Command to run inside the container
+        cmd: Vec<String>,
+        /// Mount the current directory to /code/tless
+        #[arg(long)]
+        mount: bool,
+        /// Set the working directory inside the container
+        #[arg(long)]
+        cwd: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -365,19 +379,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             DockerCommand::Cli {} => {
-                let docker_cmd = format!(
-                    "docker run -v {}:/code/tless --rm -it -w /code/tless {} bash",
-                    Env::proj_root().display(),
-                    Docker::get_docker_tag(&DockerContainer::Experiments)
-                );
-                let status = process::Command::new("sh")
-                    .arg("-c")
-                    .arg(docker_cmd)
-                    .status()
-                    .expect("invrs: error spawning docker command");
-                if !status.success() {
-                    panic!("invrs: error getting CLI into experiments container");
-                }
+                Docker::cli();
+            }
+            DockerCommand::Run { cmd, mount, cwd } => {
+                Docker::run(cmd, *mount, cwd.as_deref());
             }
         },
         Command::Eval { eval_command } => match eval_command {
@@ -533,9 +538,9 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd_in)
                             .status()
-                            .expect("invrs: error scp-ing data (in)");
+                            .expect("accli: error scp-ing data (in)");
                         if !status.success() {
-                            panic!("invrs: error scp-ing data (in)");
+                            panic!("accli: error scp-ing data (in)");
                         }
 
                         let scp_cmd_out =
@@ -544,9 +549,9 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd_out)
                             .status()
-                            .expect("invrs: error scp-ing data (out)");
+                            .expect("accli: error scp-ing data (out)");
                         if !status.success() {
-                            panic!("invrs: error scp-ing data (out)");
+                            panic!("accli: error scp-ing data (out)");
                         }
                     }
                 }
@@ -566,7 +571,7 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd)
                             .status()
-                            .expect("invrs: error scp-ing results");
+                            .expect("accli: error scp-ing results");
                     }
                 }
                 AzureSubCommand::Ssh {} => {
@@ -635,7 +640,7 @@ async fn main() -> anyhow::Result<()> {
                         .arg("-c")
                         .arg(scp_cmd)
                         .status()
-                        .expect("invrs: error scp-ing results");
+                        .expect("accli: error scp-ing results");
                 }
                 AzureSubCommand::Ssh {} => {
                     Azure::build_ssh_command("tless-mhsm-cvm");
@@ -677,7 +682,7 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd)
                             .status()
-                            .expect("invrs: error scp-ing results");
+                            .expect("accli: error scp-ing results");
                     }
                 }
                 AzureSubCommand::Ssh {} => {
@@ -714,7 +719,7 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd)
                             .status()
-                            .expect("invrs: error scp-ing results");
+                            .expect("accli: error scp-ing results");
                     }
                 }
                 AzureSubCommand::Ssh {} => {
@@ -752,9 +757,9 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd_in)
                             .status()
-                            .expect("invrs: error scp-ing data (in)");
+                            .expect("accli: error scp-ing data (in)");
                         if !status.success() {
-                            panic!("invrs: error scp-ing data (in)");
+                            panic!("accli: error scp-ing data (in)");
                         }
 
                         let scp_cmd_out =
@@ -763,9 +768,9 @@ async fn main() -> anyhow::Result<()> {
                             .arg("-c")
                             .arg(scp_cmd_out)
                             .status()
-                            .expect("invrs: error scp-ing data (out)");
+                            .expect("accli: error scp-ing data (out)");
                         if !status.success() {
-                            panic!("invrs: error scp-ing data (out)");
+                            panic!("accli: error scp-ing data (out)");
                         }
                     }
                 }
@@ -783,7 +788,7 @@ async fn main() -> anyhow::Result<()> {
                         .arg("-c")
                         .arg(scp_cmd)
                         .status()
-                        .expect("invrs: error scp-ing results");
+                        .expect("accli: error scp-ing results");
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
