@@ -1,11 +1,19 @@
-use cloudevents::binding::reqwest::RequestBuilderExt;
-use cloudevents::binding::warp::{filter, reply};
-use cloudevents::{AttributesReader, AttributesWriter, Event};
+use cloudevents::{
+    AttributesReader, AttributesWriter, Event,
+    binding::{
+        reqwest::RequestBuilderExt,
+        warp::{filter, reply},
+    },
+};
 use once_cell::sync::Lazy;
-use serde_json::{json, Value};
-use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::{env, fs, io::BufRead, io::BufReader, thread, time};
+use serde_json::{Value, json};
+use std::{
+    env, fs,
+    io::{BufRead, BufReader},
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    thread, time,
+};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use warp::Filter;

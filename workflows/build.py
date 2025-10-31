@@ -6,6 +6,7 @@ from subprocess import run
 from sys import argv
 
 WORKFLOWS_ROOT = dirname(realpath(__file__))
+PROJ_ROOT = dirname(WORKFLOWS_ROOT)
 
 WORKFLOWS = {
     "finra": ["driver", "fetch-public", "fetch-private", "audit", "merge"],
@@ -67,8 +68,8 @@ def compile_driver(debug=False):
     """
     for workflow in list(WORKFLOWS.keys()):
         build_dir = join(WORKFLOWS_ROOT, workflow, "knative")
-        cargo_cmd = "cargo build --{}".format("debug" if debug else "release")
-        run(cargo_cmd, shell=True, check=True, cwd=build_dir)
+        cargo_cmd = "cargo build -p accless-{}-cloudevent-handler --{}".format(workflow, "debug" if debug else "release")
+        run(cargo_cmd, shell=True, check=True, cwd=PROJ_ROOT)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,23 @@
+[package]
+name = "accless-abe4"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Decentralized CP-ABE Implementation"
+homepage.workspace = true
+
+[lib]
+name="accless_abe4"
+crate-type=["staticlib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+ark-bls12-377.workspace = true
+ark-bls12-381.workspace = true
+ark-mnt4-298.workspace = true
+ark-ec.workspace = true
+ark-ff.workspace = true
+ark-std.workspace = true
+sha2.workspace = true

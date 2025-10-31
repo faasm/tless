@@ -21,8 +21,7 @@ is running:
 To run the experiment, first upload the corresponding WASM files and state:
 
 ```bash
-cd ~/git/faasm/tless
-source ./bin/workon.sh
+source ./scripts/workon.sh
 invrs eval cold-start upload-state
 invrs eval cold-start upload-wasm
 ```
@@ -50,7 +49,7 @@ Once inside, you can deploy the microbenchmark:
 
 ```bash
 cd git/faasm/tless
-source ./bin/workon.sh
+source ./scripts/workon.sh
 kubectl apply -f k8s/common.yaml
 envsubst < ./ubench/cold-start/deployment.yaml | kubectl apply -f -
 ```
