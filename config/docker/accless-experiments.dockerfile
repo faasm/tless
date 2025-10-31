@@ -7,6 +7,7 @@ RUN rm -rf /root/.rustup \
         curl \
         gosu \
         libboost-dev \
+        sudo \
         wget \
         zlib1g-dev \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
@@ -81,7 +82,7 @@ ARG ACCLESS_VERSION
 RUN cd /code \
     && git clone -b v${ACCLESS_VERSION} https://github.com/faasm/tless /code/accless \
     && cd /code/accless \
-    && git submodule update --init
+    && source ./scripts/workon.sh
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 # ENV PATH=${PATH}:/root/.cargo/bin
@@ -97,5 +98,4 @@ COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-RUN echo ". /code/accless/scripts/workon.sh" >> ~/.bashrc
 CMD ["/bin/bash", "-l"]

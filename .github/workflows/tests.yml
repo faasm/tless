@@ -17,18 +17,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  unit-tests:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: "Checkout code"
-        uses: actions/checkout@v4
-      - name: "Run Rust unit tests"
-        run: |
-          source ./scripts/workon.sh
-          # TODO: move to accli dev test
-          cargo test
-
   checks:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
@@ -39,3 +27,29 @@ jobs:
         run: sudo apt install -y clang-format
       - name: "Run formatting checks"
         run: ./scripts/accli_wrapper.sh dev format-code
+
+  rust-unit-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Run Rust unit tests"
+        run: |
+          source ./scripts/workon.sh
+          cargo test
+
+  cpp-unit-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/faasm/accless-experiments:0.8.1
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Build C++ code"
+        run: python3 build.py
+        working-directory: accless
+      - name: "Run C++ unit tests"
+        run: ctest
+        working-directory: accless/build-native
