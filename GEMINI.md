@@ -59,10 +59,10 @@ You can run the code formatting checks with:
 
 ```bash
 # To format code.
-accli dev format-code
+./scripts/accli_wrapper.sh dev format-code
 
 # To check formatting.
-accli dev format-code --check
+./scripts/accli_wrapper.sh dev format-code --check
 ```
 
 after applying any changes, make sure they compile by running:
@@ -70,6 +70,11 @@ after applying any changes, make sure they compile by running:
 ```bash
 cargo build
 ```
+
+note that in order to set the right environment for your commands, we provide
+the `./scripts/accli_wrapper.sh` that you should use whenever you want to
+run a commadn in `accli`. All commands and subcommands in `accli` take an
+optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
 ## Code Style
 
@@ -104,4 +109,23 @@ cargo build
 ### C++ Coding Guidelines
 
 C++ code has certain dependencies, including a cross-compilation toolchain and
-system root, that we only ship inside a container.
+system root, that we only ship inside a container. As a consequence, any
+time you need to test some C++ feature, you need to run the command inside
+the sysroot container. To do so, you may use `accli` as follows:
+
+```
+# <cwd> must be an absolute path!
+./scripts/accli_wrapper.sh docker run [--cwd <cwd>] [--mount] "<your bash command here>"
+```
+
+for example, to build the current version of the accless library:
+
+```
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless --mount "python3 build.py"
+```
+
+after building, you can run the C++ integration tests with:
+
+```
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless/build-native --mount "ctest"
+```

@@ -20,9 +20,10 @@ ark-bls12-381.workspace = true
 ark-mnt4-298.workspace = true
 ark-ec.workspace = true
 ark-ff.workspace = true
-ark-std.workspace = true
+ark-std = { workspace = true, features = ["std"] }
 ark-serialize = { workspace = true, features = ["derive"] }
 base64.workspace = true
+rand = { workspace = true, features = ["std", "std_rng"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true

@@ -15,9 +15,9 @@ add_library(jwt_rust_lib STATIC IMPORTED GLOBAL)
 
 add_custom_command(
     OUTPUT ${JWT_RUST_LIBRARY}
-    COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}/../target cargo build
-        --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/../Cargo.toml
-        ${CARGO_FLAGS}
+    COMMAND CARGO_TARGET_DIR=${CMAKE_SOURCE_DIR}/../target cargo build
+        --manifest-path ${CMAKE_SOURCE_DIR}/../Cargo.toml -p accless-jwt
+        ${CARGO_FLAGS} > /dev/null 2>&1
     COMMENT "Building JWT staticlib with Cargo"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
