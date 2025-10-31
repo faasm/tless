@@ -9,7 +9,8 @@ homepage.workspace = true
 
 [lib]
 name="accless_abe4"
-crate-type=["staticlib", "rlib"]
+# rlib needed for tests, staticlib needed for linkage with Accless C++ library
+crate-type=["rlib", "staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
@@ -20,4 +21,8 @@ ark-mnt4-298.workspace = true
 ark-ec.workspace = true
 ark-ff.workspace = true
 ark-std.workspace = true
+ark-serialize = { workspace = true, features = ["derive"] }
+base64.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 sha2.workspace = true

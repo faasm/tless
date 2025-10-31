@@ -12,7 +12,11 @@ dependencies = [
  "ark-ec",
  "ark-ff",
  "ark-mnt4-298",
+ "ark-serialize",
  "ark-std",
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
  "sha2",
 ]
 
