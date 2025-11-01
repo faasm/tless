@@ -20,6 +20,27 @@ SetupOutput setup(const std::vector<std::string> &auths) {
     return {result_json["msk"], result_json["mpk"]};
 }
 
+std::string keygen(const std::string &gid, const std::string &msk,
+                   const std::vector<UserAttribute> &user_attrs) {
+    nlohmann::json user_attrs_json = nlohmann::json::array();
+    for (const auto &attr : user_attrs) {
+        user_attrs_json.push_back({{"authority", attr.authority},
+                                   {"label", attr.label},
+                                   {"attribute", attr.attribute}});
+    }
+
+    char *result =
+        keygen_abe4(gid.c_str(), msk.c_str(), user_attrs_json.dump().c_str());
+    if (!result) {
+        return "";
+    }
+
+    std::string usk_b64(result);
+    free_string(result);
+
+    return usk_b64;
+}
+
 std::map<std::string, std::vector<uint8_t>>
 unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
     std::map<std::string, std::vector<uint8_t>> result;

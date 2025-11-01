@@ -210,6 +210,154 @@ impl Valid for PartialMSK {
     }
 }
 
+impl CanonicalSerialize for PartialUSK {
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        mode: ark_serialize::Compress,
+    ) -> Result<(), ark_serialize::SerializationError> {
+        (self.auth.len() as u64).serialize_with_mode(&mut writer, mode)?;
+        writer.write_all(self.auth.as_bytes())?;
+        self.k_1_1_vec.serialize_with_mode(&mut writer, mode)?;
+
+        // k_1_2_map
+        (self.k_1_2_map.len() as u64).serialize_with_mode(&mut writer, mode)?;
+        for (k, v) in &self.k_1_2_map {
+            k.serialize_with_mode(&mut writer, mode)?;
+            v.serialize_with_mode(&mut writer, mode)?;
+        }
+
+        // k_2_map
+        (self.k_2_map.len() as u64).serialize_with_mode(&mut writer, mode)?;
+        for (k, v) in &self.k_2_map {
+            k.serialize_with_mode(&mut writer, mode)?;
+            v.serialize_with_mode(&mut writer, mode)?;
+        }
+
+        // k_3_map
+        (self.k_3_map.len() as u64).serialize_with_mode(&mut writer, mode)?;
+        for (k, v) in &self.k_3_map {
+            k.serialize_with_mode(&mut writer, mode)?;
+            v.serialize_with_mode(&mut writer, mode)?;
+        }
+
+        self.k_4_vec.serialize_with_mode(&mut writer, mode)?;
+        self.k_5_vec.serialize_with_mode(&mut writer, mode)?;
+        Ok(())
+    }
+
+    fn serialized_size(&self, mode: ark_serialize::Compress) -> usize {
+        let mut size = (self.auth.len() as u64).serialized_size(mode) + self.auth.len();
+        size += self.k_1_1_vec.serialized_size(mode);
+
+        // k_1_2_map
+        size += (self.k_1_2_map.len() as u64).serialized_size(mode);
+        for (k, v) in &self.k_1_2_map {
+            size += k.serialized_size(mode);
+            size += v.serialized_size(mode);
+        }
+
+        // k_2_map
+        size += (self.k_2_map.len() as u64).serialized_size(mode);
+        for (k, v) in &self.k_2_map {
+            size += k.serialized_size(mode);
+            size += v.serialized_size(mode);
+        }
+
+        // k_3_map
+        size += (self.k_3_map.len() as u64).serialized_size(mode);
+        for (k, v) in &self.k_3_map {
+            size += k.serialized_size(mode);
+            size += v.serialized_size(mode);
+        }
+
+        size += self.k_4_vec.serialized_size(mode);
+        size += self.k_5_vec.serialized_size(mode);
+        size
+    }
+}
+
+impl CanonicalDeserialize for PartialUSK {
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: ark_serialize::Compress,
+        validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        let auth_len = u64::deserialize_with_mode(&mut reader, compress, validate)?;
+        let mut auth_bytes = vec![0; auth_len as usize];
+        reader.read_exact(&mut auth_bytes)?;
+        let auth = String::from_utf8(auth_bytes)
+            .map_err(|_| ark_serialize::SerializationError::InvalidData)?;
+
+        let k_1_1_vec = Vec::<G>::deserialize_with_mode(&mut reader, compress, validate)?;
+
+        // k_1_2_map
+        let k_1_2_map_len = u64::deserialize_with_mode(&mut reader, compress, validate)?;
+        let mut k_1_2_map = HashMap::with_capacity(k_1_2_map_len as usize);
+        for _ in 0..k_1_2_map_len {
+            let key = <(String, String)>::deserialize_with_mode(&mut reader, compress, validate)?;
+            let value = G::deserialize_with_mode(&mut reader, compress, validate)?;
+            k_1_2_map.insert(key, value);
+        }
+
+        // k_2_map
+        let k_2_map_len = u64::deserialize_with_mode(&mut reader, compress, validate)?;
+        let mut k_2_map = HashMap::with_capacity(k_2_map_len as usize);
+        for _ in 0..k_2_map_len {
+            let key = String::deserialize_with_mode(&mut reader, compress, validate)?;
+            let value = G::deserialize_with_mode(&mut reader, compress, validate)?;
+            k_2_map.insert(key, value);
+        }
+
+        // k_3_map
+        let k_3_map_len = u64::deserialize_with_mode(&mut reader, compress, validate)?;
+        let mut k_3_map = HashMap::with_capacity(k_3_map_len as usize);
+        for _ in 0..k_3_map_len {
+            let key = <(String, String)>::deserialize_with_mode(&mut reader, compress, validate)?;
+            let value = G::deserialize_with_mode(&mut reader, compress, validate)?;
+            k_3_map.insert(key, value);
+        }
+
+        let k_4_vec = Vec::<H>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let k_5_vec = Vec::<H>::deserialize_with_mode(&mut reader, compress, validate)?;
+
+        Ok(Self {
+            auth,
+            k_1_1_vec,
+            k_1_2_map,
+            k_2_map,
+            k_3_map,
+            k_4_vec,
+            k_5_vec,
+        })
+    }
+}
+
+impl Valid for PartialUSK {
+    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
+        self.k_1_1_vec.check()?;
+        for (k, v) in &self.k_1_2_map {
+            k.check()?;
+            v.check()?;
+        }
+        for (k, v) in &self.k_2_map {
+            k.check()?;
+            v.check()?;
+        }
+        for (k, v) in &self.k_3_map {
+            k.check()?;
+            v.check()?;
+        }
+        self.k_4_vec.check()?;
+        self.k_5_vec.check()?;
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------------------------
+// Serialization Of Full Keys
+// -----------------------------------------------------------------------------------------------
+
 impl<T: CanonicalSerialize + PartialKey> CanonicalSerialize for FullKey<T> {
     fn serialize_with_mode<W: Write>(
         &self,
@@ -354,7 +502,7 @@ impl FullKey<PartialUSK> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scheme::setup;
+    use crate::scheme::{iota::Iota, keygen, setup};
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use ark_std::test_rng;
 
@@ -403,5 +551,25 @@ mod tests {
             let partial_key = PartialMPK::deserialize_compressed(&key_bytes[..]).unwrap();
             assert_eq!(auth, partial_key.get_authority());
         }
+    }
+
+    #[test]
+    fn test_usk_serialization() {
+        let mut rng = test_rng();
+        let auths = vec!["A", "B"];
+        let (msk, _mpk) = setup(&mut rng, &auths);
+        let user_attrs = vec![
+            UserAttribute::new("A", "L1", "A1"),
+            UserAttribute::new("B", "L2", "A2"),
+        ];
+        let iota = Iota::new(&user_attrs);
+        let usk = keygen(&mut rng, "gid", &msk, &user_attrs, &iota);
+
+        let mut usk_bytes = Vec::new();
+        usk.serialize_compressed(&mut usk_bytes).unwrap();
+
+        let usk_deserialized: USK = USK::deserialize_compressed(&usk_bytes[..]).unwrap();
+
+        assert_eq!(usk, usk_deserialized);
     }
 }

@@ -3,11 +3,12 @@ mod hashing;
 mod policy;
 mod scheme;
 
-use ark_serialize::CanonicalSerialize;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::engine::{Engine as _, general_purpose};
 pub use curve::Gt;
 pub use policy::{Policy, UserAttribute};
 pub use scheme::{decrypt, encrypt, iota, keygen, setup, tau};
+use scheme::{iota::Iota, types::MSK};
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::{CStr, CString},
@@ -57,4 +58,41 @@ pub unsafe extern "C" fn setup_abe4(auths_json: *const c_char) -> *mut c_char {
 
     let output_json = serde_json::to_string(&output).unwrap();
     CString::new(output_json).unwrap().into_raw()
+}
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn keygen_abe4(
+    gid: *const c_char,
+    msk_b64: *const c_char,
+    user_attrs_json: *const c_char,
+) -> *mut c_char {
+    let gid_cstr = unsafe { CStr::from_ptr(gid) };
+    let msk_b64_cstr = unsafe { CStr::from_ptr(msk_b64) };
+    let user_attrs_cstr = unsafe { CStr::from_ptr(user_attrs_json) };
+
+    let msk_bytes = general_purpose::STANDARD
+        .decode(msk_b64_cstr.to_str().unwrap())
+        .unwrap();
+    let msk: MSK = MSK::deserialize_compressed(&msk_bytes[..]).unwrap();
+
+    let user_attrs: Vec<UserAttribute> =
+        serde_json::from_str(user_attrs_cstr.to_str().unwrap()).unwrap();
+
+    let iota = Iota::new(&user_attrs);
+    let mut rng = ark_std::rand::thread_rng();
+
+    let usk = keygen(
+        &mut rng,
+        gid_cstr.to_str().unwrap(),
+        &msk,
+        &user_attrs,
+        &iota,
+    );
+
+    let mut usk_bytes = Vec::new();
+    usk.serialize_compressed(&mut usk_bytes).unwrap();
+
+    let usk_b64 = general_purpose::STANDARD.encode(&usk_bytes);
+    CString::new(usk_b64).unwrap().into_raw()
 }
