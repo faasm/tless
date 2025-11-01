@@ -1,6 +1,7 @@
 #include "abe4.h"
 #include "base64.h" // New include
 #include <gtest/gtest.h>
+#include <optional>
 
 TEST(abe4, setup) {
     std::vector<std::string> auths = {"auth1", "auth2"};
@@ -63,4 +64,24 @@ TEST(Abe4Test, Encrypt) {
         accless::abe4::encrypt(setup_output.mpk, policy);
     EXPECT_FALSE(encrypt_output.gt.empty());
     EXPECT_FALSE(encrypt_output.ciphertext.empty());
+}
+
+TEST(Abe4Test, Decrypt) {
+    std::vector<std::string> auths = {"auth1", "auth2"};
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+
+    std::string gid = "test_gid";
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {"auth1", "label1", "attr1"}, {"auth2", "label2", "attr2"}};
+    std::string usk_b64 =
+        accless::abe4::keygen(gid, setup_output.msk, user_attrs);
+
+    std::string policy = "auth1.label1:attr1 and auth2.label2:attr2";
+    accless::abe4::EncryptOutput encrypt_output =
+        accless::abe4::encrypt(setup_output.mpk, policy);
+
+    std::optional<std::string> decrypted_gt =
+        accless::abe4::decrypt(usk_b64, gid, policy, encrypt_output.ciphertext);
+    ASSERT_TRUE(decrypted_gt.has_value());
+    EXPECT_EQ(decrypted_gt.value(), encrypt_output.gt);
 }

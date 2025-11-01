@@ -11,7 +11,7 @@ pub use scheme::{decrypt, encrypt, iota, keygen, setup, tau};
 use scheme::{
     iota::Iota,
     tau::Tau,
-    types::{Ciphertext, MPK, MSK},
+    types::{Ciphertext, MPK, MSK, USK},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -140,4 +140,46 @@ pub unsafe extern "C" fn encrypt_abe4(
 
     let output_json = serde_json::to_string(&output).unwrap();
     CString::new(output_json).unwrap().into_raw()
+}
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn decrypt_abe4(
+    usk_b64: *const c_char,
+    gid: *const c_char,
+    policy_str: *const c_char,
+    ct_b64: *const c_char,
+) -> *mut c_char {
+    let usk_b64_cstr = unsafe { CStr::from_ptr(usk_b64) };
+    let gid_cstr = unsafe { CStr::from_ptr(gid) };
+    let policy_cstr = unsafe { CStr::from_ptr(policy_str) };
+    let ct_b64_cstr = unsafe { CStr::from_ptr(ct_b64) };
+
+    let usk_bytes = general_purpose::STANDARD
+        .decode(usk_b64_cstr.to_str().unwrap())
+        .unwrap();
+    let usk: USK = USK::deserialize_compressed(&usk_bytes[..]).unwrap();
+
+    let policy = Policy::parse(policy_cstr.to_str().unwrap()).unwrap();
+    let tau = Tau::new(&policy);
+
+    let user_attrs = usk.get_user_attributes();
+    let iota = Iota::new(&user_attrs);
+
+    let ct_bytes = general_purpose::STANDARD
+        .decode(ct_b64_cstr.to_str().unwrap())
+        .unwrap();
+    let ct: Ciphertext = Ciphertext::deserialize_compressed(&ct_bytes[..]).unwrap();
+
+    let result = decrypt(&usk, gid_cstr.to_str().unwrap(), &iota, &tau, &policy, &ct);
+
+    match result {
+        Some(gt) => {
+            let mut gt_bytes = Vec::new();
+            gt.serialize_compressed(&mut gt_bytes).unwrap();
+            let gt_b64 = general_purpose::STANDARD.encode(&gt_bytes);
+            CString::new(gt_b64).unwrap().into_raw()
+        }
+        None => std::ptr::null_mut(),
+    }
 }

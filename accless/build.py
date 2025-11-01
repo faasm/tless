@@ -6,6 +6,7 @@ from subprocess import run
 from sys import argv, exit
 
 ACCLESS_ROOT = dirname(realpath(__file__))
+PROJ_ROOT = dirname(ACCLESS_ROOT)
 
 
 def compile(wasm=False, native=False, debug=False, time=False):
@@ -54,6 +55,8 @@ if __name__ == "__main__":
     elif len(argv) == 2 and argv[1] == "--clean":
         rmtree(join(ACCLESS_ROOT, "build-native"), ignore_errors=True)
         rmtree(join(ACCLESS_ROOT, "build-wasm"), ignore_errors=True)
+        run("cargo clean -p accless-abe4", shell=True, check=True, cwd=PROJ_ROOT)
+        run("cargo clean -p accless-jwt", shell=True, check=True, cwd=PROJ_ROOT)
 
     # Build the microbenchmarks
     compile(wasm=True, debug=debug)

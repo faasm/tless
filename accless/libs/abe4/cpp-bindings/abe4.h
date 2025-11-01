@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,9 @@ char *setup_abe4(const char *auths_json);
 char *keygen_abe4(const char *gid, const char *msk_b64,
                   const char *user_attrs_json);
 char *encrypt_abe4(const char *mpk_b64, const char *policy_str);
+char *decrypt_abe4(const char *usk_b64, const char *gid, const char *policy_str,
+                   const char *ct_b64);
+
 } // extern "C"
 
 namespace accless::abe4 {
@@ -64,6 +68,29 @@ std::string keygen(const std::string &gid, const std::string &msk,
  * `Ciphertext`.
  */
 EncryptOutput encrypt(const std::string &mpk, const std::string &policy);
+
+/**
+ * @brief Decrypts a ciphertext using a User Secret Key (USK), group ID, policy,
+ * and ciphertext.
+ *
+ * This function acts as a C++ wrapper around the Rust `decrypt` FFI function.
+ * It takes a base64 encoded User Secret Key, group ID, policy string, and
+ * base64 encoded ciphertext. It calls the Rust FFI function, and returns an
+ * `std::optional<std::string>` containing the base64 encoded `Gt` if decryption
+ * is successful, or `std::nullopt` otherwise.
+ *
+ * @param usk A base64 encoded string representing the User Secret Key.
+ * @param gid The group ID associated with the decryption.
+ * @param policy A string representing the access policy used for encryption.
+ * @param ct A base64 encoded string representing the ciphertext to be
+ * decrypted.
+ * @return An `std::optional<std::string>` containing the base64 encoded `Gt` on
+ * success, or `std::nullopt` on failure.
+ */
+std::optional<std::string> decrypt(const std::string &usk,
+                                   const std::string &gid,
+                                   const std::string &policy,
+                                   const std::string &ct);
 
 /**
  * @brief Unpacks a serialized FullKey (e.g., MPK or MSK) into a map of

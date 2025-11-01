@@ -3,6 +3,7 @@
 
 #include <cstring> // For std::memcpy
 #include <nlohmann/json.hpp>
+#include <optional>
 
 namespace accless::abe4 {
 
@@ -51,6 +52,22 @@ EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
     free_string(result);
 
     return {result_json["gt"], result_json["ciphertext"]};
+}
+
+std::optional<std::string> decrypt(const std::string &usk,
+                                   const std::string &gid,
+                                   const std::string &policy,
+                                   const std::string &ct) {
+    char *result =
+        decrypt_abe4(usk.c_str(), gid.c_str(), policy.c_str(), ct.c_str());
+    if (!result) {
+        return std::nullopt;
+    }
+
+    std::string gt_b64(result);
+    free_string(result);
+
+    return gt_b64;
 }
 
 std::map<std::string, std::vector<uint8_t>>
