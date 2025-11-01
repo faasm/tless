@@ -1,11 +1,16 @@
+# Rust builds
 target
 
-workflows/build
+# Python builds
 venv
+venv-bm
 
+# C++ builds
 build-native
 build-wasm
 
 ansible/inventory/vms.ini
 
 datasets*
+
+gemini-plans

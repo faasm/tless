@@ -1,0 +1,103 @@
+#include "abe4.h"
+#include "base64.h"
+
+#include <cstring> // For std::memcpy
+#include <nlohmann/json.hpp>
+#include <optional>
+
+namespace accless::abe4 {
+
+SetupOutput setup(const std::vector<std::string> &auths) {
+    nlohmann::json j = auths;
+
+    char *result = setup_abe4(j.dump().c_str());
+    if (!result) {
+        return {};
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return {result_json["msk"], result_json["mpk"]};
+}
+
+std::string keygen(const std::string &gid, const std::string &msk,
+                   const std::vector<UserAttribute> &user_attrs) {
+    nlohmann::json user_attrs_json = nlohmann::json::array();
+    for (const auto &attr : user_attrs) {
+        user_attrs_json.push_back({{"authority", attr.authority},
+                                   {"label", attr.label},
+                                   {"attribute", attr.attribute}});
+    }
+
+    char *result =
+        keygen_abe4(gid.c_str(), msk.c_str(), user_attrs_json.dump().c_str());
+    if (!result) {
+        return "";
+    }
+
+    std::string usk_b64(result);
+    free_string(result);
+
+    return usk_b64;
+}
+
+EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
+    char *result = encrypt_abe4(mpk.c_str(), policy.c_str());
+    if (!result) {
+        return {};
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return {result_json["gt"], result_json["ciphertext"]};
+}
+
+std::optional<std::string> decrypt(const std::string &usk,
+                                   const std::string &gid,
+                                   const std::string &policy,
+                                   const std::string &ct) {
+    char *result =
+        decrypt_abe4(usk.c_str(), gid.c_str(), policy.c_str(), ct.c_str());
+    if (!result) {
+        return std::nullopt;
+    }
+
+    std::string gt_b64(result);
+    free_string(result);
+
+    return gt_b64;
+}
+
+std::map<std::string, std::vector<uint8_t>>
+unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
+    std::map<std::string, std::vector<uint8_t>> result;
+    const uint8_t *ptr = full_key_bytes.data();
+
+    uint64_t num_keys;
+    std::memcpy(&num_keys, ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+
+    for (uint64_t i = 0; i < num_keys; ++i) {
+        uint64_t auth_len;
+        std::memcpy(&auth_len, ptr, sizeof(uint64_t));
+        ptr += sizeof(uint64_t);
+
+        std::string auth(reinterpret_cast<const char *>(ptr), auth_len);
+        ptr += auth_len;
+
+        uint64_t key_len;
+        std::memcpy(&key_len, ptr, sizeof(uint64_t));
+        ptr += sizeof(uint64_t);
+
+        std::vector<uint8_t> key(ptr, ptr + key_len);
+        ptr += key_len;
+
+        result[auth] = key;
+    }
+
+    return result;
+}
+
+} // namespace accless::abe4

@@ -16,6 +16,30 @@ set(CMAKE_PROJECT_TARGET accless)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Hints to find the custom libriares that we install in the docker container:
+# ./config/docker/accless-experiments.dockerfile
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    # Third-party deps for native builds.
+    include(cmake/NativeExternalProjects.cmake)
+
+    # Make custom prefixes visible to *all* find_package() calls in subdirs
+    list(PREPEND CMAKE_PREFIX_PATH
+        "/usr/local/attestationssl"
+        "/usr/local/attestationcurl"
+    )
+
+    # OpenSSL hints
+    set(OPENSSL_ROOT_DIR "/usr/local/attestationssl" CACHE PATH "")
+    set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "")
+    set(OPENSSL_INCLUDE_DIR "/usr/local/attestationssl/include" CACHE PATH "")
+    set(OPENSSL_CRYPTO_LIBRARY "/usr/local/attestationssl/lib64/libcrypto.a" CACHE FILEPATH "")
+    set(OPENSSL_SSL_LIBRARY    "/usr/local/attestationssl/lib64/libssl.a"    CACHE FILEPATH "")
+
+    # Curl hints
+    set(CURL_INCLUDE_DIR "/usr/local/attestationcurl/include" CACHE PATH "")
+    set(CURL_LIBRARY     "/usr/local/attestationcurl/lib/libcurl.a" CACHE FILEPATH "")
+endif ()
+
 add_library(${CMAKE_PROJECT_TARGET}
     ./src/accless.cpp
     ./src/dag.cpp
@@ -32,14 +56,16 @@ endif ()
 
 # Common libraries and headers that support WASM and native compilation
 add_subdirectory(./libs/jwt/cpp-bindings)
-add_subdirectory(./libs/rabe/cpp-bindings)
+add_subdirectory(./libs/abe4/cpp-bindings)
+add_subdirectory(./libs/base64)
 
 set(ACCLESS_COMMON_HEADERS
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_LIST_DIR}/libs/jwt/cpp-bindings
-    ${CMAKE_CURRENT_LIST_DIR}/libs/rabe/cpp-bindings
+    ${CMAKE_CURRENT_LIST_DIR}/libs/abe4/cpp-bindings
+    ${CMAKE_CURRENT_LIST_DIR}/libs/base64
 )
-set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::rabe)
+set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::abe4 accless::base64)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # The WASM version of the library relies on a pre-populated sysroot as part
@@ -55,6 +81,8 @@ else ()
         /usr/local/attestationcurl/lib
         /usr/local/attestationssl/lib64
     )
+
+    target_compile_options(${CMAKE_PROJECT_TARGET} PRIVATE -Wno-deprecated-declarations)
 
     # The WASM version of the attestation and S3 libraries is part of Faasm
     # because it needs to execute (partially) outside of the WASM module
@@ -91,3 +119,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
 endif ()
 
 add_library(accless::accless ALIAS accless)
+
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    add_subdirectory(tests)
+endif()

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ark_std::iterable::Iterable;
 use core::fmt;
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Write};
 
 mod parser;
@@ -21,7 +22,7 @@ enum Expr<T> {
 /// attribute is a triple of strings: (authority, label, attribute) indicating
 /// the authority that provides keys for this attribute, the attribute label,
 /// and the value itself.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct UserAttribute {
     authority: String,
     label: String,

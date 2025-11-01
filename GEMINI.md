@@ -59,21 +59,66 @@ You can run the code formatting checks with:
 
 ```bash
 # To format code.
-accli dev format-code
+./scripts/accli_wrapper.sh dev format-code
 
 # To check formatting.
-accli dev format-code --check
+./scripts/accli_wrapper.sh dev format-code --check
 ```
 
-after applying any changes, make sure they compile by running:
+note that in order to set the right environment for your commands, we provide
+the `./scripts/accli_wrapper.sh` that you should use whenever you want to
+run a commadn in `accli`. All commands and subcommands in `accli` take an
+optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
-```bash
-cargo build
-```
-
-## Code Style
+## Coding Guideleins
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
   the file.
-- In rust code, do not allow the use of unwrap() or panic(). Instead, enforce
-  proper error handling.
+- For each new function you add, make sure to add one or multiple unit tests.
+
+### Rust Coding Guidelines
+
+- Whenever you make changes to rust source code, make sure to build it and test
+  it with: `cargo build` and `cargo test` from the root of the directory.
+- Do not allow the use of unwrap() or panic(). Instead, enforce proper error handling.
+- For each new method, make sure to add extensive documentation in the following format:
+```rust
+///
+/// # Description
+///
+/// <description>
+///
+/// # Arguments
+///
+/// - `arg1`: explanation
+/// - `arg2`: explanation
+///
+/// # Returns
+///
+/// <explanation of return value>
+///
+/// # Example Usage
+///
+/// <code snippet if applicable
+```
+
+### C++ Coding Guidelines
+
+C++ code has certain dependencies, including a cross-compilation toolchain and
+system root, that we only ship inside a container. As a consequence, any
+time you need to test some C++ feature, you need to run the command inside
+the sysroot container. To do so, you may use `accli` as follows:
+
+```
+# <cwd> must be an absolute path!
+./scripts/accli_wrapper.sh docker run [--cwd <cwd>] [--mount] "<your bash command here>"
+```
+
+After doing any C++ code modifications, make sure to format the code, and run
+the tests:
+
+```
+./scripts/accli_wrapper.sh dev format-code
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless --mount python3 build.py
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless/build-native --mount ctest -- --output-on-failure
+```

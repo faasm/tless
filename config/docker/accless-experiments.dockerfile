@@ -5,7 +5,11 @@ RUN rm -rf /root/.rustup \
     && apt update && apt install -y --no-install-recommends \
         build-essential \
         curl \
+        gosu \
+        libboost-dev \
+        sudo \
         wget \
+        zlib1g-dev \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
     && . "$HOME/.cargo/env"
 
@@ -54,8 +58,7 @@ RUN wget https://www.openssl.org/source/openssl-3.3.2.tar.gz \
     && make install \
     && rm -rf /opt/tpm2-tss
 
-# Prepare repository structure
-ARG ACCLESS_VERSION
+# Build specific libraries we need
 RUN rm -rf /code \
     && mkdir -p /code \
     && cd /code \
@@ -64,13 +67,8 @@ RUN rm -rf /code \
     && cd /code/faasm-examples \
     && git checkout 3cd09e9cf41979fe73c8a9417b661ba08b5b3a75 \
     && git submodule update --init -f cpp \
-    && git clone -b v${ACCLESS_VERSION} https://github.com/faasm/tless /code/tless \
-    && cd /code/tless \
-    && git submodule update --init
-
-# Build specific libraries we need
-RUN cd /code/faasm-examples/cpp \
     # Build specific CPP libs
+    && cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh libfaasm --clean \
     && git submodule update --init ./third-party/zlib \
     && ./bin/inv_wrapper.sh zlib \
@@ -79,10 +77,25 @@ RUN cd /code/faasm-examples/cpp \
     && ./bin/inv_wrapper.sh \
         opencv opencv --native
 
+# Prepare repository structure
+ARG ACCLESS_VERSION
+RUN cd /code \
+    && git clone -b v${ACCLESS_VERSION} https://github.com/faasm/tless /code/accless \
+    && cd /code/accless \
+    && source ./scripts/workon.sh
+
 # Build workflow code (WASM for Faasm + Native for Knative)
 # ENV PATH=${PATH}:/root/.cargo/bin
-# RUN cd /code/tless \
+ENV ACCLESS_DOCKER=on
+# RUN cd /code/accless \
     #     # Activate faasmtools
 #     && source /code/faasm-examples/cpp/bin/workon.sh \
     #     && python3 ./ubench/build.py \
     #     && python3 ./workflows/build.py
+
+WORKDIR /code/accless
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+CMD ["/bin/bash", "-l"]

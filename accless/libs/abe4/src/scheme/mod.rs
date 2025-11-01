@@ -13,7 +13,7 @@ pub mod iota;
 mod keygen;
 mod setup;
 pub mod tau;
-mod types;
+pub mod types;
 
 pub fn setup(rng: impl ark_std::rand::RngCore, auths: &Vec<&str>) -> (MSK, MPK) {
     setup::setup(rng, auths)
