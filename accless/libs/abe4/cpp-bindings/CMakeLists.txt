@@ -68,4 +68,15 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
 
     include(GoogleTest)
     gtest_discover_tests(${TESTS_TARGET} TEST_PREFIX abe4::)
+
+    set(API_TESTS_TARGET abe_cpp_api_tests)
+    add_executable(${API_TESTS_TARGET} api_tests.cpp)
+    target_link_libraries(${API_TESTS_TARGET} PRIVATE
+        GTest::gtest_main
+        accless::abe4
+    )
+    target_compile_options(${API_TESTS_TARGET} PRIVATE -Wno-deprecated-declarations)
+
+    include(GoogleTest)
+    gtest_discover_tests(${API_TESTS_TARGET} TEST_PREFIX abe4::)
 endif ()
