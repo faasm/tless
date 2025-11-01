@@ -8,7 +8,11 @@ use base64::engine::{Engine as _, general_purpose};
 pub use curve::Gt;
 pub use policy::{Policy, UserAttribute};
 pub use scheme::{decrypt, encrypt, iota, keygen, setup, tau};
-use scheme::{iota::Iota, types::MSK};
+use scheme::{
+    iota::Iota,
+    tau::Tau,
+    types::{Ciphertext, MPK, MSK},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::{CStr, CString},
@@ -95,4 +99,45 @@ pub unsafe extern "C" fn keygen_abe4(
 
     let usk_b64 = general_purpose::STANDARD.encode(&usk_bytes);
     CString::new(usk_b64).unwrap().into_raw()
+}
+
+#[derive(Serialize, Deserialize)]
+struct EncryptOutput {
+    gt: String,
+    ciphertext: String,
+}
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn encrypt_abe4(
+    mpk_b64: *const c_char,
+    policy_str: *const c_char,
+) -> *mut c_char {
+    let mpk_b64_cstr = unsafe { CStr::from_ptr(mpk_b64) };
+    let policy_cstr = unsafe { CStr::from_ptr(policy_str) };
+
+    let mpk_bytes = general_purpose::STANDARD
+        .decode(mpk_b64_cstr.to_str().unwrap())
+        .unwrap();
+    let mpk: MPK = MPK::deserialize_compressed(&mpk_bytes[..]).unwrap();
+
+    let policy = Policy::parse(policy_cstr.to_str().unwrap()).unwrap();
+    let tau = Tau::new(&policy);
+    let mut rng = ark_std::rand::thread_rng();
+
+    let (gt, ct) = encrypt(&mut rng, &mpk, &policy, &tau);
+
+    let mut gt_bytes = Vec::new();
+    gt.serialize_compressed(&mut gt_bytes).unwrap();
+
+    let mut ct_bytes = Vec::new();
+    ct.serialize_compressed(&mut ct_bytes).unwrap();
+
+    let output = EncryptOutput {
+        gt: general_purpose::STANDARD.encode(&gt_bytes),
+        ciphertext: general_purpose::STANDARD.encode(&ct_bytes),
+    };
+
+    let output_json = serde_json::to_string(&output).unwrap();
+    CString::new(output_json).unwrap().into_raw()
 }

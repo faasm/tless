@@ -41,6 +41,18 @@ std::string keygen(const std::string &gid, const std::string &msk,
     return usk_b64;
 }
 
+EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
+    char *result = encrypt_abe4(mpk.c_str(), policy.c_str());
+    if (!result) {
+        return {};
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return {result_json["gt"], result_json["ciphertext"]};
+}
+
 std::map<std::string, std::vector<uint8_t>>
 unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
     std::map<std::string, std::vector<uint8_t>> result;

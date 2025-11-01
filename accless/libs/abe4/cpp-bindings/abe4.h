@@ -10,12 +10,18 @@ void free_string(char *s);
 char *setup_abe4(const char *auths_json);
 char *keygen_abe4(const char *gid, const char *msk_b64,
                   const char *user_attrs_json);
+char *encrypt_abe4(const char *mpk_b64, const char *policy_str);
 } // extern "C"
 
 namespace accless::abe4 {
 struct SetupOutput {
     std::string msk;
     std::string mpk;
+};
+
+struct EncryptOutput {
+    std::string gt;
+    std::string ciphertext;
 };
 
 struct UserAttribute {
@@ -43,6 +49,21 @@ SetupOutput setup(const std::vector<std::string> &auths);
  */
 std::string keygen(const std::string &gid, const std::string &msk,
                    const std::vector<UserAttribute> &user_attrs);
+
+/**
+ * @brief Encrypts a message using the Master Public Key (MPK) and a policy.
+ *
+ * This function acts as a C++ wrapper around the Rust `encrypt` FFI function.
+ * It takes a base64 encoded Master Public Key and a policy string. It calls the
+ * Rust FFI function, and returns an `EncryptOutput` struct containing the
+ * base64 encoded `Gt` and `Ciphertext`.
+ *
+ * @param mpk A base64 encoded string representing the Master Public Key.
+ * @param policy A string representing the access policy.
+ * @return An `EncryptOutput` struct containing the base64 encoded `Gt` and
+ * `Ciphertext`.
+ */
+EncryptOutput encrypt(const std::string &mpk, const std::string &policy);
 
 /**
  * @brief Unpacks a serialized FullKey (e.g., MPK or MSK) into a map of

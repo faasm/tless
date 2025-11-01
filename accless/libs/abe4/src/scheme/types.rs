@@ -355,6 +355,56 @@ impl Valid for PartialUSK {
 }
 
 // -----------------------------------------------------------------------------------------------
+// Serialization Of Ciphertexts
+// -----------------------------------------------------------------------------------------------
+
+impl CanonicalSerialize for Ciphertext {
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        mode: ark_serialize::Compress,
+    ) -> Result<(), ark_serialize::SerializationError> {
+        self.c_1_vec.serialize_with_mode(&mut writer, mode)?;
+        self.c_2_vec.serialize_with_mode(&mut writer, mode)?;
+        self.c_3_vec.serialize_with_mode(&mut writer, mode)?;
+        self.c_4_vec.serialize_with_mode(&mut writer, mode)?;
+        Ok(())
+    }
+
+    fn serialized_size(&self, mode: ark_serialize::Compress) -> usize {
+        self.c_1_vec.serialized_size(mode)
+            + self.c_2_vec.serialized_size(mode)
+            + self.c_3_vec.serialized_size(mode)
+            + self.c_4_vec.serialized_size(mode)
+    }
+}
+
+impl CanonicalDeserialize for Ciphertext {
+    fn deserialize_with_mode<R: Read>(
+        mut reader: R,
+        compress: ark_serialize::Compress,
+        validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        Ok(Self {
+            c_1_vec: Vec::<H>::deserialize_with_mode(&mut reader, compress, validate)?,
+            c_2_vec: Vec::<G>::deserialize_with_mode(&mut reader, compress, validate)?,
+            c_3_vec: Vec::<H>::deserialize_with_mode(&mut reader, compress, validate)?,
+            c_4_vec: Vec::<H>::deserialize_with_mode(&mut reader, compress, validate)?,
+        })
+    }
+}
+
+impl Valid for Ciphertext {
+    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
+        self.c_1_vec.check()?;
+        self.c_2_vec.check()?;
+        self.c_3_vec.check()?;
+        self.c_4_vec.check()?;
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------------------------
 // Serialization Of Full Keys
 // -----------------------------------------------------------------------------------------------
 

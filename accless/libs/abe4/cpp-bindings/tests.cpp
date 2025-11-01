@@ -52,3 +52,15 @@ TEST(Abe4Test, Keygen) {
         EXPECT_TRUE(usk_map.count(auth));
     }
 }
+
+TEST(Abe4Test, Encrypt) {
+    std::vector<std::string> auths = {"auth1", "auth2"};
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+
+    std::string policy = "auth1.label1:attr1 and auth2.label2:attr2";
+
+    accless::abe4::EncryptOutput encrypt_output =
+        accless::abe4::encrypt(setup_output.mpk, policy);
+    EXPECT_FALSE(encrypt_output.gt.empty());
+    EXPECT_FALSE(encrypt_output.ciphertext.empty());
+}
