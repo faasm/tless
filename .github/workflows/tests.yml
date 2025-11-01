@@ -42,14 +42,14 @@ jobs:
   cpp-unit-tests:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/faasm/accless-experiments:0.8.1
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
       - name: "Build C++ code"
-        run: python3 build.py
-        working-directory: accless
+        shell: bash
+        run: |
+          ./scripts/accli_wrapper.sh docker run --mount --cwd /code/accless/accless python3 build.py
       - name: "Run C++ unit tests"
-        run: ctest
-        working-directory: accless/build-native
+        shell: bash
+        run: |
+          ./scripts/accli_wrapper.sh docker run --mount --cwd /code/accless/accless/build-native  ctest -- --output-on-failure
