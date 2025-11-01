@@ -46,6 +46,10 @@ add_library(${CMAKE_PROJECT_TARGET} abe4.cpp)
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
     abe4_rust_lib
     nlohmann_json::nlohmann_json
+    accless::base64
+)
+target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
+    ${CMAKE_SOURCE_DIR}/libs/base64
 )
 add_library(accless::abe4 ALIAS ${CMAKE_PROJECT_TARGET})
 

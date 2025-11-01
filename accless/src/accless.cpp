@@ -1,4 +1,5 @@
 #include "accless.h"
+#include "base64.h"
 #include "dag.h"
 #include "jwt.h"
 #include "utils.h"
@@ -248,7 +249,7 @@ bool checkChain(const std::string &workflow, const std::string &function,
 
         std::string teeSymKeyBase64 =
             accless::jwt::getProperty(jwtStr, "aes_key_b64");
-        auto teeSymKey = accless::utils::base64Decode(teeSymKeyBase64);
+        auto teeSymKey = accless::base64::decode(teeSymKeyBase64);
 
         // Fetch the (encrypted) CP-ABE context from S3
         std::vector<uint8_t> ctCtx;

@@ -56,5 +56,5 @@ if __name__ == "__main__":
         rmtree(join(ACCLESS_ROOT, "build-wasm"), ignore_errors=True)
 
     # Build the microbenchmarks
-    # compile(wasm=True, debug=debug)
+    compile(wasm=True, debug=debug)
     compile(native=True, debug=debug)

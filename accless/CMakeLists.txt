@@ -57,13 +57,15 @@ endif ()
 # Common libraries and headers that support WASM and native compilation
 add_subdirectory(./libs/jwt/cpp-bindings)
 add_subdirectory(./libs/abe4/cpp-bindings)
+add_subdirectory(./libs/base64)
 
 set(ACCLESS_COMMON_HEADERS
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_LIST_DIR}/libs/jwt/cpp-bindings
     ${CMAKE_CURRENT_LIST_DIR}/libs/abe4/cpp-bindings
+    ${CMAKE_CURRENT_LIST_DIR}/libs/base64
 )
-set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::abe4)
+set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::abe4 accless::base64)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # The WASM version of the library relies on a pre-populated sysroot as part

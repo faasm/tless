@@ -65,24 +65,21 @@ You can run the code formatting checks with:
 ./scripts/accli_wrapper.sh dev format-code --check
 ```
 
-after applying any changes, make sure they compile by running:
-
-```bash
-cargo build
-```
-
 note that in order to set the right environment for your commands, we provide
 the `./scripts/accli_wrapper.sh` that you should use whenever you want to
 run a commadn in `accli`. All commands and subcommands in `accli` take an
 optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
-## Code Style
+## Coding Guideleins
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
   the file.
+- For each new function you add, make sure to add one or multiple unit tests.
 
 ### Rust Coding Guidelines
 
+- Whenever you make changes to rust source code, make sure to build it and test
+  it with: `cargo build` and `cargo test` from the root of the directory.
 - Do not allow the use of unwrap() or panic(). Instead, enforce proper error handling.
 - For each new method, make sure to add extensive documentation in the following format:
 ```rust
@@ -104,7 +101,6 @@ optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 ///
 /// <code snippet if applicable
 ```
-- For each new function you add, make sure to add one or multiple unit tests.
 
 ### C++ Coding Guidelines
 
@@ -118,14 +114,11 @@ the sysroot container. To do so, you may use `accli` as follows:
 ./scripts/accli_wrapper.sh docker run [--cwd <cwd>] [--mount] "<your bash command here>"
 ```
 
-for example, to build the current version of the accless library:
+After doing any C++ code modifications, make sure to format the code, and run
+the tests:
 
 ```
-./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless --mount "python3 build.py"
-```
-
-after building, you can run the C++ integration tests with:
-
-```
-./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless/build-native --mount "ctest"
+./scripts/accli_wrapper.sh dev format-code
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless --mount python3 build.py
+./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless/build-native --mount ctest -- --output-on-failure
 ```

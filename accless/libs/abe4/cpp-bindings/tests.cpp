@@ -1,8 +1,32 @@
 #include "abe4.h"
+#include "base64.h" // New include
 #include <gtest/gtest.h>
 
 TEST(abe4, setup) {
     std::vector<std::string> auths = {"auth1", "auth2"};
     accless::abe4::setup(auths);
     SUCCEED(); // If setup doesn't throw, it's a success for now
+}
+
+TEST(Abe4Test, PartialKeyDeserialization) {
+    std::vector<std::string> auths = {"auth1", "auth2"};
+
+    accless::abe4::SetupOutput output = accless::abe4::setup(auths);
+    std::vector<uint8_t> mpk_bytes =
+        accless::base64::decode(output.mpk); // Changed
+    std::map<std::string, std::vector<uint8_t>> mpk_map =
+        accless::abe4::unpackFullKey(mpk_bytes);
+
+    ASSERT_EQ(mpk_map.size(), 2);
+    EXPECT_TRUE(mpk_map.count("auth1"));
+    EXPECT_TRUE(mpk_map.count("auth2"));
+
+    std::vector<uint8_t> msk_bytes =
+        accless::base64::decode(output.msk); // Changed
+    std::map<std::string, std::vector<uint8_t>> msk_map =
+        accless::abe4::unpackFullKey(msk_bytes);
+
+    ASSERT_EQ(msk_map.size(), 2);
+    EXPECT_TRUE(msk_map.count("auth1"));
+    EXPECT_TRUE(msk_map.count("auth2"));
 }
