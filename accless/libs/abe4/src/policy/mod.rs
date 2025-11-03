@@ -165,12 +165,18 @@ fn fmt_expr(
             write!(f, "{:?}", t)
         }
         Expr::And(lhs, rhs) => {
+            write!(f, "(")?;
             fmt_expr(lhs, f)?;
             write!(f, " & ")?;
-            fmt_expr(rhs, f)
+            fmt_expr(rhs, f)?;
+            write!(f, ")")
         }
-        Expr::Or(_, _) => {
-            panic!("Not implemented")
+        Expr::Or(lhs, rhs) => {
+            write!(f, "(")?;
+            fmt_expr(lhs, f)?;
+            write!(f, " | ")?;
+            fmt_expr(rhs, f)?;
+            write!(f, ")")
         }
     }
 }

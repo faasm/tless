@@ -5,6 +5,8 @@
 //! defines the structure of a serverless workflow, its security policies, and
 //! its data dependencies.
 
+pub mod policy_compiler;
+
 use accless_abe4::policy::Policy;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -36,7 +38,7 @@ pub struct TemplateGraph {
 pub struct Workflow {
     /// A human-readable name for the workflow.
     pub name: String,
-    /// A unique user-identifier owning the workflow.
+    /// A unique user-identifier owning the workflow. Cannot contain dashes.
     pub uid: String,
 }
 

@@ -33,6 +33,7 @@ ark-std = "0.4.0"
 axum = "0.7"
 base64 = "^0.22"
 bytes = "1.4"
+blake3 = "1.5.1"
 chrono = "^0.4.38"
 clap = { version = "4.0" }
 cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", rev = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b" }
