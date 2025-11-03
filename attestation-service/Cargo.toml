@@ -4,8 +4,14 @@ version.workspace = true
 license-file.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Reference attribute providing service implementation"
+description = "Reference attestation service implementation"
 homepage.workspace = true
+
+[features]
+default = ["sgx", "snp"]
+azure-cvm = []
+sgx = []
+snp = []
 
 [dependencies]
 aes-gcm.workspace = true
@@ -17,6 +23,7 @@ chrono.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio", "server", "http1", "service"] }
 jsonwebtoken.workspace = true
+log.workspace = true
 p256.workspace = true
 ring.workspace = true
 rustls.workspace = true

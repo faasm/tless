@@ -506,6 +506,7 @@ dependencies = [
  "hyper 1.7.0",
  "hyper-util",
  "jsonwebtoken",
+ "log",
  "p256",
  "ring",
  "rustls",
