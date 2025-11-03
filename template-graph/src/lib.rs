@@ -38,8 +38,6 @@ pub struct TemplateGraph {
 pub struct Workflow {
     /// A human-readable name for the workflow.
     pub name: String,
-    /// A unique user-identifier owning the workflow. Cannot contain dashes.
-    pub uid: String,
 }
 
 /// # Description
@@ -47,11 +45,24 @@ pub struct Workflow {
 /// Defines the attribute-providing authorities for the workflow.
 #[derive(Debug, Deserialize)]
 pub struct Authorities {
+    /// The user authority.
+    pub user: UserAuthority,
     /// A list of attestation services. At least one is mandatory.
     #[serde(rename = "attestation-services")]
     pub attestation_services: Vec<AttestationService>,
     /// An optional list of attribute providing services.
     pub aps: Option<Vec<Aps>>,
+}
+
+/// # Description
+///
+/// Represents the user authority.
+#[derive(Debug, Deserialize, Clone)]
+pub struct UserAuthority {
+    /// A unique user-identifier owning the workflow. Cannot contain dashes.
+    pub id: String,
+    /// The master public key of the user for ABE.
+    pub mpk_abe: String,
 }
 
 /// # Description
@@ -153,12 +164,13 @@ impl TemplateGraph {
     pub fn from_yaml(yaml: &str) -> Result<Self, serde_yaml::Error> {
         let graph: TemplateGraph = serde_yaml::from_str(yaml)?;
 
-        let aps_ids: std::collections::HashSet<String> = graph
+        let mut aps_ids: std::collections::HashSet<String> = graph
             .authorities
             .aps
             .as_ref()
             .map(|aps_vec| aps_vec.iter().map(|aps| aps.id.clone()).collect())
             .unwrap_or_default();
+        aps_ids.insert(graph.authorities.user.id.clone());
 
         for node in &graph.nodes {
             if let Some(policy) = &node.node_policy {
@@ -189,9 +201,11 @@ mod tests {
 version: 1
 workflow:
   name: fraud-detector
-  uid: user_42
 
 authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
@@ -235,7 +249,7 @@ output:
 
         assert_eq!(template_graph.version, 1);
         assert_eq!(template_graph.workflow.name, "fraud-detector");
-        assert_eq!(template_graph.workflow.uid, "user_42");
+        assert_eq!(template_graph.authorities.user.id, "user_42");
 
         assert_eq!(template_graph.authorities.attestation_services.len(), 1);
         assert_eq!(template_graph.authorities.attestation_services[0].id, "maa");
@@ -335,9 +349,11 @@ output:
 version: 1
 workflow:
   name: fraud-detector
-  uid: user_42
 
 authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
@@ -369,9 +385,11 @@ output:
 version: 1
 workflow:
   name: fraud-detector
-  uid: user_42
 
 authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa

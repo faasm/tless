@@ -1,6 +1,4 @@
-use accless_abe4::{
-    UserAttribute, decrypt, encrypt, iota::Iota, keygen, setup, tau::Tau,
-};
+use accless_abe4::{UserAttribute, decrypt, encrypt, iota::Iota, keygen, setup, tau::Tau};
 use std::collections::HashSet;
 use template_graph::{TemplateGraph, policy_compiler};
 
@@ -10,9 +8,11 @@ fn test_encrypt_decrypt_workflow() {
 version: 1
 workflow:
   name: fraud-detector
-  uid: user_42
 
 authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
@@ -61,7 +61,7 @@ output:
             auths.insert(ap.id.clone());
         }
     }
-    auths.insert(template_graph.workflow.uid.clone());
+    auths.insert(template_graph.authorities.user.id.clone());
     let auths_str: Vec<&str> = auths.iter().map(|s| s.as_str()).collect();
     let (msk, mpk) = setup(&mut rng, &auths_str);
 
@@ -88,7 +88,7 @@ output:
                 let ancestor_id =
                     policy_compiler::get_node_id(&template_graph.workflow.name, &ancestor);
                 user_attrs.push(UserAttribute::new(
-                    &template_graph.workflow.uid,
+                    &template_graph.authorities.user.id,
                     "anc",
                     &ancestor_id,
                 ));
@@ -105,7 +105,7 @@ output:
             let iota = Iota::new(&user_attrs);
             let usk = keygen(
                 &mut rng,
-                &template_graph.workflow.uid,
+                &template_graph.authorities.user.id,
                 &msk,
                 &user_attrs,
                 &iota,
@@ -113,7 +113,7 @@ output:
 
             let k_dec = decrypt(
                 &usk,
-                &template_graph.workflow.uid,
+                &template_graph.authorities.user.id,
                 &iota,
                 &Tau::new(&policy),
                 &policy,

@@ -86,7 +86,7 @@ pub fn compile_policies(template_graph: &TemplateGraph) -> HashMap<String, Polic
                 .iter()
                 .map(|ancestor| {
                     let ancestor_id = get_node_id(&template_graph.workflow.name, ancestor);
-                    format!("{}.anc:{}", template_graph.workflow.uid, ancestor_id)
+                    format!("{}.anc:{}", template_graph.authorities.user.id, ancestor_id)
                 })
                 .collect();
             anc_disjunction.sort();
@@ -185,9 +185,11 @@ mod tests {
 version: 1
 workflow:
   name: fraud-detector
-  uid: user_42
 
 authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
