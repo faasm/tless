@@ -1,7 +1,7 @@
 mod curve;
 mod hashing;
 pub mod policy;
-mod scheme;
+pub mod scheme;
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::engine::{Engine as _, general_purpose};

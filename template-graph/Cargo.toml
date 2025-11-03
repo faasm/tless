@@ -17,3 +17,5 @@ serde_yaml = { workspace = true }
 
 [dev-dependencies]
 ark-std = { workspace = true }
+base64 = { workspace = true }
+ark-serialize = { workspace = true }

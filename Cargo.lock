@@ -4026,7 +4026,9 @@ version = "0.8.1"
 dependencies = [
  "accless-abe4",
  "anyhow",
+ "ark-serialize",
  "ark-std",
+ "base64 0.22.1",
  "blake3",
  "serde",
  "serde_yaml",
