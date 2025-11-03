@@ -8,7 +8,7 @@
 pub mod policy_compiler;
 
 use accless_abe4::policy::Policy;
-use serde::Deserialize;
+use serde::{Deserialize, de::Error};
 use std::path::PathBuf;
 
 /// # Description
@@ -68,7 +68,7 @@ pub struct AttestationService {
 /// # Description
 ///
 /// Represents an attribute providing service.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Aps {
     /// A unique identifier for the attribute providing service.
     pub id: String,
@@ -151,7 +151,31 @@ impl TemplateGraph {
     /// A `Result` containing the parsed `TemplateGraph` or a
     /// `serde_yaml::Error`.
     pub fn from_yaml(yaml: &str) -> Result<Self, serde_yaml::Error> {
-        serde_yaml::from_str(yaml)
+        let graph: TemplateGraph = serde_yaml::from_str(yaml)?;
+
+        let aps_ids: std::collections::HashSet<String> = graph
+            .authorities
+            .aps
+            .as_ref()
+            .map(|aps_vec| aps_vec.iter().map(|aps| aps.id.clone()).collect())
+            .unwrap_or_default();
+
+        for node in &graph.nodes {
+            if let Some(policy) = &node.node_policy {
+                for i in 0..policy.len() {
+                    let (attr, _) = policy.get(i);
+                    if !aps_ids.contains(attr.authority()) {
+                        return Err(serde_yaml::Error::custom(format!(
+                            "Authority '{}' in node policy for '{}' not found in attribute providing services.",
+                            attr.authority(),
+                            node.name
+                        ).as_str()));
+                    }
+                }
+            }
+        }
+
+        Ok(graph)
     }
 }
 
@@ -165,7 +189,7 @@ mod tests {
 version: 1
 workflow:
   name: fraud-detector
-  uid: user-42
+  uid: user_42
 
 authorities:
   attestation-services:
@@ -211,7 +235,7 @@ output:
 
         assert_eq!(template_graph.version, 1);
         assert_eq!(template_graph.workflow.name, "fraud-detector");
-        assert_eq!(template_graph.workflow.uid, "user-42");
+        assert_eq!(template_graph.workflow.uid, "user_42");
 
         assert_eq!(template_graph.authorities.attestation_services.len(), 1);
         assert_eq!(template_graph.authorities.attestation_services[0].id, "maa");
@@ -221,7 +245,7 @@ output:
         );
 
         assert!(template_graph.authorities.aps.is_some());
-        let aps = template_graph.authorities.aps.unwrap();
+        let aps = template_graph.authorities.aps.as_ref().unwrap();
         assert_eq!(aps.len(), 1);
         assert_eq!(aps[0].id, "finra");
         assert_eq!(aps[0].mpk_abe, "base64:mpk_abe_finra");
@@ -311,7 +335,7 @@ output:
 version: 1
 workflow:
   name: fraud-detector
-  uid: user-42
+  uid: user_42
 
 authorities:
   attestation-services:
@@ -337,5 +361,35 @@ output:
                 "Policy attributes cannot contain dashes '-'. Use underscores '_' instead."
             )
         );
+    }
+
+    #[test]
+    fn test_parse_template_graph_with_unknown_policy_authority() {
+        let yaml_content = r#"
+version: 1
+workflow:
+  name: fraud-detector
+  uid: user_42
+
+authorities:
+  attestation-services:
+    - id: maa
+      mpk_abe: base64:mpk_abe_maa
+
+nodes:
+- name: fetch_private
+  function: fetch_private_data
+  node-policy: 'finra.role:data_fetch'
+
+edges: []
+
+output:
+  dir: ./out-ciphertexts
+        "#;
+
+        let result = TemplateGraph::from_yaml(yaml_content);
+        assert!(result.is_err());
+        let error = result.err().unwrap();
+        assert!(error.to_string().contains("Authority 'finra' in node policy for 'fetch_private' not found in attribute providing services."));
     }
 }

@@ -191,6 +191,9 @@ authorities:
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
+  aps:
+    - id: finra
+      mpk_abe: base64:mpk_abe_finra
 
 nodes:
 - name: fetch_public
