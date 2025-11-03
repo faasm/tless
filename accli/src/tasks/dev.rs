@@ -93,6 +93,25 @@ impl Dev {
         Ok(())
     }
 
+    /// Helper function to update the version in the github workflow file using
+    /// regex.
+    fn update_workflow_file(path: &Path, new_version: &str) -> Result<()> {
+        let workflow_content = fs::read_to_string(path)?;
+
+        // Regex to find 'image: ghcr.io/faasm/accless-experiments:X.Y.Z'
+        let re = Regex::new(r#"(image:\s*ghcr\.io/faasm/accless-experiments:)(\d+\.\d+\.\d+)"#)?;
+
+        let replacement = format!("$1{}", new_version);
+        let new_content = re
+            .replace(&workflow_content, replacement.as_str())
+            .to_string();
+
+        // Overwrite the workflow file with the new content
+        fs::write(path, new_content)?;
+
+        Ok(())
+    }
+
     /// Bumps the version tag in both the VERSION file and Cargo.toml
     pub fn bump_code_version(major: bool, minor: bool, patch: bool) -> Result<()> {
         // Read current version from version file
@@ -113,6 +132,10 @@ impl Dev {
         // Update the cargo.toml file
         let cargo_toml_path = Env::proj_root().join("Cargo.toml");
         Self::update_cargo_toml(&cargo_toml_path, &new_version_str)?;
+
+        // Update the github workflow file
+        let workflow_path = Env::proj_root().join(".github/workflows/tests.yml");
+        Self::update_workflow_file(&workflow_path, &new_version_str)?;
 
         Ok(())
     }

@@ -46,7 +46,11 @@ sudo apt install -y \
 # Python deps
 # ----------------------------
 
-VENV_PATH=${PROJ_ROOT}/venv
+if [[ -z "$ACCLESS_DOCKER" ]]; then
+    VENV_PATH="${PROJ_ROOT}/venv-bm"
+else
+    VENV_PATH="${PROJ_ROOT}/venv"
+fi
 
 if [ ! -d ${VENV_PATH} ]; then
     ${PROJ_ROOT}/scripts/create_venv.sh
