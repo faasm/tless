@@ -106,7 +106,7 @@ pub fn compile_policies(template_graph: &TemplateGraph) -> HashMap<String, Polic
     policies
 }
 
-fn build_graph(template_graph: &TemplateGraph) -> HashMap<String, Vec<String>> {
+pub fn build_graph(template_graph: &TemplateGraph) -> HashMap<String, Vec<String>> {
     let mut graph: HashMap<String, Vec<String>> = template_graph
         .nodes
         .iter()
@@ -121,7 +121,7 @@ fn build_graph(template_graph: &TemplateGraph) -> HashMap<String, Vec<String>> {
     graph
 }
 
-fn get_ancestors(graph: &HashMap<String, Vec<String>>, node_name: &str) -> HashSet<String> {
+pub fn get_ancestors(graph: &HashMap<String, Vec<String>>, node_name: &str) -> HashSet<String> {
     let mut reversed_graph: HashMap<String, Vec<String>> = HashMap::new();
     for node in graph.keys() {
         reversed_graph.entry(node.clone()).or_default();

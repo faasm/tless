@@ -14,3 +14,6 @@ anyhow = { workspace = true }
 blake3 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
+
+[dev-dependencies]
+ark-std = { workspace = true }
