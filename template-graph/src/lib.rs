@@ -8,6 +8,7 @@
 pub mod policy_compiler;
 
 use accless_abe4::policy::Policy;
+use log::error;
 use serde::{Deserialize, de::Error};
 use std::path::PathBuf;
 
@@ -42,7 +43,11 @@ pub struct Workflow {
 
 /// # Description
 ///
-/// Defines the attribute-providing authorities for the workflow.
+/// Defines the attribute-providing authorities for the workflow. There are
+/// three different types of authorities in Accless: the user that owns the
+/// data, the attestation service that can run remote attestation protocols to
+/// validate quotes from TEEs, and arbitrarily many attribute
+/// providing services.
 #[derive(Debug, Deserialize)]
 pub struct Authorities {
     /// The user authority.
@@ -51,7 +56,8 @@ pub struct Authorities {
     #[serde(rename = "attestation-services")]
     pub attestation_services: Vec<AttestationService>,
     /// An optional list of attribute providing services.
-    pub aps: Option<Vec<Aps>>,
+    #[serde(rename = "attribute-providing-services")]
+    pub attribute_providing_services: Option<Vec<AttributeProvidingService>>,
 }
 
 /// # Description
@@ -68,6 +74,10 @@ pub struct UserAuthority {
 /// # Description
 ///
 /// Represents an attestation service.
+///
+/// Attestation services are a special kind of attribute providing services that
+/// will only grant attributes in exchange of a successful remote attestation of
+/// the requesting node.
 #[derive(Debug, Deserialize)]
 pub struct AttestationService {
     /// A unique identifier for the attestation service.
@@ -80,7 +90,7 @@ pub struct AttestationService {
 ///
 /// Represents an attribute providing service.
 #[derive(Debug, Deserialize, Clone)]
-pub struct Aps {
+pub struct AttributeProvidingService {
     /// A unique identifier for the attribute providing service.
     pub id: String,
     /// The master public key of the attribute providing service for ABE.
@@ -164,9 +174,16 @@ impl TemplateGraph {
     pub fn from_yaml(yaml: &str) -> Result<Self, serde_yaml::Error> {
         let graph: TemplateGraph = serde_yaml::from_str(yaml)?;
 
+        if graph.authorities.attestation_services.is_empty() {
+            error!("Template graph must contain at least one attestation service");
+            return Err(serde_yaml::Error::custom(
+                "`authorities.attestation-services` must not be empty.",
+            ));
+        }
+
         let mut aps_ids: std::collections::HashSet<String> = graph
             .authorities
-            .aps
+            .attribute_providing_services
             .as_ref()
             .map(|aps_vec| aps_vec.iter().map(|aps| aps.id.clone()).collect())
             .unwrap_or_default();
@@ -196,6 +213,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_template_graph_without_attestation_services() {
+        let yaml_content = r#"
+version: 1
+workflow:
+  name: fraud-detector
+
+authorities:
+  user:
+    id: user_42
+    mpk_abe: base64:mpk_abe_user
+  attestation-services: []
+
+nodes:
+- name: fetch_public
+  function: fetch_public_data
+
+edges: []
+
+output:
+  dir: ./out-ciphertexts
+        "#;
+
+        let result = TemplateGraph::from_yaml(yaml_content);
+        assert!(result.is_err());
+        let error = result.err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("`authorities.attestation-services` must not be empty.")
+        );
+    }
+
+    #[test]
     fn test_parse_template_graph() {
         let yaml_content = r#"
 version: 1
@@ -209,7 +259,7 @@ authorities:
   attestation-services:
     - id: maa
       mpk_abe: base64:mpk_abe_maa
-  aps:
+  attribute-providing-services:
     - id: finra
       mpk_abe: base64:mpk_abe_finra
 
@@ -258,8 +308,17 @@ output:
             "base64:mpk_abe_maa"
         );
 
-        assert!(template_graph.authorities.aps.is_some());
-        let aps = template_graph.authorities.aps.as_ref().unwrap();
+        assert!(
+            template_graph
+                .authorities
+                .attribute_providing_services
+                .is_some()
+        );
+        let aps = template_graph
+            .authorities
+            .attribute_providing_services
+            .as_ref()
+            .unwrap();
         assert_eq!(aps.len(), 1);
         assert_eq!(aps[0].id, "finra");
         assert_eq!(aps[0].mpk_abe, "base64:mpk_abe_finra");

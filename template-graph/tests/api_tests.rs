@@ -11,11 +11,9 @@ use base64::engine::{Engine as _, general_purpose};
 use std::collections::HashSet;
 use template_graph::{TemplateGraph, policy_compiler};
 
-///
 /// # Description
 ///
 /// Helper method to construct a full MPK from a template graph.
-///
 fn get_full_mpk_from_template_graph(template_graph: &TemplateGraph) -> MPK {
     let mut mpk = MPK::new();
 
@@ -36,7 +34,7 @@ fn get_full_mpk_from_template_graph(template_graph: &TemplateGraph) -> MPK {
     }
 
     // APS
-    if let Some(aps_vec) = &template_graph.authorities.aps {
+    if let Some(aps_vec) = &template_graph.authorities.attribute_providing_services {
         for aps in aps_vec {
             let aps_mpk_bytes = general_purpose::STANDARD.decode(&aps.mpk_abe).unwrap();
             let aps_partial_mpk = PartialMPK::deserialize_compressed(&aps_mpk_bytes[..]).unwrap();
@@ -61,7 +59,7 @@ authorities:
   attestation-services:
     - id: maa
       mpk_abe: ""
-  aps:
+  attribute-providing-services:
     - id: finra
       mpk_abe: ""
 
@@ -100,7 +98,7 @@ output:
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    if let Some(aps) = &template_graph.authorities.aps {
+    if let Some(aps) = &template_graph.authorities.attribute_providing_services {
         for ap in aps {
             auths.insert(ap.id.clone());
         }
@@ -126,7 +124,7 @@ output:
             as_service.mpk_abe = mpk_b64;
         } else if let Some(aps) = template_graph
             .authorities
-            .aps
+            .attribute_providing_services
             .as_mut()
             .and_then(|aps_vec| aps_vec.iter_mut().find(|a| &a.id == auth))
         {
@@ -139,7 +137,7 @@ output:
 
     // Test encryption and decryption for each node
     for node in &template_graph.nodes {
-        if let Some(policy) = policies.get(&node.name) {
+        if let Some(policy) = policies.as_ref().unwrap().get(&node.name) {
             let (k_enc, ct) = encrypt(&mut rng, &full_mpk, &policy, &Tau::new(&policy));
 
             // Simulate a user with the required attributes

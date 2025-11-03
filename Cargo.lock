@@ -4030,6 +4030,7 @@ dependencies = [
  "ark-std",
  "base64 0.22.1",
  "blake3",
+ "log",
  "serde",
  "serde_yaml",
 ]

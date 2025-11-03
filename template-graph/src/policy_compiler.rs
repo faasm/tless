@@ -1,5 +1,6 @@
 use crate::TemplateGraph;
 use accless_abe4::policy::Policy;
+use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
 /// # Description
@@ -54,7 +55,7 @@ pub fn get_node_id(workflow_name: &str, node_name: &str) -> String {
 ///
 /// A `HashMap` where the keys are node names and the values are the compiled
 /// `Policy` objects.
-pub fn compile_policies(template_graph: &TemplateGraph) -> HashMap<String, Policy> {
+pub fn compile_policies(template_graph: &TemplateGraph) -> Result<HashMap<String, Policy>> {
     let mut policies = HashMap::new();
     let graph = build_graph(template_graph);
 
@@ -99,11 +100,11 @@ pub fn compile_policies(template_graph: &TemplateGraph) -> HashMap<String, Polic
         }
 
         let policy_string = policy_parts.join(" & ");
-        let policy = Policy::parse(&policy_string).unwrap();
+        let policy = Policy::parse(&policy_string)?;
         policies.insert(node.name.clone(), policy);
     }
 
-    policies
+    Ok(policies)
 }
 
 pub fn build_graph(template_graph: &TemplateGraph) -> HashMap<String, Vec<String>> {
@@ -137,7 +138,7 @@ pub fn get_ancestors(graph: &HashMap<String, Vec<String>>, node_name: &str) -> H
 
     let mut ancestors = HashSet::new();
     let mut stack = vec![node_name.to_string()];
-    let mut visited = HashSet::new();
+    let mut visited = HashSet::from([node_name.to_string()]);
 
     while let Some(current_node) = stack.pop() {
         if let Some(predecessors) = reversed_graph.get(&current_node) {
@@ -157,6 +158,16 @@ pub fn get_ancestors(graph: &HashMap<String, Vec<String>>, node_name: &str) -> H
 mod tests {
     use super::*;
     use crate::TemplateGraph;
+
+    #[test]
+    fn test_get_ancestors_with_self_cycle() {
+        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        graph.insert("A".to_string(), vec!["A".to_string()]);
+
+        let ancestors = get_ancestors(&graph, "A");
+        assert!(!ancestors.contains("A"));
+        assert!(ancestors.is_empty());
+    }
 
     #[test]
     fn test_get_workflow_id() {
@@ -189,13 +200,13 @@ workflow:
 authorities:
   user:
     id: user_42
-    mpk_abe: base64:mpk_abe_user
+    mpk_abe: ""
   attestation-services:
     - id: maa
-      mpk_abe: base64:mpk_abe_maa
-  aps:
+      mpk_abe: ""
+  attribute-providing-services:
     - id: finra
-      mpk_abe: base64:mpk_abe_finra
+      mpk_abe: ""
 
 nodes:
 - name: fetch_public
@@ -221,7 +232,7 @@ output:
         "#;
 
         let template_graph = TemplateGraph::from_yaml(yaml_content).unwrap();
-        let policies = compile_policies(&template_graph);
+        let policies = compile_policies(&template_graph).unwrap();
 
         let wf_id = get_workflow_id("fraud-detector");
 

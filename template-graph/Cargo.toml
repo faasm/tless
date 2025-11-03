@@ -12,6 +12,7 @@ homepage.workspace = true
 accless-abe4 = { path = "../accless/libs/abe4" }
 anyhow = { workspace = true }
 blake3 = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 
