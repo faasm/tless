@@ -21,6 +21,28 @@ fn solve_lse(usk: &USK, policy: &Policy) -> Option<(Vec<usize>, Vec<usize>)> {
     Some((eps_vec, eps_not_vec))
 }
 
+/// # Description
+///
+/// Decrypts a ciphertext to recover the symmetric key.
+///
+/// This function attempts to decrypt a `Ciphertext` using a user's secret key
+/// (`USK`). If the user's attributes (embedded in the `USK`) satisfy the policy
+/// associated with the `Ciphertext`, the original symmetric key (`Gt`) is
+/// recovered. Otherwise, decryption fails and `None` is returned.
+///
+/// # Arguments
+///
+/// * `usk`: The user's secret key.
+/// * `gid`: The global identifier of the user.
+/// * `iota`: The `Iota` object derived from the user's attributes.
+/// * `tau`: The `Tau` object derived from the policy.
+/// * `policy`: The access control policy used for encryption.
+/// * `ct`: The ciphertext to be decrypted.
+///
+/// # Returns
+///
+/// An `Option<Gt>` containing the recovered symmetric key if decryption is
+/// successful, or `None` otherwise.
 pub fn decrypt(
     usk: &USK,
     gid: &str,

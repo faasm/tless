@@ -1,7 +1,7 @@
 mod curve;
 mod hashing;
-mod policy;
-mod scheme;
+pub mod policy;
+pub mod scheme;
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::engine::{Engine as _, general_purpose};
@@ -107,6 +107,27 @@ struct EncryptOutput {
     ciphertext: String,
 }
 
+/// # Description
+///
+/// FFI wrapper for the CP-ABE encryption function.
+///
+/// This function takes a base64-encoded master public key and a policy string,
+/// encrypts a symmetric key under this policy, and returns the base64-encoded
+/// encrypted symmetric key and its ciphertext.
+///
+/// # Arguments
+///
+/// * `mpk_b64`: A C-style string containing the base64-encoded master public
+///   key.
+/// * `policy_str`: A C-style string containing the policy string.
+///
+/// # Returns
+///
+/// A C-style string containing a JSON object with two fields:
+/// - `gt`: The base64-encoded symmetric key (plaintext) that was encrypted.
+/// - `ciphertext`: The base64-encoded ciphertext of the symmetric key.
+///
+/// Returns a null pointer on error.
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn encrypt_abe4(
@@ -142,6 +163,25 @@ pub unsafe extern "C" fn encrypt_abe4(
     CString::new(output_json).unwrap().into_raw()
 }
 
+/// # Description
+///
+/// FFI wrapper for the CP-ABE decryption function.
+///
+/// This function takes a base64-encoded user secret key, a global identifier,
+/// a policy string, and a base64-encoded ciphertext. It attempts to decrypt
+/// the ciphertext to recover the symmetric key.
+///
+/// # Arguments
+///
+/// * `usk_b64`: A C-style string containing the base64-encoded user secret key.
+/// * `gid`: A C-style string containing the global identifier of the user.
+/// * `policy_str`: A C-style string containing the policy string.
+/// * `ct_b64`: A C-style string containing the base64-encoded ciphertext.
+///
+/// # Returns
+///
+/// A C-style string containing the base64-encoded symmetric key if decryption
+/// is successful, or a null pointer otherwise.
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn decrypt_abe4(

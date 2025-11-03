@@ -80,7 +80,8 @@ optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
 - Whenever you make changes to rust source code, make sure to build it and test
   it with: `cargo build` and `cargo test` from the root of the directory.
-- Do not allow the use of unwrap() or panic(). Instead, enforce proper error handling.
+- Do not allow the use of unwrap(), expect(), or panic(). Instead, enforce proper
+  error handling through the `anyhow` crate.
 - For each new method, make sure to add extensive documentation in the following format:
 ```rust
 ///

@@ -51,6 +51,29 @@ fn share_secret(
     (lambda_vec, mu_vec, n)
 }
 
+/// # Description
+///
+/// Encrypts a symmetric key using the CP-ABE scheme.
+///
+/// This function does not encrypt arbitrary plaintext data directly. Instead,
+/// it takes a policy and generates a symmetric key (`Gt`) that is encrypted
+/// under this policy. The returned `Ciphertext` can then be used to decrypt
+/// this symmetric key if the decryptor possesses a set of attributes that
+/// satisfy the policy.
+///
+/// # Arguments
+///
+/// * `rng`: A mutable reference to a random number generator.
+/// * `mpk`: The master public key.
+/// * `policy`: The access control policy under which the symmetric key will be
+///   encrypted.
+/// * `tau`: The `Tau` object derived from the policy.
+///
+/// # Returns
+///
+/// A tuple containing:
+/// - `Gt`: The symmetric key (plaintext) that was encrypted.
+/// - `Ciphertext`: The ciphertext of the symmetric key.
 pub fn encrypt(mut rng: impl Rng, mpk: &MPK, policy: &Policy, tau: &Tau) -> (Gt, Ciphertext) {
     let s = ScalarField::rand(&mut rng);
     let m = std::cmp::max(tau.get_max(), tau.get_tilde_max());

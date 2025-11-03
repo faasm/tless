@@ -1,0 +1,22 @@
+
+[package]
+name = "template-graph"
+version.workspace = true
+license-file.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "A library to parse and work with Accless workflow template graphs"
+homepage.workspace = true
+
+[dependencies]
+accless-abe4 = { path = "../accless/libs/abe4" }
+anyhow = { workspace = true }
+blake3 = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+
+[dev-dependencies]
+ark-std = { workspace = true }
+base64 = { workspace = true }
+ark-serialize = { workspace = true }
