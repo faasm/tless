@@ -5,6 +5,7 @@ members = [
     "attestation-service",
     "accless/libs/abe4",
     "accless/libs/jwt",
+    "template-graph",
     "workflows/finra/knative",
     "workflows/word-count/knative",
     "workflows/ml-inference/knative",

@@ -1,6 +1,6 @@
 mod curve;
 mod hashing;
-mod policy;
+pub mod policy;
 mod scheme;
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

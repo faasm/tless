@@ -3990,6 +3990,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "template-graph"
+version = "0.8.1"
+dependencies = [
+ "accless-abe4",
+ "anyhow",
+ "serde",
+ "serde_yaml",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
