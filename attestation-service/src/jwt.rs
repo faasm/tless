@@ -3,17 +3,19 @@ use anyhow::Result;
 use jsonwebtoken::EncodingKey;
 use log::error;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// # Description
 ///
 /// Generate a JWT encoding key based on a certificate PEM File.
-pub fn generate_encoding_key() -> Result<EncodingKey> {
-    let pem_bytes = match std::fs::read(tls::get_public_certificate_path()) {
+pub fn generate_encoding_key(certs_dir: &Path) -> Result<EncodingKey> {
+    let pub_cert_path = tls::get_public_certificate_path(certs_dir);
+    let pem_bytes = match std::fs::read(&pub_cert_path) {
         Ok(bytes) => bytes,
         Err(e) => {
             error!(
                 "failed to read certificate file (path={:?}, error={e:?})",
-                tls::get_public_certificate_path()
+                pub_cert_path
             );
             anyhow::bail!("failed to read private PEM file");
         }

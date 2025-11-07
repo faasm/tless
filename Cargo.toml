@@ -38,6 +38,7 @@ chrono = "^0.4.38"
 clap = { version = "4.0" }
 cloudevents-sdk = { git = "https://github.com/cloudevents/sdk-rust.git", rev = "fa0aadb31de82956d44fba4b50c6a002d5bd0b7b" }
 csv = "^1.1"
+dcap-qvl = "0.3.4"
 env_logger = "0.11.8"
 futures = "^0.3"
 futures-util = "0.3"

@@ -20,6 +20,9 @@ axum.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+clap = { workspace = true, features = ["derive"] }
+dcap-qvl.workspace = true
+hex.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio", "server", "http1", "service"] }
 jsonwebtoken.workspace = true

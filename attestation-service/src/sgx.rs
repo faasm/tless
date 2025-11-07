@@ -1,11 +1,16 @@
-use crate::{jwt::JwtClaims, state::AttestationServiceState};
+use crate::{
+    intel::{INTEL_PCS_URL, IntelCa, SgxCollateral, SgxQuote},
+    jwt::JwtClaims,
+    state::AttestationServiceState,
+};
 use aes_gcm::{
     Aes128Gcm, KeyInit, Nonce,
     aead::{Aead, OsRng, rand_core::RngCore},
 };
+use anyhow::Result;
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
-use log::error;
+use log::{debug, error, info};
 use p256::PublicKey;
 use ring::{
     agreement::{self, ECDH_P256, UnparsedPublicKey},
@@ -13,7 +18,11 @@ use ring::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::sync::Arc;
+use std::{
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,13 +38,8 @@ struct RuntimeData {
     _data_type: String,
 }
 
-fn is_valid_p256_point(bytes: &[u8]) -> bool {
-    if bytes.len() != 65 || bytes[0] != 0x04 {
-        return false;
-    }
-    PublicKey::from_sec1_bytes(bytes).is_ok()
-}
-
+/// # Description
+///
 /// This struct corresponds to the request that SGX-Faasm sends to verify
 /// an SGX report. Most importantly, the quote is the actual SGX quote, and
 /// the runtime_data corresponds to the enclave held data, which is the public
@@ -49,6 +53,15 @@ pub struct SgxRequest {
     runtime_data: RuntimeData,
 }
 
+fn is_valid_p256_point(bytes: &[u8]) -> bool {
+    if bytes.len() != 65 || bytes[0] != 0x04 {
+        return false;
+    }
+    PublicKey::from_sec1_bytes(bytes).is_ok()
+}
+
+/// # Description
+///
 /// SGX's crypto library uses little-endian encoding for the coordinates in
 /// the crypto library, whereas Rust's ring uses big-endian. We thus need to
 /// convert the raw bytes we receive, as part of the enclave's held data in
@@ -74,6 +87,8 @@ fn sgx_pubkey_to_sec1_format(raw: &[u8]) -> Option<[u8; 65]> {
     Some(sec1)
 }
 
+/// # Description
+///
 /// Reverse the process above: given a SEC1 key usable in Rust, convert it
 /// to something we can parse in the SGX SDK
 fn sec1_pubkey_to_sgx(sec1_pubkey: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -94,6 +109,80 @@ fn sec1_pubkey_to_sgx(sec1_pubkey: &[u8]) -> anyhow::Result<Vec<u8>> {
     Ok(sgx_le_pubkey)
 }
 
+/// # Description
+///
+/// Helper method to fetch the SGX quote collateral. This is the information we
+/// need to validate that the quote is correct. We need to fetch it once per
+/// TCB, but then we can cache it for subsequent requests.
+///
+/// In Azure, in general, we can use a Provisioning Certificate Caching Service
+/// (PCCS) that prevents having to send a request to Intel for the collateral.
+///
+/// # Arguments
+///
+/// - `cache_key`: key in the SGX collateral cache that indicates the TCB of the
+///   quote we are trying to validate. It comes from the SGX quote itself.
+/// - `state`: handle to the state that contains the SGX quote cache.
+///
+/// # Returns
+///
+/// The SGX collateral, either read from the cache, or fetched from Intel's PCS
+/// or a cloud-based PCCS.
+async fn get_sgx_collateral(
+    cache_key: (String, IntelCa),
+    state: &Arc<AttestationServiceState>,
+) -> Result<SgxCollateral> {
+    // Fast path: read collateral from the cache.
+    let maybe_collateral: Option<SgxCollateral> = {
+        let cache = state.sgx_collateral_cache.read().await;
+        cache.get(&cache_key).cloned()
+    };
+
+    if let Some(collateral) = maybe_collateral {
+        return Ok(collateral);
+    };
+
+    // Slow path: fetch collateral from either Intel's PCS or a cloud's PCCS.
+    let pccs_url: Option<&str> = state.sgx_pccs_url.as_deref().and_then(|path| path.to_str());
+
+    let collateral: SgxCollateral = if let Some(pccs_url) = pccs_url {
+        debug!("fetching SGX collateral from PCCS (url={pccs_url})");
+        dcap_qvl::collateral::get_collateral_for_fmspc(
+            pccs_url,
+            cache_key.0.clone(),
+            cache_key.1.as_str(),
+            true,
+        )
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!("Error fetching SGX collateral from PCCS (url={pccs_url}, error={e:?})")
+        })?
+    } else {
+        debug!("fetching SGX collateral from Intel's PCS (url={INTEL_PCS_URL})");
+        dcap_qvl::collateral::get_collateral_for_fmspc(
+            INTEL_PCS_URL,
+            cache_key.0.clone(),
+            cache_key.1.as_str(),
+            true,
+        )
+        .await
+        .map_err(|e| {
+            anyhow::anyhow!("Error fetching SGX collateral from Intel's PCS (error={e:?})")
+        })?
+    };
+
+    // Cache collateral for future use.
+    {
+        let mut cache = state.sgx_collateral_cache.write().await;
+        cache.insert(cache_key, collateral.clone());
+    }
+
+    Ok(collateral)
+}
+
+/// # Description
+///
+/// Entrypoint function to verify an SGX report.
 pub async fn verify_sgx_report(
     Extension(state): Extension<Arc<AttestationServiceState>>,
     Json(payload): Json<SgxRequest>,
@@ -102,15 +191,89 @@ pub async fn verify_sgx_report(
     // WARNING: we must use URL_SAFE as on the client side we are encoding
     // with cppcodec::base64_url
     let raw_quote_b64 = payload.quote.replace(['\n', '\r'], "");
-    let _quote_bytes = match general_purpose::URL_SAFE.decode(&raw_quote_b64) {
-        Ok(b) => {
-            // TODO: validate the quote and check that the runtime data matches the
-            // held data in the quote
-            // TODO: validate SGX quote using DCAP's Quote Verification Library (QVL)
+    let verified_enclave_report = match general_purpose::URL_SAFE.decode(&raw_quote_b64) {
+        Ok(bytes) => {
+            // Parse the bytes into an SgxQuote structure.
+            let sgx_quote: SgxQuote = match SgxQuote::parse(&bytes) {
+                Ok(sgx_quote) => sgx_quote,
+                Err(e) => {
+                    error!("error getting time since epoch (error={e:?})");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "error getting time since epoch" })),
+                    );
+                }
+            };
 
-            b
+            // Extract the key we use in the collateral cache.
+            let sgx_tcb_key: (String, IntelCa) = match (sgx_quote.fmspc(), sgx_quote.ca()) {
+                (Ok(sgx_fmpsc), Ok(sgx_ca)) => match IntelCa::from_str(sgx_ca) {
+                    Ok(parsed_ca) => (hex::encode_upper(sgx_fmpsc), parsed_ca),
+                    Err(_) => {
+                        error!("invalid CA returned by SGX quote: {sgx_ca}");
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({ "error": "invalid CA in SGX quote" })),
+                        );
+                    }
+                },
+                _ => {
+                    error!("error extracting FMSPC and CA from SGX quote");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "error extracting CA and FMSPC from SGX quote" })),
+                    );
+                }
+            };
+
+            // Fetch the collateral to validate the quote.
+            let collateral: SgxCollateral = match get_sgx_collateral(sgx_tcb_key, &state).await {
+                Ok(collateral) => collateral,
+                Err(e) => {
+                    error!("error fetching SGX collateral (error={e:?})");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "error fetching SGX collateral" })),
+                    );
+                }
+            };
+
+            let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(t) => t.as_secs(),
+                Err(e) => {
+                    error!("error getting time since epoch (error={e:?})");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "error getting time since epoch" })),
+                    );
+                }
+            };
+            let verified_report = match dcap_qvl::verify::verify(&bytes, &collateral, now) {
+                Ok(tcb) => tcb,
+                Err(e) => {
+                    error!("failed to verify SGX's quote (error={e:?})");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "failed to verify SGX quote" })),
+                    );
+                }
+            };
+
+            info!("verififed sgx report (status={})", verified_report.status);
+
+            match verified_report.report {
+                dcap_qvl::quote::Report::SgxEnclave(enclave_report) => enclave_report,
+                _ => {
+                    error!("received TDX report instead of SGX one");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "received TDX report instead of SGX one" })),
+                    );
+                }
+            }
         }
-        Err(_) => {
+        Err(e) => {
+            error!("invalid base64 string in SGX quote (error={e:?})");
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": "invalid base64 in quote" })),
@@ -120,10 +283,6 @@ pub async fn verify_sgx_report(
 
     // Use the enclave held data (runtime_data) public key, to derive an
     // encryption key to protect the returned JWT, which contains secrets.
-    // This is only necessary for SGX, as the HTTPS connection is terminated
-    // outside of the enclave.
-    // WARNING: we must use URL_SAFE as on the client side we are encoding
-    // with cppcodec::base64_url
     let raw_pubkey_bytes = match general_purpose::URL_SAFE.decode(&payload.runtime_data.data) {
         Ok(b) => b,
         Err(_) => {
@@ -133,6 +292,16 @@ pub async fn verify_sgx_report(
             );
         }
     };
+
+    // Verify that the raw-bytes included in the runtime data match the enclave held
+    // data in the verified report.
+    if raw_pubkey_bytes != verified_enclave_report.report_data {
+        error!(
+            "enclave held data does not match verified report data (expected={raw_pubkey_bytes:?}, got={:?})",
+            verified_enclave_report.report_data
+        );
+    }
+
     let pubkey_bytes = match sgx_pubkey_to_sec1_format(&raw_pubkey_bytes) {
         Some(b) => b,
         None => {
@@ -235,7 +404,8 @@ pub async fn verify_sgx_report(
 
     let ciphertext = match cipher.encrypt(&nonce, jwt.as_bytes()) {
         Ok(ct) => ct,
-        Err(_) => {
+        Err(e) => {
+            error!("error encrypting JWT (error={e:?})");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "JWT encryption failed" })),

@@ -8,7 +8,7 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{
     fs::{self, File},
     io::{BufReader, ErrorKind},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
 };
@@ -18,12 +18,12 @@ fn get_certs_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("certs")
 }
 
-pub fn get_private_key_path() -> PathBuf {
-    get_certs_dir().join("key.pem")
+pub fn get_private_key_path(certs_dir: &Path) -> PathBuf {
+    certs_dir.join("key.pem")
 }
 
-pub fn get_public_certificate_path() -> PathBuf {
-    get_certs_dir().join("cert.pem")
+pub fn get_public_certificate_path(certs_dir: &Path) -> PathBuf {
+    certs_dir.join("cert.pem")
 }
 
 /// # Description
@@ -62,8 +62,8 @@ fn get_node_url() -> Result<String> {
     Ok((*ip).to_string())
 }
 
-fn initialize_tls_keys(clean: bool) -> Result<()> {
-    let certs_dir = get_certs_dir();
+fn initialize_tls_keys(certs_dir: Option<PathBuf>, clean: bool) -> Result<PathBuf> {
+    let certs_dir = certs_dir.unwrap_or(get_certs_dir());
 
     if clean {
         match fs::remove_dir_all(&certs_dir) {
@@ -78,13 +78,13 @@ fn initialize_tls_keys(clean: bool) -> Result<()> {
 
     if certs_dir.is_dir() {
         info!("TLS certificate directory already exists, skipping TLS initialisation");
-        return Ok(());
+        return Ok(certs_dir);
     }
     std::fs::create_dir_all(&certs_dir)?;
 
     let url = get_node_url()?;
-    let key_path = get_private_key_path();
-    let cert_path = get_public_certificate_path();
+    let key_path = get_private_key_path(&certs_dir);
+    let cert_path = get_public_certificate_path(&certs_dir);
 
     let status = Command::new("openssl")
         .arg("req")
@@ -110,19 +110,19 @@ fn initialize_tls_keys(clean: bool) -> Result<()> {
             "accless: as: generated private key and certs at: {}",
             certs_dir.display()
         );
-        Ok(())
+        Ok(certs_dir)
     } else {
         error!("error generating TLS private key and certificates");
         Err(anyhow::anyhow!("openssl failed with status {}", status))
     }
 }
 
-pub async fn load_config(clean: bool) -> Result<TlsAcceptor> {
+pub async fn load_config(certs_dir: Option<PathBuf>, clean: bool) -> Result<TlsAcceptor> {
     // Initialize, generating if necessary, the TLS keys and certificates.
-    initialize_tls_keys(clean)?;
+    let certs_dir = initialize_tls_keys(certs_dir, clean)?;
 
-    let cert_file = &mut BufReader::new(File::open(get_public_certificate_path())?);
-    let key_file = &mut BufReader::new(File::open(get_private_key_path())?);
+    let cert_file = &mut BufReader::new(File::open(get_public_certificate_path(&certs_dir))?);
+    let key_file = &mut BufReader::new(File::open(get_private_key_path(&certs_dir))?);
 
     let cert_chain: Vec<CertificateDer> = certs(cert_file)?
         .into_iter()
@@ -133,7 +133,7 @@ pub async fn load_config(clean: bool) -> Result<TlsAcceptor> {
     if keys.is_empty() {
         error!(
             "found 0 keys in PEM key file (path={:?})",
-            get_private_key_path()
+            get_private_key_path(&certs_dir)
         );
         anyhow::bail!("0 private keys found in PEM file");
     }

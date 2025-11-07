@@ -1,15 +1,18 @@
 use crate::state::AttestationServiceState;
 use anyhow::Result;
 use axum::{Extension, Router, routing::post};
+use clap::Parser;
 use hyper::server::conn::http1;
 use hyper_util::{rt::tokio::TokioIo, service::TowerToHyperService};
-use log::info;
+use log::{error, info};
 use rustls::crypto::CryptoProvider;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::net::TcpListener;
 
 #[cfg(feature = "azure-cvm")]
 mod azure_cvm;
+#[cfg(feature = "sgx")]
+mod intel;
 mod jwt;
 #[cfg(feature = "sgx")]
 mod sgx;
@@ -18,9 +21,27 @@ mod snp;
 mod state;
 mod tls;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Directory where to look-for and store TLS certificates.
+    #[arg(long)]
+    certs_dir: Option<PathBuf>,
+    /// URL to fetch SGX platform collateral information.
+    #[arg(long)]
+    sgx_pccs_url: Option<PathBuf>,
+    /// Whether to overwrite the existing TLS certificates (if any).
+    #[arg(long)]
+    force_clean_certs: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let state = Arc::new(AttestationServiceState::new());
+    let cli = Cli::parse();
+    let state = Arc::new(AttestationServiceState::new(
+        cli.certs_dir.clone(),
+        cli.sgx_pccs_url.clone(),
+    )?);
     CryptoProvider::install_default(rustls::crypto::ring::default_provider())
         .map_err(|e| anyhow::anyhow!("error initializing rustls provider (error={e:?})"))?;
 
@@ -30,7 +51,7 @@ async fn main() -> Result<()> {
         .layer(Extension(state.clone()));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8443));
-    let tls_acceptor = tls::load_config(false).await?;
+    let tls_acceptor = tls::load_config(cli.certs_dir, cli.force_clean_certs).await?;
     let listener = TcpListener::bind(addr).await;
     info!("Accless attestation server running on https://{}", addr);
 
@@ -44,10 +65,10 @@ async fn main() -> Result<()> {
                 Ok(tls_stream) => {
                     let io = TokioIo::new(tls_stream);
                     if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                        eprintln!("as: connection error: {:?}", err);
+                        error!("as: connection error: {:?}", err);
                     }
                 }
-                Err(err) => eprintln!("as: TLS handshake failed: {:?}", err),
+                Err(err) => error!("as: TLS handshake failed: {:?}", err),
             }
         });
     }
