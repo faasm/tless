@@ -342,6 +342,7 @@ pub async fn verify_sgx_report(
 
     // Use the enclave held data (runtime_data) public key, to derive an
     // encryption key to protect the returned JWT, which contains secrets.
+    debug!("decoding base64 encoded public key in quote.runtime_data");
     let raw_pubkey_bytes = match general_purpose::URL_SAFE.decode(&payload.runtime_data.data) {
         Ok(b) => b,
         Err(_) => {
@@ -361,6 +362,7 @@ pub async fn verify_sgx_report(
         );
     }
 
+    debug!("parsing pub key bytes to SEC1 format");
     let pubkey_bytes = match sgx_pubkey_to_sec1_format(&raw_pubkey_bytes) {
         Some(b) => b,
         None => {
@@ -383,6 +385,7 @@ pub async fn verify_sgx_report(
     let peer_pubkey = UnparsedPublicKey::new(&ECDH_P256, pubkey_bytes);
 
     // Generate ephemeral private key and do ECDH
+    debug!("generating server-side ephemeral private key for ECDH key exchange");
     let rng = SystemRandom::new();
     let my_private_key = match agreement::EphemeralPrivateKey::generate(&ECDH_P256, &rng) {
         Ok(k) => k,
@@ -400,11 +403,13 @@ pub async fn verify_sgx_report(
     // WARNING: when encoding in base64, the decoder will run inside an SGX
     // enclave, and our home-baked base64 decoding assumes STANDARD (not
     // URL_SAFE) encoding
+    debug!("generating server-side ephemeral public key for ECDH key exchange");
     let server_pub_key = my_private_key.compute_public_key().unwrap();
     let server_pub_key_le = sec1_pubkey_to_sgx(server_pub_key.as_ref()).unwrap();
     let server_pub_b64 = general_purpose::STANDARD.encode(server_pub_key_le);
 
     // Now do the key derivation
+    debug!("running server-side key derivation for ECDH key exchange");
     let shared_secret: Vec<u8> =
         match agreement::agree_ephemeral(my_private_key, &peer_pubkey, |shared_secret_material| {
             Ok::<Vec<u8>, ring::error::Unspecified>(shared_secret_material.to_vec())
@@ -420,6 +425,7 @@ pub async fn verify_sgx_report(
 
     // WARNING: the SGX-SDK only implements AES 128, so we must use it here
     // instead of AES 256
+    debug!("generating AES-128-GCM key from ECDH secret");
     let cipher = match Aes128Gcm::new_from_slice(&shared_secret[..16]) {
         Ok(cipher) => cipher,
         Err(e) => {
@@ -431,6 +437,7 @@ pub async fn verify_sgx_report(
         }
     };
 
+    debug!("encoding JWT with server's private key (for authenticity)");
     let claims = match JwtClaims::new("sgx") {
         Ok(claims) => claims,
         Err(e) => {
@@ -457,6 +464,7 @@ pub async fn verify_sgx_report(
     };
 
     // Encrypt the JWT
+    debug!("encrypting JWT with ECDH-derived AES key (for confidentiality)");
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from(nonce_bytes);

@@ -67,7 +67,7 @@ fn get_accli_path() -> Result<PathBuf> {
 async fn test_spawn_as() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), true)?;
+    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, false)?;
     let _child_guard = ChildGuard(child);
 
     // Give the service time to start.
@@ -85,7 +85,7 @@ async fn test_spawn_as() -> Result<()> {
 async fn test_spawn_as_no_clean() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), false)?;
+    let child = common::spawn_as(certs_dir.to_str().unwrap(), false, false)?;
     let _child_guard = ChildGuard(child);
     // Give the service time to start.
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -105,7 +105,7 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 async fn test_att_client_sgx() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), true)?;
+    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, true)?;
     let _child_guard = ChildGuard(child);
 
     // Give the service time to start.

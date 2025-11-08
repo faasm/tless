@@ -9,17 +9,14 @@ use std::path::Path;
 ///
 /// Generate a JWT encoding key based on a certificate PEM File.
 pub fn generate_encoding_key(certs_dir: &Path) -> Result<EncodingKey> {
-    let pub_cert_path = tls::get_public_certificate_path(certs_dir);
-    debug!(
-        "loading public certificate path from: {}",
-        pub_cert_path.display()
-    );
-    let pem_bytes = match std::fs::read(&pub_cert_path) {
+    let priv_key_path = tls::get_private_key_path(certs_dir);
+    debug!("loading private key path from: {}", priv_key_path.display());
+    let pem_bytes = match std::fs::read(&priv_key_path) {
         Ok(bytes) => bytes,
         Err(e) => {
             error!(
-                "failed to read certificate file (path={:?}, error={e:?})",
-                pub_cert_path
+                "failed to read private key file (path={:?}, error={e:?})",
+                priv_key_path
             );
             anyhow::bail!("failed to read private PEM file");
         }

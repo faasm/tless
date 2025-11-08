@@ -41,6 +41,7 @@ constexpr size_t SGX_COORD_SIZE = 32;
 constexpr size_t SGX_REPORT_DATA_SIZE = 64;
 constexpr size_t MOCK_QUOTE_HEADER_SIZE = 16;
 constexpr uint32_t MOCK_QUOTE_VERSION = 1;
+constexpr size_t AES_128_KEY_SIZE = 16;
 constexpr size_t AES_GCM_IV_SIZE = 12;
 constexpr size_t AES_GCM_TAG_SIZE = 16;
 const std::array<uint8_t, 8> MOCK_QUOTE_MAGIC = {'A', 'C', 'C', 'L',
@@ -130,17 +131,26 @@ buildMockQuote(const std::array<uint8_t, SGX_REPORT_DATA_SIZE> &reportData) {
     std::vector<uint8_t> quote;
     quote.reserve(MOCK_QUOTE_HEADER_SIZE + reportData.size());
 
+    // Magic
     quote.insert(quote.end(), MOCK_QUOTE_MAGIC.begin(), MOCK_QUOTE_MAGIC.end());
 
+    // Version (little-endian)
     uint32_t version = MOCK_QUOTE_VERSION;
-    quote.insert(quote.end(), reinterpret_cast<uint8_t *>(&version),
-                 reinterpret_cast<uint8_t *>(&version) + sizeof(uint32_t));
+    quote.push_back(static_cast<uint8_t>(version));
+    quote.push_back(static_cast<uint8_t>(version >> 8));
+    quote.push_back(static_cast<uint8_t>(version >> 16));
+    quote.push_back(static_cast<uint8_t>(version >> 24));
 
+    // Reserved (little-endian)
     uint32_t reserved = 0;
-    quote.insert(quote.end(), reinterpret_cast<uint8_t *>(&reserved),
-                 reinterpret_cast<uint8_t *>(&reserved) + sizeof(uint32_t));
+    quote.push_back(static_cast<uint8_t>(reserved));
+    quote.push_back(static_cast<uint8_t>(reserved >> 8));
+    quote.push_back(static_cast<uint8_t>(reserved >> 16));
+    quote.push_back(static_cast<uint8_t>(reserved >> 24));
 
+    // Report data
     quote.insert(quote.end(), reportData.begin(), reportData.end());
+
     return quote;
 }
 
@@ -261,7 +271,7 @@ deriveSharedSecret(const EcKeyPair &keyPair,
 std::string decryptJwt(const std::vector<uint8_t> &encrypted,
                        const std::vector<uint8_t> &aesKey) {
     if (encrypted.size() < AES_GCM_IV_SIZE + AES_GCM_TAG_SIZE ||
-        aesKey.size() < AES_GCM_IV_SIZE) {
+        aesKey.size() != AES_128_KEY_SIZE) {
         throw std::runtime_error("accless(att): invalid encrypted payload");
     }
 
@@ -395,11 +405,11 @@ std::string getMockSgxAttestationJwt() {
 
     std::vector<uint8_t> sharedSecret =
         deriveSharedSecret(keyPair, serverPubKey);
-    if (sharedSecret.size() < AES_GCM_IV_SIZE) {
+    if (sharedSecret.size() < AES_128_KEY_SIZE) {
         throw std::runtime_error("accless(att): derived secret too small");
     }
     std::vector<uint8_t> aesKey(sharedSecret.begin(),
-                                sharedSecret.begin() + AES_GCM_IV_SIZE);
+                                sharedSecret.begin() + AES_128_KEY_SIZE);
 
     return decryptJwt(encrypted, aesKey);
 }
