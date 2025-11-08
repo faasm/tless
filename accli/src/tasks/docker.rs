@@ -163,7 +163,14 @@ impl Docker {
             .expect("failed to execute docker exec");
     }
 
-    fn run_cmd(cmd: &[String], mount: bool, cwd: Option<&str>, interactive: bool) {
+    fn run_cmd(
+        cmd: &[String],
+        mount: bool,
+        cwd: Option<&str>,
+        interactive: bool,
+        env: &[String],
+        net: bool,
+    ) {
         let image_tag = Self::get_docker_tag(&DockerContainer::Experiments);
         let mut run_cmd = Command::new("docker");
         run_cmd
@@ -180,6 +187,14 @@ impl Docker {
             .arg(format!("HOST_UID={}", Self::get_user_id()))
             .arg("-e")
             .arg(format!("HOST_GID={}", Self::get_group_id()));
+
+        for e in env {
+            run_cmd.arg("-e").arg(e);
+        }
+
+        if net {
+            run_cmd.arg("--network").arg("host");
+        }
 
         if mount {
             run_cmd
@@ -204,15 +219,15 @@ impl Docker {
             .expect("failed to execute docker run");
     }
 
-    pub fn cli() {
+    pub fn cli(net: bool) {
         if Self::is_container_running() {
             Self::exec_cmd(&[], Some("/code/accless"), true);
         } else {
-            Self::run_cmd(&[], true, Some("/code/accless"), true);
+            Self::run_cmd(&[], true, Some("/code/accless"), true, &[], net);
         }
     }
 
-    pub fn run(cmd: &[String], mount: bool, cwd: Option<&str>) {
+    pub fn run(cmd: &[String], mount: bool, cwd: Option<&str>, env: &[String], net: bool) {
         if Self::is_container_running() {
             if !mount {
                 panic!(
@@ -221,7 +236,7 @@ impl Docker {
             }
             Self::exec_cmd(cmd, cwd, true);
         } else {
-            Self::run_cmd(cmd, mount, cwd, true);
+            Self::run_cmd(cmd, mount, cwd, true, env, net);
         }
     }
 }

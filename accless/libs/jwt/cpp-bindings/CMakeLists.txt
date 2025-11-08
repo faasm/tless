@@ -5,10 +5,10 @@ set(CMAKE_PROJECT_TARGET jwt-cpp)
 # ------------------------------------------------------------------------------
 
 set(CARGO_FLAGS --release)
-set(JWT_RUST_LIBRARY "${CMAKE_SOURCE_DIR}/../target/release/libaccless_jwt.a" CACHE INTERNAL "")
+set(JWT_RUST_LIBRARY "${ACCLESS_ROOT}/../target/release/libaccless_jwt.a" CACHE INTERNAL "")
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     set(CARGO_FLAGS --release --target=wasm32-wasip1)
-    set(JWT_RUST_LIBRARY "${CMAKE_SOURCE_DIR}/../target/wasm32-wasip1/release/libaccless_jwt.a" CACHE INTERNAL "")
+    set(JWT_RUST_LIBRARY "${ACCLESS_ROOT}/../target/wasm32-wasip1/release/libaccless_jwt.a" CACHE INTERNAL "")
 endif ()
 
 add_library(jwt_rust_lib STATIC IMPORTED GLOBAL)
@@ -17,7 +17,7 @@ add_custom_command(
     OUTPUT ${JWT_RUST_LIBRARY}
     COMMAND cargo build -p accless-jwt ${CARGO_FLAGS} > /dev/null 2>&1
     COMMENT "Building JWT staticlib with Cargo"
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/..
+    WORKING_DIRECTORY ${ACCLESS_ROOT}/..
 )
 
 add_custom_target(jwt_rust_build DEPENDS ${JWT_RUST_LIBRARY})

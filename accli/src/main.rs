@@ -121,7 +121,11 @@ enum DockerCommand {
         nocache: bool,
     },
     /// Get a CLI interface to the experiments container
-    Cli {},
+    Cli {
+        /// Connect the container to the host's network
+        #[arg(long)]
+        net: bool,
+    },
     /// Run a command inside the experiments container
     Run {
         /// Command to run inside the container
@@ -132,6 +136,12 @@ enum DockerCommand {
         /// Set the working directory inside the container
         #[arg(long)]
         cwd: Option<String>,
+        /// Set environment variables inside the container
+        #[arg(long, value_name = "KEY=VALUE")]
+        env: Vec<String>,
+        /// Connect the container to the host's network
+        #[arg(long)]
+        net: bool,
     },
 }
 
@@ -378,11 +388,17 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            DockerCommand::Cli {} => {
-                Docker::cli();
+            DockerCommand::Cli { net } => {
+                Docker::cli(*net);
             }
-            DockerCommand::Run { cmd, mount, cwd } => {
-                Docker::run(cmd, *mount, cwd.as_deref());
+            DockerCommand::Run {
+                cmd,
+                mount,
+                cwd,
+                env,
+                net,
+            } => {
+                Docker::run(cmd, *mount, cwd.as_deref(), env, *net);
             }
         },
         Command::Eval { eval_command } => match eval_command {

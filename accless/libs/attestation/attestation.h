@@ -62,4 +62,7 @@ getSnpReport(std::optional<std::array<uint8_t, 64>> reportData);
 // Attestation-service methods
 std::string getAttestationServiceUrl();
 std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport);
+
+// SGX mock helpers used in integration tests
+std::string getMockSgxAttestationJwt();
 } // namespace accless::attestation

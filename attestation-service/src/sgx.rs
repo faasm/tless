@@ -7,7 +7,7 @@ use aes_gcm::{
     Aes128Gcm, KeyInit, Nonce,
     aead::{Aead, OsRng, rand_core::RngCore},
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
 use log::{debug, error, info};
@@ -36,6 +36,47 @@ struct InitTimeData {
 struct RuntimeData {
     data: String,
     _data_type: String,
+}
+
+const MOCK_QUOTE_MAGIC: &[u8; 8] = b"ACCLSGX!";
+const MOCK_QUOTE_VERSION: u32 = 1;
+const MOCK_QUOTE_HEADER_LEN: usize = 16;
+
+struct MockSgxQuote {
+    report_data: [u8; 64],
+}
+
+impl MockSgxQuote {
+    fn parse(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != MOCK_QUOTE_HEADER_LEN + 64 {
+            return Err(anyhow!(
+                "mock SGX quote must be {} bytes (got={})",
+                MOCK_QUOTE_HEADER_LEN + 64,
+                bytes.len()
+            ));
+        }
+
+        if bytes[..MOCK_QUOTE_MAGIC.len()] != *MOCK_QUOTE_MAGIC {
+            return Err(anyhow!("invalid mock SGX quote header"));
+        }
+
+        let version_bytes: [u8; 4] = bytes[MOCK_QUOTE_MAGIC.len()..MOCK_QUOTE_MAGIC.len() + 4]
+            .try_into()
+            .expect("slice size already checked");
+        let version = u32::from_le_bytes(version_bytes);
+        if version != MOCK_QUOTE_VERSION {
+            return Err(anyhow!(
+                "unsupported mock SGX quote version (expected={}, got={})",
+                MOCK_QUOTE_VERSION,
+                version
+            ));
+        }
+
+        let mut report_data = [0u8; 64];
+        report_data.copy_from_slice(&bytes[MOCK_QUOTE_HEADER_LEN..]);
+
+        Ok(Self { report_data })
+    }
 }
 
 /// # Description
@@ -191,93 +232,111 @@ pub async fn verify_sgx_report(
     // WARNING: we must use URL_SAFE as on the client side we are encoding
     // with cppcodec::base64_url
     let raw_quote_b64 = payload.quote.replace(['\n', '\r'], "");
-    let verified_enclave_report = match general_purpose::URL_SAFE.decode(&raw_quote_b64) {
-        Ok(bytes) => {
-            // Parse the bytes into an SgxQuote structure.
-            let sgx_quote: SgxQuote = match SgxQuote::parse(&bytes) {
-                Ok(sgx_quote) => sgx_quote,
-                Err(e) => {
-                    error!("error getting time since epoch (error={e:?})");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "error getting time since epoch" })),
-                    );
-                }
-            };
-
-            // Extract the key we use in the collateral cache.
-            let sgx_tcb_key: (String, IntelCa) = match (sgx_quote.fmspc(), sgx_quote.ca()) {
-                (Ok(sgx_fmpsc), Ok(sgx_ca)) => match IntelCa::from_str(sgx_ca) {
-                    Ok(parsed_ca) => (hex::encode_upper(sgx_fmpsc), parsed_ca),
-                    Err(_) => {
-                        error!("invalid CA returned by SGX quote: {sgx_ca}");
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(json!({ "error": "invalid CA in SGX quote" })),
-                        );
-                    }
-                },
-                _ => {
-                    error!("error extracting FMSPC and CA from SGX quote");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "error extracting CA and FMSPC from SGX quote" })),
-                    );
-                }
-            };
-
-            // Fetch the collateral to validate the quote.
-            let collateral: SgxCollateral = match get_sgx_collateral(sgx_tcb_key, &state).await {
-                Ok(collateral) => collateral,
-                Err(e) => {
-                    error!("error fetching SGX collateral (error={e:?})");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "error fetching SGX collateral" })),
-                    );
-                }
-            };
-
-            let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
-                Ok(t) => t.as_secs(),
-                Err(e) => {
-                    error!("error getting time since epoch (error={e:?})");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "error getting time since epoch" })),
-                    );
-                }
-            };
-            let verified_report = match dcap_qvl::verify::verify(&bytes, &collateral, now) {
-                Ok(tcb) => tcb,
-                Err(e) => {
-                    error!("failed to verify SGX's quote (error={e:?})");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "failed to verify SGX quote" })),
-                    );
-                }
-            };
-
-            info!("verififed sgx report (status={})", verified_report.status);
-
-            match verified_report.report {
-                dcap_qvl::quote::Report::SgxEnclave(enclave_report) => enclave_report,
-                _ => {
-                    error!("received TDX report instead of SGX one");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "received TDX report instead of SGX one" })),
-                    );
-                }
-            }
-        }
+    let quote_bytes = match general_purpose::URL_SAFE.decode(&raw_quote_b64) {
+        Ok(bytes) => bytes,
         Err(e) => {
             error!("invalid base64 string in SGX quote (error={e:?})");
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": "invalid base64 in quote" })),
             );
+        }
+    };
+
+    let report_data_bytes: Vec<u8> = if state.mock_sgx {
+        match MockSgxQuote::parse(&quote_bytes) {
+            Ok(mock_quote) => {
+                info!("received mock SGX quote, skipping DCAP verification");
+                mock_quote.report_data.to_vec()
+            }
+            Err(e) => {
+                error!("invalid mock SGX quote (error={e:?})");
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "invalid mock SGX quote" })),
+                );
+            }
+        }
+    } else {
+        // Parse the bytes into an SgxQuote structure.
+        let sgx_quote: SgxQuote = match SgxQuote::parse(&quote_bytes) {
+            Ok(sgx_quote) => sgx_quote,
+            Err(e) => {
+                error!("error parsing SGX quote (error={e:?})");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "error parsing SGX quote" })),
+                );
+            }
+        };
+
+        // Extract the key we use in the collateral cache.
+        let sgx_tcb_key: (String, IntelCa) = match (sgx_quote.fmspc(), sgx_quote.ca()) {
+            (Ok(sgx_fmpsc), Ok(sgx_ca)) => match IntelCa::from_str(sgx_ca) {
+                Ok(parsed_ca) => (hex::encode_upper(sgx_fmpsc), parsed_ca),
+                Err(_) => {
+                    error!("invalid CA returned by SGX quote: {sgx_ca}");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "invalid CA in SGX quote" })),
+                    );
+                }
+            },
+            _ => {
+                error!("error extracting FMSPC and CA from SGX quote");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "error extracting CA and FMSPC from SGX quote" })),
+                );
+            }
+        };
+
+        // Fetch the collateral to validate the quote.
+        let collateral: SgxCollateral = match get_sgx_collateral(sgx_tcb_key, &state).await {
+            Ok(collateral) => collateral,
+            Err(e) => {
+                error!("error fetching SGX collateral (error={e:?})");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "error fetching SGX collateral" })),
+                );
+            }
+        };
+
+        let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(t) => t.as_secs(),
+            Err(e) => {
+                error!("error getting time since epoch (error={e:?})");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "error getting time since epoch" })),
+                );
+            }
+        };
+        let verified_report = match dcap_qvl::verify::verify(&quote_bytes, &collateral, now) {
+            Ok(tcb) => tcb,
+            Err(e) => {
+                error!("failed to verify SGX's quote (error={e:?})");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "failed to verify SGX quote" })),
+                );
+            }
+        };
+
+        info!("verififed sgx report (status={})", verified_report.status);
+
+        match verified_report.report {
+            dcap_qvl::quote::Report::SgxEnclave(enclave_report) => {
+                enclave_report.report_data.to_vec()
+            }
+            _ => {
+                error!("received TDX report instead of SGX one");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "received TDX report instead of SGX one" })),
+                );
+            }
         }
     };
 
@@ -295,10 +354,10 @@ pub async fn verify_sgx_report(
 
     // Verify that the raw-bytes included in the runtime data match the enclave held
     // data in the verified report.
-    if raw_pubkey_bytes != verified_enclave_report.report_data {
+    if raw_pubkey_bytes != report_data_bytes {
         error!(
             "enclave held data does not match verified report data (expected={raw_pubkey_bytes:?}, got={:?})",
-            verified_enclave_report.report_data
+            report_data_bytes
         );
     }
 

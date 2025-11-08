@@ -1,7 +1,7 @@
 use crate::tls;
 use anyhow::Result;
 use jsonwebtoken::EncodingKey;
-use log::error;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -10,6 +10,10 @@ use std::path::Path;
 /// Generate a JWT encoding key based on a certificate PEM File.
 pub fn generate_encoding_key(certs_dir: &Path) -> Result<EncodingKey> {
     let pub_cert_path = tls::get_public_certificate_path(certs_dir);
+    debug!(
+        "loading public certificate path from: {}",
+        pub_cert_path.display()
+    );
     let pem_bytes = match std::fs::read(&pub_cert_path) {
         Ok(bytes) => bytes,
         Err(e) => {

@@ -22,6 +22,7 @@ bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 dcap-qvl.workspace = true
+env_logger.workspace = true
 hex.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio", "server", "http1", "service"] }
@@ -37,3 +38,11 @@ snpguest.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls.workspace = true
 ureq = { workspace = true, features = ["json"] }
+
+[dev-dependencies]
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+tempfile.workspace = true
+
+[build-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

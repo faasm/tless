@@ -15,6 +15,7 @@ project(accless)
 set(CMAKE_PROJECT_TARGET accless)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(ACCLESS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Hints to find the custom libriares that we install in the docker container:
 # ./config/docker/accless-experiments.dockerfile
@@ -60,10 +61,10 @@ add_subdirectory(./libs/abe4/cpp-bindings)
 add_subdirectory(./libs/base64)
 
 set(ACCLESS_COMMON_HEADERS
-    ${CMAKE_CURRENT_LIST_DIR}/include
-    ${CMAKE_CURRENT_LIST_DIR}/libs/jwt/cpp-bindings
-    ${CMAKE_CURRENT_LIST_DIR}/libs/abe4/cpp-bindings
-    ${CMAKE_CURRENT_LIST_DIR}/libs/base64
+    ${ACCLESS_ROOT}/include
+    ${ACCLESS_ROOT}/libs/jwt/cpp-bindings
+    ${ACCLESS_ROOT}/libs/abe4/cpp-bindings
+    ${ACCLESS_ROOT}/libs/base64
 )
 set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::abe4 accless::base64)
 
@@ -96,7 +97,7 @@ else ()
         # We use the installed curl as part of azure-cvm-attestation
         /usr/local/attestationcurl/lib/libcurl.a
     )
-    set(ACCLESS_HEADERS ${CMAKE_CURRENT_LIST_DIR}/libs)
+    set(ACCLESS_HEADERS ${ACCLESS_ROOT}/libs)
 endif()
 
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
@@ -113,7 +114,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     add_custom_command(
         TARGET ${CMAKE_PROJECT_TARGET}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/libaccless.imports ${CMAKE_CURRENT_BINARY_DIR}/libaccless.imports
+        COMMAND ${CMAKE_COMMAND} -E copy ${ACCLESS_ROOT}/libaccless.imports ${CMAKE_CURRENT_BINARY_DIR}/libaccless.imports
         COMMENT "Created ${PROJECT_BINARY_DIR}/libaccless.imports"
     )
 endif ()
