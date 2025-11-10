@@ -10,7 +10,8 @@ use std::path::Path;
 
 /// # Description
 ///
-/// Constant for the workflow attribute label managed by the attestation service.
+/// Constant for the workflow attribute label managed by the attestation
+/// service.
 const ATTRIBUTE_WORKFLOW_LABEL: &str = "wf";
 
 /// # Description
@@ -57,17 +58,25 @@ pub struct JwtClaims {
 impl JwtClaims {
     /// # Description
     ///
-    /// Generates a new JWT based on the attestation service state, and the specific request
-    /// metadata.
+    /// Generates a new JWT based on the attestation service state, and the
+    /// specific request metadata.
     ///
     /// # Arguments
     ///
     /// - `state`: handle to the attestation service state.
     /// - `tee`: type of TEE we are generating the claim for.
     /// - `gid`: unique user identifier owning the encrypted data.
-    /// - `workflow_id`: unique identifier of the workflow graph we are executing.
-    /// - `node_id`: unique identifier of the node in the workflow graph we are executing.
-    pub fn new(state: &AttestationServiceState, gid: &str, tee: &str, workflow_id: &str, node_id: &str) -> Result<Self> {
+    /// - `workflow_id`: unique identifier of the workflow graph we are
+    ///   executing.
+    /// - `node_id`: unique identifier of the node in the workflow graph we are
+    ///   executing.
+    pub fn new(
+        state: &AttestationServiceState,
+        gid: &str,
+        tee: &str,
+        workflow_id: &str,
+        node_id: &str,
+    ) -> Result<Self> {
         let rng = rand::thread_rng();
         let user_attributes: Vec<UserAttribute> = vec![
             abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
@@ -75,13 +84,8 @@ impl JwtClaims {
         ];
         let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
         let iota = abe4::scheme::iota::Iota::new(&user_attributes);
-        let partial_usk: PartialUSK = abe4::scheme::keygen_partial(
-            rng,
-            gid,
-            &state.partial_msk,
-            &user_attribute_refs,
-            &iota
-        );
+        let partial_usk: PartialUSK =
+            abe4::scheme::keygen_partial(rng, gid, &state.partial_msk, &user_attribute_refs, &iota);
         let mut partial_usk_bytes: Vec<u8> = Vec::new();
         partial_usk.serialize_compressed(&mut partial_usk_bytes)?;
 

@@ -18,11 +18,11 @@ pub struct AttestationServiceState {
     /// included in the template graph, and is the field we use to run CP-ABE
     /// key generation.
     pub id: String,
-    /// Master Secret Key for the attestation service as one of the authorities of the
-    /// decentralized CP-ABE scheme.
+    /// Master Secret Key for the attestation service as one of the authorities
+    /// of the decentralized CP-ABE scheme.
     pub partial_msk: PartialMSK,
-    /// Master Pulic Key for the attestation service as one of the authorities of the
-    /// decentralized CP-ABE scheme.
+    /// Master Pulic Key for the attestation service as one of the authorities
+    /// of the decentralized CP-ABE scheme.
     pub partial_mpk: PartialMPK,
     #[cfg(feature = "azure-cvm")]
     pub vcek_pem: Vec<u8>,
@@ -54,7 +54,8 @@ impl AttestationServiceState {
 
         // Initialize CP-ABE authority.
         let mut rng = rand::thread_rng();
-        let (partial_msk, partial_mpk): (PartialMSK, PartialMPK) = abe4::scheme::setup_partial(&mut rng, ATTESTATION_SERVICE_ID);
+        let (partial_msk, partial_mpk): (PartialMSK, PartialMPK) =
+            abe4::scheme::setup_partial(&mut rng, ATTESTATION_SERVICE_ID);
 
         Ok(Self {
             id: ATTESTATION_SERVICE_ID.to_string(),

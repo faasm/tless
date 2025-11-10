@@ -1,23 +1,15 @@
-use crate::{
-    jwt::JwtClaims,
-    request::NodeData,
-    state::AttestationServiceState
-};
-use axum::{
-    Extension, Json,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use crate::{jwt::JwtClaims, request::NodeData, state::AttestationServiceState};
+use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
-use serde::Deserialize;
 use log::error;
+use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
 /// # Description
 ///
-/// This struct corresponds to the request that SNP-Knative sends to verify an SNP attestation
-/// report.
+/// This struct corresponds to the request that SNP-Knative sends to verify an
+/// SNP attestation report.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnpRequest {
@@ -44,8 +36,7 @@ pub async fn verify_snp_report(
     };
 
     #[cfg(feature = "azure-cvm")]
-    match snpguest::verify::attestation::verify_attestation(&state.vcek_pem, bytes.as_ref())
-    {
+    match snpguest::verify::attestation::verify_attestation(&state.vcek_pem, bytes.as_ref()) {
         Ok(()) => {
             let claims = match JwtClaims::new("snp-acvm") {
                 Ok(claims) => claims,
@@ -84,8 +75,8 @@ pub async fn verify_snp_report(
         "snp",
         &payload.node_data.gid,
         &payload.node_data.workflow_id,
-        &payload.node_data.node_id)
-    {
+        &payload.node_data.node_id,
+    ) {
         Ok(claims) => claims,
         Err(e) => {
             error!("error gathering JWT claims (error={e:?})");

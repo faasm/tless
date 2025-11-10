@@ -100,4 +100,49 @@ unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
     return result;
 }
 
+std::vector<uint8_t>
+packFullKey(const std::vector<std::string> &authorities,
+            const std::vector<std::vector<uint8_t>> &partial_keys) {
+    std::map<std::string, std::vector<uint8_t>> key_map;
+    for (size_t i = 0; i < authorities.size(); ++i) {
+        key_map[authorities[i]] = partial_keys[i];
+    }
+
+    std::vector<uint8_t> full_key_bytes;
+    uint64_t num_keys = key_map.size();
+    full_key_bytes.insert(
+        full_key_bytes.end(), reinterpret_cast<const uint8_t *>(&num_keys),
+        reinterpret_cast<const uint8_t *>(&num_keys) + sizeof(uint64_t));
+
+    for (const auto &pair : key_map) {
+        uint64_t auth_len = pair.first.length();
+        full_key_bytes.insert(
+            full_key_bytes.end(), reinterpret_cast<const uint8_t *>(&auth_len),
+            reinterpret_cast<const uint8_t *>(&auth_len) + sizeof(uint64_t));
+        full_key_bytes.insert(full_key_bytes.end(), pair.first.begin(),
+                              pair.first.end());
+
+        uint64_t key_len = pair.second.size();
+        full_key_bytes.insert(
+            full_key_bytes.end(), reinterpret_cast<const uint8_t *>(&key_len),
+            reinterpret_cast<const uint8_t *>(&key_len) + sizeof(uint64_t));
+        full_key_bytes.insert(full_key_bytes.end(), pair.second.begin(),
+                              pair.second.end());
+    }
+
+    return full_key_bytes;
+}
+
+std::string packFullKey(const std::vector<std::string> &authorities,
+                        const std::vector<std::string> &partial_keys_b64) {
+    std::vector<std::vector<uint8_t>> partial_keys;
+    for (const auto &key_b64 : partial_keys_b64) {
+        partial_keys.push_back(accless::base64::decode(key_b64));
+    }
+
+    std::vector<uint8_t> full_key_bytes =
+        packFullKey(authorities, partial_keys);
+    return accless::base64::encode(full_key_bytes);
+}
+
 } // namespace accless::abe4

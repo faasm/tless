@@ -114,4 +114,43 @@ std::optional<std::string> decrypt(const std::string &usk,
  */
 std::map<std::string, std::vector<uint8_t>>
 unpackFullKey(const std::vector<uint8_t> &full_key_bytes);
+
+/**
+ * @brief Packs a FullKey from a vector of authorities and their corresponding
+ * partial keys.
+ *
+ * This function serializes a collection of partial keys into a single byte
+ * vector representing a FullKey. The serialization format is:
+ * - A uint64_t indicating the number of partial keys.
+ * - For each partial key (sorted by authority):
+ *   - A uint64_t for the length of the authority string.
+ *   - The authority string.
+ *   - A uint64_t for the length of the partial key.
+ *   - The partial key bytes.
+ *
+ * @param authorities A const reference to a vector of authority strings.
+ * @param partial_keys A const reference to a vector of partial key byte
+ * vectors.
+ * @return A std::vector<uint8_t> containing the serialized FullKey.
+ */
+std::vector<uint8_t>
+packFullKey(const std::vector<std::string> &authorities,
+            const std::vector<std::vector<uint8_t>> &partial_keys);
+
+/**
+ * @brief Packs a FullKey from a vector of authorities and base64-encoded
+ * partial keys.
+ *
+ * This is an overload of packFullKey that accepts partial keys as
+ * base64-encoded strings. It decodes the keys and then calls the primary
+ * packFullKey function, finally returning a base64-encoded string of the packed
+ * key.
+ *
+ * @param authorities A const reference to a vector of authority strings.
+ * @param partial_keys_b64 A const reference to a vector of base64-encoded
+ * partial key strings.
+ * @return A std::string containing the base64-encoded serialized FullKey.
+ */
+std::string packFullKey(const std::vector<std::string> &authorities,
+                        const std::vector<std::string> &partial_keys_b64);
 } // namespace accless::abe4

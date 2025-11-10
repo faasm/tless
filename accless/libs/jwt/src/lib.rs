@@ -138,7 +138,7 @@ pub unsafe extern "C" fn get_property(
 /// Free a C string returned from `get_property`
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn free_string(s: *mut c_char) {
+pub unsafe extern "C" fn jwt_free_string(s: *mut c_char) {
     if !s.is_null() {
         unsafe {
             drop(CString::from_raw(s));
@@ -157,11 +157,12 @@ pub unsafe extern "C" fn verify_jwt(jwt_cstr: *const c_char) -> bool {
     }
 
     // SAFETY: we are parsing a C-string from a pointer that we know is not null.
-    let jwt = unsafe { match CStr::from_ptr(jwt_cstr).to_str() {
-        Ok(s) => s,
-        Err(_) => return false,
-    }};
-
+    let jwt = unsafe {
+        match CStr::from_ptr(jwt_cstr).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
 
     verify_jwt_signature(jwt, &x5c_certs)
 }
@@ -250,24 +251,24 @@ MIIFCTCCAvGgAwIBAgIUIfCvnY9eL7gCAMnilTlwJTjV1ekwDQYJKoZIhvcNAQELBQAwFDESMBAGA1UE
             assert!(!sub_ptr.is_null());
             let sub_val = CStr::from_ptr(sub_ptr).to_str().unwrap();
             assert_eq!(sub_val, "attested-client");
-            free_string(sub_ptr);
+            jwt_free_string(sub_ptr);
 
             // Test "aud"
             let aud_ptr = get_property(jwt_cstr.as_ptr(), prop_aud_cstr.as_ptr());
             assert!(!aud_ptr.is_null());
             let aud_val = CStr::from_ptr(aud_ptr).to_str().unwrap();
             assert_eq!(aud_val, "accless-attestation-service");
-            free_string(aud_ptr);
+            jwt_free_string(aud_ptr);
 
             // Test missing property "iss"
             let iss_ptr = get_property(jwt_cstr.as_ptr(), prop_missing_cstr.as_ptr());
             assert!(iss_ptr.is_null());
-            free_string(iss_ptr); // free_string handles null
+            jwt_free_string(iss_ptr); // free_string handles null
 
             // Test property that isn't a string "exp"
             let exp_ptr = get_property(jwt_cstr.as_ptr(), prop_not_string_cstr.as_ptr());
             assert!(exp_ptr.is_null()); // .as_str() will fail for a number
-            free_string(exp_ptr);
+            jwt_free_string(exp_ptr);
         }
     }
 }

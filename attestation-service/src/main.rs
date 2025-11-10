@@ -81,6 +81,7 @@ async fn main() -> Result<()> {
     // Start HTTPS server.
     let app = Router::new()
         .route("/health", get(health))
+        .route("/state", get(request::get_state))
         .route("/verify-sgx-report", post(sgx::verify_sgx_report))
         .route("/verify-snp-report", post(snp::verify_snp_report))
         .layer(Extension(state.clone()));

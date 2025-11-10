@@ -1,6 +1,5 @@
-///! This build file generates a file with optionally-injected certificates from (one or different)
-///! attestation services.
-
+/// ! This build file generates a file with optionally-injected certificates
+/// from (one or different) ! attestation services.
 use std::{env, fs, path::PathBuf};
 
 fn main() {
@@ -12,13 +11,11 @@ fn main() {
 
     // In the furutre we could add more certificates here.
     let mut entries = String::new();
-    if let Some(path) = cert_path {
-        if !path.is_empty() {
-            // Rebuild if that file changes
-            println!("cargo:rerun-if-changed={path}");
-            // Add an entry to the slice using include_str! on that path
-            entries.push_str(&format!("    include_str!(r\"{path}\"),\n"));
-        }
+    if let Some(path) = cert_path && !path.is_empty() {
+        // Rebuild if that file changes
+        println!("cargo:rerun-if-changed={path}");
+        // Add an entry to the slice using include_str! on that path
+        entries.push_str(&format!("    include_str!(r\"{path}\"),\n"));
     }
 
     // You can add more entries here in the future if you want more dynamic certs.

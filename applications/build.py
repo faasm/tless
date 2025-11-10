@@ -52,7 +52,10 @@ def compile(wasm=False, native=False, debug=False, clean=False, cert_path=None):
         ]
         cmake_cmd = " ".join(cmake_cmd)
 
-        run(cmake_cmd, shell=True, check=True, cwd=build_dir)
+        # Only run CMake command on clean builds.
+        if clean:
+            run(cmake_cmd, shell=True, check=True, cwd=build_dir)
+
         run("ninja", shell=True, check=True, cwd=build_dir)
 
 
@@ -74,7 +77,7 @@ if __name__ == "__main__":
     if args.clean:
         # This is a global clean, so we do it once here.
         print("Running global clean: cargo clean-accless")
-        run("cargo clean-accless", shell=True, check=True, cwd=PROJ_ROOT)
+        run("cargo clean-accless", shell=True, capture_output=True, cwd=PROJ_ROOT)
 
     # Build the microbenchmarks
     compile(

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use reqwest::Client;
+use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -144,6 +145,32 @@ async fn test_att_client_sgx() -> Result<()> {
     );
 
     assert!(output.status.success());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_state() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let certs_dir = temp_dir.path();
+    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, false)?;
+    let _child_guard = ChildGuard(child);
+
+    // Give the service time to start.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()?;
+
+    let res = client.get("https://localhost:8443/state").send().await?;
+    assert!(res.status().is_success());
+
+    let body: Value = res.json().await?;
+    assert!(body.get("id").is_some());
+    assert!(body.get("id").unwrap().is_string());
+    assert!(body.get("mpk").is_some());
+    assert!(body.get("mpk").unwrap().is_string());
 
     Ok(())
 }

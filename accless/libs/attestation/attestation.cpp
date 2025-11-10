@@ -174,6 +174,63 @@ getSnpReport(std::optional<std::array<uint8_t, 64>> reportData) {
 /* Attestation Service Methods                                                */
 /******************************************************************************/
 
+// Must match the signature libcurl expects
+static size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb,
+                                void *userdata) {
+    auto *out = static_cast<std::string *>(userdata);
+    if (!out) {
+        return 0; // tells libcurl this is an error
+    }
+
+    const size_t total = size * nmemb;
+    out->append(ptr, total);
+    return total;
+}
+
+// Helper for GET requests
+static std::string http_get(const std::string &url,
+                            const std::string &certPath) {
+    CURL *curl = curl_easy_init();
+    if (curl == nullptr) {
+        throw std::runtime_error("accless(att): failed to init curl");
+    }
+
+    char errbuf[CURL_ERROR_SIZE];
+    errbuf[0] = 0;
+
+    std::string response;
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_CAINFO, certPath.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+
+    CURLcode res = curl_easy_perform(curl);
+    long status = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        size_t len = strlen(errbuf);
+        fprintf(stderr, "accless(att): curl error: ");
+        if (len) {
+            fprintf(stderr, "%s%s", errbuf,
+                    ((errbuf[len - 1] != '\n') ? "\n" : ""));
+        } else {
+            fprintf(stderr, "%s\n", curl_easy_strerror(res));
+        }
+        throw std::runtime_error("accless(att): curl GET error");
+    }
+    if (status != 200) {
+        throw std::runtime_error(
+            "accless(att): GET request failed with status " +
+            std::to_string(status));
+    }
+
+    return response;
+}
+
 // Get the URL of our own attestation service (**not** MAA)
 std::string getAttestationServiceUrl() {
     const char *val = std::getenv("ACCLESS_AS_URL");
@@ -186,19 +243,26 @@ std::string getAttestationServiceUrl() {
 }
 
 std::string getAttestationServiceCertPath() {
-    const char *val = std::getenv("ACCLESS_AS_CERT");
+    const char *val = std::getenv("ACCLESS_AS_CERT_PATH");
     if (val == nullptr) {
-        std::cerr << "accless(att): must set ACCLESS_AS_CERT" << std::endl;
-        throw std::runtime_error("must set ACCLESS_AS_CERT");
+        std::cerr << "accless(att): must set ACCLESS_AS_CERT_PATH" << std::endl;
+        throw std::runtime_error("must set ACCLESS_AS_CERT_PATH");
     }
     return std::string(val);
 }
 
-size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
-    size_t totalSize = size * nmemb;
-    auto *response = static_cast<std::string *>(userdata);
-    response->append(ptr, totalSize);
-    return totalSize;
+std::pair<std::string, std::string> getAttestationServiceState() {
+    std::string asUrl = getAttestationServiceUrl();
+    std::string certPath = getAttestationServiceCertPath();
+    std::string url = asUrl + "/state";
+
+    std::string response = http_get(url, certPath);
+
+    std::cout << "got response: " << response << std::endl;
+    std::string id = extractJsonStringField(response, "id");
+    std::string mpk = extractJsonStringField(response, "mpk");
+
+    return std::make_pair(id, mpk);
 }
 
 std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
@@ -244,5 +308,38 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
     curl_slist_free_all(headers);
 
     return jwt;
+}
+
+std::string extractJsonStringField(const std::string &json,
+                                   const std::string &field) {
+    const std::string key = "\"" + field + "\"";
+    const size_t keyPos = json.find(key);
+    if (keyPos == std::string::npos) {
+        throw std::runtime_error("accless(att): missing JSON field " + field);
+    }
+
+    size_t colonPos = json.find(':', keyPos + key.size());
+    if (colonPos == std::string::npos) {
+        throw std::runtime_error("accless(att): malformed JSON near " + field);
+    }
+
+    size_t begin = colonPos + 1;
+    while (begin < json.size() &&
+           std::isspace(static_cast<unsigned char>(json[begin]))) {
+        begin++;
+    }
+    if (begin >= json.size() || json[begin] != '"') {
+        throw std::runtime_error("accless(att): expected string for " + field);
+    }
+
+    size_t end = json.find('"', begin + 1);
+    while (end != std::string::npos && json[end - 1] == '\\') {
+        end = json.find('"', end + 1);
+    }
+    if (end == std::string::npos) {
+        throw std::runtime_error("accless(att): unterminated string in JSON");
+    }
+
+    return json.substr(begin + 1, end - begin - 1);
 }
 } // namespace accless::attestation

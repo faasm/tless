@@ -20,23 +20,6 @@
 
 namespace accless::attestation {
 
-std::string getAttestationServiceUrl() {
-    const char *url = std::getenv("ACCLESS_AS_URL");
-    if (url == nullptr) {
-        throw std::runtime_error("ACCLESS_AS_URL environment variable not set");
-    }
-    return std::string(url);
-}
-
-std::string getAttestationServiceCertPath() {
-    const char *path = std::getenv("ACCLESS_AS_CERT_PATH");
-    if (path == nullptr) {
-        throw std::runtime_error(
-            "ACCLESS_AS_CERT_PATH environment variable not set");
-    }
-    return std::string(path);
-}
-
 constexpr size_t SGX_COORD_SIZE = 32;
 constexpr size_t SGX_REPORT_DATA_SIZE = 64;
 constexpr size_t MOCK_QUOTE_HEADER_SIZE = 16;
@@ -175,39 +158,6 @@ std::string buildRequestBody(const std::string &quoteB64,
     body += runtimeB64;
     body += R"(","dataType":"Binary"}})";
     return body;
-}
-
-std::string extractJsonStringField(const std::string &json,
-                                   const std::string &field) {
-    const std::string key = "\"" + field + "\"";
-    const size_t keyPos = json.find(key);
-    if (keyPos == std::string::npos) {
-        throw std::runtime_error("accless(att): missing JSON field " + field);
-    }
-
-    size_t colonPos = json.find(':', keyPos + key.size());
-    if (colonPos == std::string::npos) {
-        throw std::runtime_error("accless(att): malformed JSON near " + field);
-    }
-
-    size_t begin = colonPos + 1;
-    while (begin < json.size() &&
-           std::isspace(static_cast<unsigned char>(json[begin]))) {
-        begin++;
-    }
-    if (begin >= json.size() || json[begin] != '"') {
-        throw std::runtime_error("accless(att): expected string for " + field);
-    }
-
-    size_t end = json.find('"', begin + 1);
-    while (end != std::string::npos && json[end - 1] == '\\') {
-        end = json.find('"', end + 1);
-    }
-    if (end == std::string::npos) {
-        throw std::runtime_error("accless(att): unterminated string in JSON");
-    }
-
-    return json.substr(begin + 1, end - begin - 1);
 }
 
 std::vector<uint8_t>

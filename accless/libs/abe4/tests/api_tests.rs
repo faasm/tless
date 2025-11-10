@@ -1,6 +1,4 @@
-use abe4::{
-    Gt, Policy, UserAttribute, decrypt, encrypt, iota::Iota, keygen, setup, tau::Tau,
-};
+use abe4::{Gt, Policy, UserAttribute, decrypt, encrypt, iota::Iota, keygen, setup, tau::Tau};
 use std::collections::HashSet;
 
 const USER_ID: &str = "TEST_USER_ID";

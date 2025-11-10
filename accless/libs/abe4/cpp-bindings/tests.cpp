@@ -85,3 +85,30 @@ TEST(Abe4Test, Decrypt) {
     ASSERT_TRUE(decrypted_gt.has_value());
     EXPECT_EQ(decrypted_gt.value(), encrypt_output.gt);
 }
+
+TEST(Abe4Test, PackFullKey) {
+    std::vector<std::string> auths = {"auth1", "auth2"};
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+
+    std::vector<uint8_t> mpk_bytes = accless::base64::decode(setup_output.mpk);
+    std::map<std::string, std::vector<uint8_t>> mpk_map =
+        accless::abe4::unpackFullKey(mpk_bytes);
+
+    std::vector<std::string> authorities;
+    std::vector<std::vector<uint8_t>> partial_keys_bytes;
+    std::vector<std::string> partial_keys_b64;
+
+    for (const auto &pair : mpk_map) {
+        authorities.push_back(pair.first);
+        partial_keys_bytes.push_back(pair.second);
+        partial_keys_b64.push_back(accless::base64::encode(pair.second));
+    }
+
+    std::vector<uint8_t> packed_mpk_bytes =
+        accless::abe4::packFullKey(authorities, partial_keys_bytes);
+    EXPECT_EQ(packed_mpk_bytes, mpk_bytes);
+
+    std::string packed_mpk_b64 =
+        accless::abe4::packFullKey(authorities, partial_keys_b64);
+    EXPECT_EQ(packed_mpk_b64, setup_output.mpk);
+}
