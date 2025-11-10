@@ -15,6 +15,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "base64 0.22.1",
+ "log",
  "rand 0.8.5",
  "serde",
  "serde_json",

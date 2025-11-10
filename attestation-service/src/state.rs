@@ -11,7 +11,7 @@ use std::{collections::HashMap, path::PathBuf};
 use tokio::sync::RwLock;
 
 /// Unique identifier for the demo attestation service.
-const ATTESTATION_SERVICE_ID: &str = "accless-demo-as";
+const ATTESTATION_SERVICE_ID: &str = "4CL3SSD3M0";
 
 pub struct AttestationServiceState {
     /// Unique ID for this attestation service. This is the field that must be

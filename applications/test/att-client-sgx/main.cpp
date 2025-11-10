@@ -26,7 +26,14 @@ int main() {
 
     // Generate a test ciphertext that only us, after a succesful attestation,
     // should be able to decrypt.
+    std::cout << "att-client-sgx: encrypting cp-abe with policy: " << policy
+              << std::endl;
     auto [gt, ct] = accless::abe4::encrypt(mpk, policy);
+    if (gt.empty() || ct.empty()) {
+        std::cerr << "att-client-sgx: error running cp-abe encryption"
+                  << std::endl;
+        return 1;
+    }
     std::cout << "att-client-sgx: ran CP-ABE encryption" << std::endl;
 
     std::cout << "att-client-sgx: running remote attestation..." << std::endl;

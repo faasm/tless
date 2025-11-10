@@ -1,3 +1,5 @@
+use anyhow::Result;
+use log::error;
 use std::str::from_utf8;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -12,9 +14,10 @@ pub enum Token {
     Ident(String),
 }
 
-pub fn lex(input: &str) -> Vec<Token> {
+pub fn lex(input: &str) -> Result<Vec<Token>> {
     if !input.is_ascii() {
-        panic!("Lexing error: policy must only contain ASCII character");
+        error!("lexing error: policy must only contain ASCII character");
+        anyhow::bail!("lexing error: policy must only contain ASCII character");
     }
     let mut tokens = Vec::new();
     let mut idx = 0;
@@ -51,29 +54,34 @@ pub fn lex(input: &str) -> Vec<Token> {
                 idx += 1
             }
             _ => {
-                let (token, i) = ident(input, idx);
+                let (token, i) = ident(input, idx)?;
                 tokens.push(token);
                 idx = i
             }
         }
     }
-    tokens
+
+    Ok(tokens)
 }
 
-fn ident(input: &[u8], start: usize) -> (Token, usize) {
+fn ident(input: &[u8], start: usize) -> Result<(Token, usize)> {
     let mut end = start;
     while end < input.len() && (input[end].is_ascii_alphanumeric() || input[end] == b'_') {
         end += 1;
     }
     let str = from_utf8(&input[start..end]).unwrap();
     if str.is_empty() {
-        panic!(
+        error!(
             "Illegal character '{}' found at index {}",
             from_utf8(&input[start..start + 1]).unwrap(),
             end
         );
+        anyhow::bail!(
+            "illegal character found in policy (char={})",
+            from_utf8(&input[start..start + 1]).unwrap(),
+        );
     }
-    (Token::Ident(String::from(str)), end)
+    Ok((Token::Ident(String::from(str)), end))
 }
 
 #[test]

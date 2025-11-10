@@ -13,6 +13,9 @@ TEST(Abe4Test, PartialKeyDeserialization) {
     std::vector<std::string> auths = {"auth1", "auth2"};
 
     accless::abe4::SetupOutput output = accless::abe4::setup(auths);
+    ASSERT_FALSE(output.mpk.empty());
+    ASSERT_FALSE(output.msk.empty());
+
     std::vector<uint8_t> mpk_bytes =
         accless::base64::decode(output.mpk); // Changed
     std::map<std::string, std::vector<uint8_t>> mpk_map =
@@ -35,6 +38,7 @@ TEST(Abe4Test, PartialKeyDeserialization) {
 TEST(Abe4Test, Keygen) {
     std::vector<std::string> auths = {"auth1", "auth2"};
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    ASSERT_FALSE(setup_output.msk.empty());
 
     std::string gid = "test_gid";
     std::vector<accless::abe4::UserAttribute> user_attrs = {
@@ -57,6 +61,7 @@ TEST(Abe4Test, Keygen) {
 TEST(Abe4Test, Encrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    ASSERT_FALSE(setup_output.mpk.empty());
 
     std::string policy = "auth1.label1:attr1 and auth2.label2:attr2";
 
@@ -69,6 +74,8 @@ TEST(Abe4Test, Encrypt) {
 TEST(Abe4Test, Decrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    ASSERT_FALSE(setup_output.msk.empty());
+    ASSERT_FALSE(setup_output.mpk.empty());
 
     std::string gid = "test_gid";
     std::vector<accless::abe4::UserAttribute> user_attrs = {
@@ -89,6 +96,7 @@ TEST(Abe4Test, Decrypt) {
 TEST(Abe4Test, PackFullKey) {
     std::vector<std::string> auths = {"auth1", "auth2"};
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    ASSERT_FALSE(setup_output.mpk.empty());
 
     std::vector<uint8_t> mpk_bytes = accless::base64::decode(setup_output.mpk);
     std::map<std::string, std::vector<uint8_t>> mpk_map =
