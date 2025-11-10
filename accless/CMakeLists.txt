@@ -17,12 +17,17 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(ACCLESS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# Hints to find the custom libriares that we install in the docker container:
-# ./config/docker/accless-experiments.dockerfile
+# Third-party projects we fetch using CMake.
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # Third-party deps for native builds.
     include(cmake/NativeExternalProjects.cmake)
+else ()
+    include(cmake/WasmExternalProjects.cmake)
+endif ()
 
+# Hints to find the custom libriares that we install in the docker container:
+# ./config/docker/accless-experiments.dockerfile
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
     # Make custom prefixes visible to *all* find_package() calls in subdirs
     list(PREPEND CMAKE_PREFIX_PATH
         "/usr/local/attestationssl"

@@ -9,8 +9,11 @@ int main() {
 
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
-    auto [id, mpk] = accless::attestation::getAttestationServiceState();
+    auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
     std::cout << "att-client-sgx: got attesation service's state" << std::endl;
+    std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
+    std::cout << "att-client-sgx: packed partial MPK into full MPK"
+              << std::endl;
 
     // These values are hard-coded in the mock SGX library in:
     // `accless/libs/attestation/mock_sgx.cpp`.

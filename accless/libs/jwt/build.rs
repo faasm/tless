@@ -11,7 +11,9 @@ fn main() {
 
     // In the furutre we could add more certificates here.
     let mut entries = String::new();
-    if let Some(path) = cert_path && !path.is_empty() {
+    if let Some(path) = cert_path
+        && !path.is_empty()
+    {
         // Rebuild if that file changes
         println!("cargo:rerun-if-changed={path}");
         // Add an entry to the slice using include_str! on that path

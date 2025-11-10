@@ -2,6 +2,7 @@
 #include "base64.h"
 
 #include <cstring> // For std::memcpy
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <optional>
 
@@ -12,6 +13,9 @@ SetupOutput setup(const std::vector<std::string> &auths) {
 
     char *result = setup_abe4(j.dump().c_str());
     if (!result) {
+        std::cerr << "accless(abe4): FFI call to setup_abe4 failed. See Rust "
+                     "logs for details."
+                  << std::endl;
         return {};
     }
 
@@ -33,6 +37,9 @@ std::string keygen(const std::string &gid, const std::string &msk,
     char *result =
         keygen_abe4(gid.c_str(), msk.c_str(), user_attrs_json.dump().c_str());
     if (!result) {
+        std::cerr << "accless(abe4): FFI call to keygen_abe4 failed. See Rust "
+                     "logs for details."
+                  << std::endl;
         return "";
     }
 
@@ -45,6 +52,9 @@ std::string keygen(const std::string &gid, const std::string &msk,
 EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
     char *result = encrypt_abe4(mpk.c_str(), policy.c_str());
     if (!result) {
+        std::cerr << "accless(abe4): FFI call to encrypt_abe4 failed. See Rust "
+                     "logs for details."
+                  << std::endl;
         return {};
     }
 
@@ -61,6 +71,9 @@ std::optional<std::string> decrypt(const std::string &usk,
     char *result =
         decrypt_abe4(usk.c_str(), gid.c_str(), policy.c_str(), ct.c_str());
     if (!result) {
+        std::cerr << "accless(abe4): FFI call to decrypt_abe4 failed. See Rust "
+                     "logs for details."
+                  << std::endl;
         return std::nullopt;
     }
 

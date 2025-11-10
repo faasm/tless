@@ -1,4 +1,5 @@
 #include "attestation.h"
+#include <nlohmann/json.hpp>
 
 // Includes from Azure Guest Attestation library
 #include "AttestationLogger.h"
@@ -258,7 +259,6 @@ std::pair<std::string, std::string> getAttestationServiceState() {
 
     std::string response = http_get(url, certPath);
 
-    std::cout << "got response: " << response << std::endl;
     std::string id = extractJsonStringField(response, "id");
     std::string mpk = extractJsonStringField(response, "mpk");
 
@@ -312,34 +312,28 @@ std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
 
 std::string extractJsonStringField(const std::string &json,
                                    const std::string &field) {
-    const std::string key = "\"" + field + "\"";
-    const size_t keyPos = json.find(key);
-    if (keyPos == std::string::npos) {
-        throw std::runtime_error("accless(att): missing JSON field " + field);
+    try {
+        nlohmann::json j = nlohmann::json::parse(json);
+        if (j.is_string()) {
+            // If the top-level is a string, it means the actual JSON is
+            // double-encoded. Parse it again.
+            j = nlohmann::json::parse(j.get<std::string>());
+        }
+        if (j.contains(field) && j[field].is_string()) {
+            return j[field].get<std::string>();
+        } else {
+            std::cerr << "accless(att): JSON field '" << field
+                      << "' not found or not a string" << std::endl;
+            throw std::runtime_error(
+                "accless(att): missing or malformed JSON field " + field);
+        }
+    } catch (const nlohmann::json::parse_error &e) {
+        std::cerr << "accless(att): JSON parse error: " << e.what()
+                  << std::endl;
+        throw std::runtime_error("accless(att): JSON parse error");
+    } catch (const nlohmann::json::exception &e) {
+        std::cerr << "accless(att): JSON error: " << e.what() << std::endl;
+        throw std::runtime_error("accless(att): JSON error");
     }
-
-    size_t colonPos = json.find(':', keyPos + key.size());
-    if (colonPos == std::string::npos) {
-        throw std::runtime_error("accless(att): malformed JSON near " + field);
-    }
-
-    size_t begin = colonPos + 1;
-    while (begin < json.size() &&
-           std::isspace(static_cast<unsigned char>(json[begin]))) {
-        begin++;
-    }
-    if (begin >= json.size() || json[begin] != '"') {
-        throw std::runtime_error("accless(att): expected string for " + field);
-    }
-
-    size_t end = json.find('"', begin + 1);
-    while (end != std::string::npos && json[end - 1] == '\\') {
-        end = json.find('"', end + 1);
-    }
-    if (end == std::string::npos) {
-        throw std::runtime_error("accless(att): unterminated string in JSON");
-    }
-
-    return json.substr(begin + 1, end - begin - 1);
 }
 } // namespace accless::attestation
