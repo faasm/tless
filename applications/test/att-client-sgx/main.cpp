@@ -14,7 +14,6 @@ int main() {
             return 1;
         }
 
-        // FIXME: this will require hot-patching the library.
         std::cout << "att-client-sgx: received JWT" << std::endl;
         if (!accless::jwt::verify(jwt)) {
             std::cerr << "att-client-sgx: JWT signature verification failed"
@@ -23,6 +22,9 @@ int main() {
         }
 
         std::cout << "att-client-sgx: JWT signature verified" << std::endl;
+
+        // TODO: get the partial keys out, and use them to decrypt something.
+
         return 0;
     } catch (const std::exception &ex) {
         std::cerr << "att-client-sgx: error: " << ex.what() << std::endl;

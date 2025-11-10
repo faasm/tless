@@ -13,9 +13,13 @@ endif ()
 
 add_library(jwt_rust_lib STATIC IMPORTED GLOBAL)
 
+# This cert path can be set from: -DACCLESS_ATTEST_CERT_PEM=/path/to/cert.pem
+message(STATUS "Injecting AS certificates to JWT library from: '${ACCLESS_AS_CERT_PEM}'")
 add_custom_command(
     OUTPUT ${JWT_RUST_LIBRARY}
-    COMMAND cargo build -p accless-jwt ${CARGO_FLAGS} > /dev/null 2>&1
+    COMMAND ${CMAKE_COMMAND} -E env
+            ACCLESS_AS_CERT_PEM=${ACCLESS_AS_CERT_PEM}
+            cargo build -p accless-jwt ${CARGO_FLAGS} # > /dev/null 2>&1
     COMMENT "Building JWT staticlib with Cargo"
     WORKING_DIRECTORY ${ACCLESS_ROOT}/..
 )
