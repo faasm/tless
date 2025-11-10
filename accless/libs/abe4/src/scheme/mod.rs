@@ -3,8 +3,9 @@ use crate::{
     policy::{Policy, UserAttribute},
 };
 use iota::Iota;
+use rand::Rng;
 use tau::Tau;
-use types::{Ciphertext, MPK, MSK, USK};
+use types::{Ciphertext, MPK, MSK, USK, PartialMPK, PartialMSK, PartialUSK};
 
 mod decrypt;
 mod encrypt;
@@ -15,8 +16,22 @@ mod setup;
 pub mod tau;
 pub mod types;
 
+pub fn setup_partial(rng: impl Rng, authority: &str) -> (PartialMSK, PartialMPK) {
+    setup::setup_partial(rng, authority)
+}
+
 pub fn setup(rng: impl ark_std::rand::RngCore, auths: &Vec<&str>) -> (MSK, MPK) {
     setup::setup(rng, auths)
+}
+
+pub fn keygen_partial(
+    rng: impl Rng,
+    gid: &str,
+    msk: &PartialMSK,
+    user_attrs: &[&UserAttribute],
+    iota: &Iota,
+) -> PartialUSK {
+    keygen::keygen_partial(rng, gid, msk, user_attrs, iota)
 }
 
 pub fn keygen(

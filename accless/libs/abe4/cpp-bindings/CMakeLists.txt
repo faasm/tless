@@ -5,17 +5,17 @@ set(CMAKE_PROJECT_TARGET abe4-cpp)
 # ------------------------------------------------------------------------------
 
 set(CARGO_FLAGS --release)
-set(ABE4_RUST_LIBRARY "${ACCLESS_ROOT}/../target/release/libaccless_abe4.a" CACHE INTERNAL "")
+set(ABE4_RUST_LIBRARY "${ACCLESS_ROOT}/../target/release/libabe4.a" CACHE INTERNAL "")
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     set(CARGO_FLAGS --release --target=wasm32-wasip1)
-    set(ABE4_RUST_LIBRARY "${ACCLESS_ROOT}/../target/wasm32-wasip1/release/libaccless_abe4.a" CACHE INTERNAL "")
+    set(ABE4_RUST_LIBRARY "${ACCLESS_ROOT}/../target/wasm32-wasip1/release/libabe4.a" CACHE INTERNAL "")
 endif ()
 
 add_library(abe4_rust_lib STATIC IMPORTED GLOBAL)
 
 add_custom_command(
     OUTPUT ${ABE4_RUST_LIBRARY}
-    COMMAND cargo build -p accless-abe4 ${CARGO_FLAGS} > /dev/null 2>&1
+    COMMAND cargo build -p abe4 ${CARGO_FLAGS} > /dev/null 2>&1
     COMMENT "Building ABE4 staticlib with Cargo"
     WORKING_DIRECTORY ${ACCLESS_ROOT}/..
 )

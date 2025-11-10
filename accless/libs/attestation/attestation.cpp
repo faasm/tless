@@ -204,6 +204,8 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
 std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport) {
     std::string jwt;
 
+    // FIXME: extend report to include gid, workflow_id and node_id.
+
     CURL *curl = curl_easy_init();
     if (!curl) {
         std::cerr << "accless: failed to initialize CURL" << std::endl;

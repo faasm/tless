@@ -1,9 +1,22 @@
-use crate::tls;
+use crate::{state::AttestationServiceState, tls};
+use abe4::{policy::UserAttribute, scheme::types::PartialUSK};
 use anyhow::Result;
+use ark_serialize::CanonicalSerialize;
+use base64::engine::{Engine as _, general_purpose};
 use jsonwebtoken::EncodingKey;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// # Description
+///
+/// Constant for the workflow attribute label managed by the attestation service.
+const ATTRIBUTE_WORKFLOW_LABEL: &str = "wf";
+
+/// # Description
+///
+/// Constant for the node attribute label managed by the attestation service.
+const ATTRIBUTE_NODE_LABEL: &str = "node";
 
 /// # Description
 ///
@@ -38,19 +51,46 @@ pub struct JwtClaims {
     tee: String,
     /// Base64 encoded partial User Secret Key for the attributes `wf` and
     /// `node` managed by this attestation service.
-    usk: String,
+    partial_usk_b64: String,
 }
 
 impl JwtClaims {
-    pub fn new(tee: &str) -> Result<Self> {
-        // FIXME: missing calling CP-ABE keygen here and populate USK.
+    /// # Description
+    ///
+    /// Generates a new JWT based on the attestation service state, and the specific request
+    /// metadata.
+    ///
+    /// # Arguments
+    ///
+    /// - `state`: handle to the attestation service state.
+    /// - `tee`: type of TEE we are generating the claim for.
+    /// - `gid`: unique user identifier owning the encrypted data.
+    /// - `workflow_id`: unique identifier of the workflow graph we are executing.
+    /// - `node_id`: unique identifier of the node in the workflow graph we are executing.
+    pub fn new(state: &AttestationServiceState, gid: &str, tee: &str, workflow_id: &str, node_id: &str) -> Result<Self> {
+        let rng = rand::thread_rng();
+        let user_attributes: Vec<UserAttribute> = vec![
+            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
+            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_NODE_LABEL, node_id),
+        ];
+        let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
+        let iota = abe4::scheme::iota::Iota::new(&user_attributes);
+        let partial_usk: PartialUSK = abe4::scheme::keygen_partial(
+            rng,
+            gid,
+            &state.partial_msk,
+            &user_attribute_refs,
+            &iota
+        );
+        let mut partial_usk_bytes: Vec<u8> = Vec::new();
+        partial_usk.serialize_compressed(&mut partial_usk_bytes)?;
 
         Ok(Self {
             sub: "attested-client".to_string(),
             exp: (chrono::Utc::now() + chrono::Duration::minutes(5)).timestamp() as usize,
             aud: "accless-attestation-service".to_string(),
             tee: tee.to_string(),
-            usk: String::new(),
+            partial_usk_b64: general_purpose::STANDARD.encode(&partial_usk_bytes),
         })
     }
 }

@@ -9,7 +9,7 @@ description = "A library to parse and work with Accless workflow template graphs
 homepage.workspace = true
 
 [dependencies]
-accless-abe4 = { path = "../accless/libs/abe4" }
+abe4.workspace = true
 anyhow = { workspace = true }
 blake3 = { workspace = true }
 log = { workspace = true }

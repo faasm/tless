@@ -169,7 +169,7 @@ std::string base64UrlEncode(const std::vector<uint8_t> &data) {
 std::string buildRequestBody(const std::string &quoteB64,
                              const std::string &runtimeB64) {
     std::string body =
-        R"({"draftPolicyForAttestation":"","initTimeData":{"data":"","dataType":""},"quote":")";
+        R"({"draftPolicyForAttestation":"","nodeData":{"gid":"baz","workflowId":"foo","nodeId":"bar"},"initTimeData":{"data":"","dataType":""},"quote":")";
     body += quoteB64;
     body += R"(","runtimeData":{"data":")";
     body += runtimeB64;

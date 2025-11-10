@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "accless-abe4"
+name = "abe4"
 version = "0.8.1"
 dependencies = [
  "anyhow",
@@ -503,8 +503,10 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "attestation-service"
 version = "0.8.1"
 dependencies = [
+ "abe4",
  "aes-gcm",
  "anyhow",
+ "ark-serialize",
  "axum",
  "base64 0.22.1",
  "bytes",
@@ -518,6 +520,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "p256",
+ "rand 0.8.5",
  "reqwest 0.12.24",
  "ring",
  "rustls",
@@ -4430,7 +4433,7 @@ dependencies = [
 name = "template-graph"
 version = "0.8.1"
 dependencies = [
- "accless-abe4",
+ "abe4",
  "anyhow",
  "ark-serialize",
  "ark-std",

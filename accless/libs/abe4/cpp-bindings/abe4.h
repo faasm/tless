@@ -37,7 +37,7 @@ struct UserAttribute {
 SetupOutput setup(const std::vector<std::string> &auths);
 
 /**
- * @brief Generates a User Secret Key (USK) for a given group ID, Master Secret
+ * @brief Generates a User Secret Key (USK) for a given global ID, Master Secret
  * Key (MSK), and a set of user attributes.
  *
  * This function acts as a C++ wrapper around the Rust `keygen` FFI function. It

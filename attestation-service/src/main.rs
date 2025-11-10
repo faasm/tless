@@ -19,6 +19,7 @@ mod azure_cvm;
 #[cfg(feature = "sgx")]
 mod intel;
 mod jwt;
+mod request;
 #[cfg(feature = "sgx")]
 mod sgx;
 #[cfg(feature = "snp")]
