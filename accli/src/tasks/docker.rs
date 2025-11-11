@@ -44,6 +44,8 @@ impl DockerContainer {
 #[derive(Debug)]
 pub struct Docker {}
 
+pub const DOCKER_ACCLESS_CODE_MOUNT_DIR: &str = "/code/accless";
+
 impl Docker {
     const ACCLESS_DEV_CONTAINER_NAME: &'static str = "accless-dev";
 
@@ -221,9 +223,16 @@ impl Docker {
 
     pub fn cli(net: bool) {
         if Self::is_container_running() {
-            Self::exec_cmd(&[], Some("/code/accless"), true);
+            Self::exec_cmd(&[], Some(DOCKER_ACCLESS_CODE_MOUNT_DIR), true);
         } else {
-            Self::run_cmd(&[], true, Some("/code/accless"), true, &[], net);
+            Self::run_cmd(
+                &[],
+                true,
+                Some(DOCKER_ACCLESS_CODE_MOUNT_DIR),
+                true,
+                &[],
+                net,
+            );
         }
     }
 

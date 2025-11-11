@@ -1,6 +1,8 @@
 use crate::{
     env::Env,
     tasks::{
+        accless::Accless,
+        applications::Applications,
         azure::Azure,
         dag::Dag,
         dev::Dev,
@@ -29,6 +31,16 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Build or test the main Accless library
+    Accless {
+        #[command(subcommand)]
+        accless_command: AcclessCommand,
+    },
+    /// Build or test the Accless applications
+    Applications {
+        #[command(subcommand)]
+        applications_command: ApplicationsCommand,
+    },
     /// Register and manage workflows expressed as DAGs
     Dag {
         #[command(subcommand)]
@@ -331,6 +343,34 @@ enum AzureSubCommand {
     Delete {},
 }
 
+#[derive(Debug, Subcommand)]
+enum AcclessCommand {
+    /// Build the Accless C++ library
+    Build {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        debug: bool,
+    },
+    /// Test the Accless C++ library
+    Test {},
+}
+
+#[derive(Debug, Subcommand)]
+enum ApplicationsCommand {
+    /// Build the Accless applications
+    Build {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        debug: bool,
+        #[arg(long)]
+        cert_path: Option<String>,
+    },
+    /// Test the Accless applications
+    Test {},
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -347,6 +387,28 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match &cli.task {
+        Command::Accless { accless_command } => match accless_command {
+            AcclessCommand::Build { clean, debug } => {
+                Accless::build(*clean, *debug);
+            }
+            AcclessCommand::Test {} => {
+                Accless::test();
+            }
+        },
+        Command::Applications {
+            applications_command,
+        } => match applications_command {
+            ApplicationsCommand::Build {
+                clean,
+                debug,
+                cert_path,
+            } => {
+                Applications::build(*clean, *debug, cert_path.as_deref());
+            }
+            ApplicationsCommand::Test {} => {
+                Applications::test();
+            }
+        },
         Command::Dag { dag_command } => match dag_command {
             DagCommand::Upload { name, yaml_path } => {
                 Dag::upload(name, yaml_path).await?;
