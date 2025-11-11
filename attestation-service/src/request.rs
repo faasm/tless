@@ -8,7 +8,7 @@ use base64::{Engine as _, engine::general_purpose};
 use log::error;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 /// # Description
 ///
@@ -23,6 +23,23 @@ pub struct NodeData {
     pub workflow_id: String,
     /// Node identifier within the workflow.
     pub node_id: String,
+}
+
+pub enum Tee {
+    #[allow(dead_code)]
+    AzureCvm,
+    Sgx,
+    Snp,
+}
+
+impl fmt::Display for Tee {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Tee::AzureCvm => write!(f, "azure-cvm"),
+            Tee::Sgx => write!(f, "sgx"),
+            Tee::Snp => write!(f, "snp"),
+        }
+    }
 }
 
 #[derive(Serialize)]

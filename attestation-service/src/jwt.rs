@@ -1,4 +1,4 @@
-use crate::{state::AttestationServiceState, tls};
+use crate::{request::Tee, state::AttestationServiceState, tls};
 use abe4::{policy::UserAttribute, scheme::types::PartialUSK};
 use anyhow::Result;
 use ark_serialize::CanonicalSerialize;
@@ -72,8 +72,8 @@ impl JwtClaims {
     ///   executing.
     pub fn new(
         state: &AttestationServiceState,
+        tee: &Tee,
         gid: &str,
-        tee: &str,
         workflow_id: &str,
         node_id: &str,
     ) -> Result<Self> {

@@ -120,3 +120,25 @@ the sysroot container. To do so, you may use `accli` as follows:
 # To build/test applications.
 ./scripts/accli_wrapper.sh applications {build,test}
 ```
+
+For C++ code, only add block comments in header files (if present) and use
+doxygen-style documentation, e.g:
+
+```
+/**
+ * @brief Packs a FullKey from a vector of authorities and base64-encoded
+ * partial keys.
+ *
+ * This is an overload of packFullKey that accepts partial keys as
+ * base64-encoded strings. It decodes the keys and then calls the primary
+ * packFullKey function, finally returning a base64-encoded string of the packed
+ * key.
+ *
+ * @param authorities A const reference to a vector of authority strings.
+ * @param partial_keys_b64 A const reference to a vector of base64-encoded
+ * partial key strings.
+ * @return A std::string containing the base64-encoded serialized FullKey.
+ */
+std::string packFullKey(const std::vector<std::string> &authorities,
+                        const std::vector<std::string> &partial_keys_b64);
+```

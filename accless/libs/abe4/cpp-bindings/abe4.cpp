@@ -25,6 +25,23 @@ SetupOutput setup(const std::vector<std::string> &auths) {
     return {result_json["msk"], result_json["mpk"]};
 }
 
+SetupOutput setupPartial(const std::string &auth_id) {
+    char *result = setup_partial_abe4(auth_id.c_str());
+    if (!result) {
+        std::cerr
+            << "accless(abe4): FFI call to setup_partial_abe4 failed. See Rust "
+               "logs for details."
+            << std::endl;
+        throw std::runtime_error(
+            "accless(abe4): setup_partial_abe4 FFI call failed");
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return {result_json["msk"], result_json["mpk"]};
+}
+
 std::string keygen(const std::string &gid, const std::string &msk,
                    const std::vector<UserAttribute> &user_attrs) {
     nlohmann::json user_attrs_json = nlohmann::json::array();
@@ -47,6 +64,33 @@ std::string keygen(const std::string &gid, const std::string &msk,
     free_string(result);
 
     return usk_b64;
+}
+
+std::string keygenPartial(const std::string &gid,
+                          const std::string &partial_msk_b64,
+                          const std::vector<UserAttribute> &user_attrs) {
+    nlohmann::json user_attrs_json = nlohmann::json::array();
+    for (const auto &attr : user_attrs) {
+        user_attrs_json.push_back({{"authority", attr.authority},
+                                   {"label", attr.label},
+                                   {"attribute", attr.attribute}});
+    }
+
+    char *result = keygen_partial_abe4(gid.c_str(), partial_msk_b64.c_str(),
+                                       user_attrs_json.dump().c_str());
+    if (!result) {
+        std::cerr << "accless(abe4): FFI call to keygen_partial_abe4 failed. "
+                     "See Rust "
+                     "logs for details."
+                  << std::endl;
+        throw std::runtime_error(
+            "accless(abe4): keygen_partial_abe4 FFI call failed");
+    }
+
+    std::string partial_usk_b64(result);
+    free_string(result);
+
+    return partial_usk_b64;
 }
 
 EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
@@ -136,11 +180,12 @@ packFullKey(const std::vector<std::string> &authorities,
                               pair.first.end());
 
         uint64_t key_len = pair.second.size();
-        full_key_bytes.insert(
-            full_key_bytes.end(), reinterpret_cast<const uint8_t *>(&key_len),
-            reinterpret_cast<const uint8_t *>(&key_len) + sizeof(uint64_t));
+        full_key_bytes.insert(full_key_bytes.end(),
+                              reinterpret_cast<const uint8_t *>(&key_len),
+                              reinterpret_cast<const uint8_t *>(&key_len) +
+                                  sizeof(uint64_t)); // 4. Partial key length
         full_key_bytes.insert(full_key_bytes.end(), pair.second.begin(),
-                              pair.second.end());
+                              pair.second.end()); // 5. Partial key bytes
     }
 
     return full_key_bytes;

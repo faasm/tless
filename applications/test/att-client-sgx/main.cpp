@@ -76,6 +76,9 @@ int main() {
         } else if (decrypted_gt.value() != gt) {
             std::cerr << "att-client-sgx: CP-ABE decrypted ciphertexts do not"
                       << " match!" << std::endl;
+            std::cerr << "att-client-sgx: Original GT: " << gt << std::endl;
+            std::cerr << "att-client-sgx: Decrypted GT: "
+                      << decrypted_gt.value() << std::endl;
             return 1;
         }
 

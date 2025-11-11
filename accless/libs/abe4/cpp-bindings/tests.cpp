@@ -121,33 +121,47 @@ TEST(Abe4Test, PackFullKey) {
     EXPECT_EQ(packed_mpk_b64, setup_output.mpk);
 }
 
-TEST(Abe4Test, EndToEndSingleAuthority) {
-    std::string auth = "auth1";
-    accless::abe4::SetupOutput setup_output = accless::abe4::setup({auth});
-    ASSERT_FALSE(setup_output.msk.empty());
-    ASSERT_FALSE(setup_output.mpk.empty());
-
+TEST(Abe4Test, EndToEndSingleAuthorityPartial) {
+    std::string auth_id = "TEST_AUTH_ID";
     std::string gid = "test_gid";
     std::string wfId = "foo";
     std::string nodeId = "bar";
 
-    std::string policy =
-        auth + ".wf:" + wfId + " & " + auth + ".node:" + nodeId;
+    // 1. Setup partial keys
+    accless::abe4::SetupOutput partial_setup_output =
+        accless::abe4::setupPartial(auth_id);
+    ASSERT_FALSE(partial_setup_output.msk.empty());
+    ASSERT_FALSE(partial_setup_output.mpk.empty());
 
+    // 2. Keygen partial USK
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {auth_id, "wf", wfId}, {auth_id, "node", nodeId}};
+    std::string partial_usk_b64 =
+        accless::abe4::keygenPartial(gid, partial_setup_output.msk, user_attrs);
+    ASSERT_FALSE(partial_usk_b64.empty());
+
+    // 3. Pack full MPK
+    std::string mpk =
+        accless::abe4::packFullKey({auth_id}, {partial_setup_output.mpk});
+    ASSERT_FALSE(mpk.empty());
+
+    // 4. Pack full USK
+    std::string usk = accless::abe4::packFullKey({auth_id}, {partial_usk_b64});
+    ASSERT_FALSE(usk.empty());
+
+    // 5. Define policy
+    std::string policy =
+        auth_id + ".wf:" + wfId + " & " + auth_id + ".node:" + nodeId;
+
+    // 6. Encrypt
     accless::abe4::EncryptOutput encrypt_output =
-        accless::abe4::encrypt(setup_output.mpk, policy);
+        accless::abe4::encrypt(mpk, policy);
     ASSERT_FALSE(encrypt_output.gt.empty());
     ASSERT_FALSE(encrypt_output.ciphertext.empty());
 
-    std::vector<accless::abe4::UserAttribute> user_attrs = {
-        {auth, "wf", wfId}, {auth, "node", nodeId}};
-
-    std::string usk_b64 =
-        accless::abe4::keygen(gid, setup_output.msk, user_attrs);
-    ASSERT_FALSE(usk_b64.empty());
-
+    // 7. Decrypt
     std::optional<std::string> decrypted_gt =
-        accless::abe4::decrypt(usk_b64, gid, policy, encrypt_output.ciphertext);
+        accless::abe4::decrypt(usk, gid, policy, encrypt_output.ciphertext);
     ASSERT_TRUE(decrypted_gt.has_value());
     EXPECT_EQ(decrypted_gt.value(), encrypt_output.gt);
 }

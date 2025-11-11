@@ -1,4 +1,4 @@
-use crate::tasks::docker::{Docker, DOCKER_ACCLESS_CODE_MOUNT_DIR};
+use crate::tasks::docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -26,7 +26,12 @@ impl Accless {
     }
 
     pub fn test() -> anyhow::Result<()> {
-        let cmd = vec!["ctest".to_string(), "--".to_string(), "--output-on-failure".to_string()];
+        // Then run them.
+        let cmd = vec![
+            "ctest".to_string(),
+            "--".to_string(),
+            "--output-on-failure".to_string(),
+        ];
         let workdir = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join("accless/build-native");
         Docker::run(
             &cmd,
@@ -36,6 +41,7 @@ impl Accless {
             false,
             false,
         )?;
+
         Ok(())
     }
 }

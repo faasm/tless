@@ -1,4 +1,8 @@
-use crate::{jwt::JwtClaims, request::NodeData, state::AttestationServiceState};
+use crate::{
+    jwt::JwtClaims,
+    request::{NodeData, Tee},
+    state::AttestationServiceState,
+};
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
 use log::error;
@@ -72,7 +76,7 @@ pub async fn verify_snp_report(
 
     let claims = match JwtClaims::new(
         &state,
-        "snp",
+        &Tee::Snp,
         &payload.node_data.gid,
         &payload.node_data.workflow_id,
         &payload.node_data.node_id,

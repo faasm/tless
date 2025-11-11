@@ -14,6 +14,10 @@ char *keygen_abe4(const char *gid, const char *msk_b64,
 char *encrypt_abe4(const char *mpk_b64, const char *policy_str);
 char *decrypt_abe4(const char *usk_b64, const char *gid, const char *policy_str,
                    const char *ct_b64);
+char *setup_partial_abe4(const char *auth_id_cstr);
+char *keygen_partial_abe4(const char *gid_cstr,
+                          const char *partial_msk_b64_cstr,
+                          const char *user_attrs_json);
 
 } // extern "C"
 
@@ -37,6 +41,22 @@ struct UserAttribute {
 SetupOutput setup(const std::vector<std::string> &auths);
 
 /**
+ * @brief Generates a partial Master Secret Key (MSK) and a partial Master
+ * Public Key (MPK) for a single authority.
+ *
+ * This function acts as a C++ wrapper around the Rust `setup_partial` FFI
+ * function. It takes an authority ID, calls the Rust FFI function, parses the
+ * JSON output, and returns a `SetupOutput` struct containing the base64-encoded
+ * partial MSK and MPK.
+ *
+ * @param auth_id The unique identifier of the authority.
+ * @return A `SetupOutput` struct containing the base64-encoded partial MSK and
+ * MPK.
+ * @throws std::runtime_error on error.
+ */
+SetupOutput setupPartial(const std::string &auth_id);
+
+/**
  * @brief Generates a User Secret Key (USK) for a given global ID, Master Secret
  * Key (MSK), and a set of user attributes.
  *
@@ -53,6 +73,28 @@ SetupOutput setup(const std::vector<std::string> &auths);
  */
 std::string keygen(const std::string &gid, const std::string &msk,
                    const std::vector<UserAttribute> &user_attrs);
+
+/**
+ * @brief Generates a partial User Secret Key (USK) for a given global ID,
+ * partial Master Secret Key (MSK), and a set of user attributes.
+ *
+ * This function acts as a C++ wrapper around the Rust `keygen_partial` FFI
+ * function. It takes the group ID, a base64 encoded partial Master Secret Key,
+ * and a vector of UserAttribute objects. It serializes the user attributes to
+ * JSON, calls the Rust FFI function, and returns the base64 encoded partial
+ * User Secret Key.
+ *
+ * @param gid The group ID for which the partial USK is to be generated.
+ * @param partial_msk_b64 A base64 encoded string representing the partial
+ * Master Secret Key.
+ * @param user_attrs A vector of UserAttribute objects associated with the user.
+ * @return A base64 encoded string representing the generated partial User
+ * Secret Key (USK).
+ * @throws std::runtime_error on error.
+ */
+std::string keygenPartial(const std::string &gid,
+                          const std::string &partial_msk_b64,
+                          const std::vector<UserAttribute> &user_attrs);
 
 /**
  * @brief Encrypts a message using the Master Public Key (MPK) and a policy.

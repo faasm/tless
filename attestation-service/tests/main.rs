@@ -135,7 +135,7 @@ async fn test_att_client_sgx() -> Result<()> {
         None,
         &env_vars,
         true,
-        false
+        false,
     )?;
 
     match std::fs::remove_dir_all(&certs_dir) {

@@ -38,6 +38,80 @@ struct SetupOutput {
     mpk: String,
 }
 
+/// # Description
+///
+/// FFI wrapper for the CP-ABE setup function for a single authority.
+///
+/// This function takes a C-style string representing the unique identifier of
+/// the authority. It generates a Master Secret Key (MSK) and a Master Public
+/// Key (MPK) for this authority.
+///
+/// # Arguments
+///
+/// * `auth_id_cstr`: A C-style string containing the unique identifier of the
+///   authority.
+///
+/// # Returns
+///
+/// A C-style string containing a JSON object with two fields:
+/// - `msk`: The base64-encoded Master Secret Key for the authority.
+/// - `mpk`: The base64-encoded Master Public Key for the authority.
+///
+/// Returns a null pointer on error.
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn setup_partial_abe4(auth_id_cstr: *const c_char) -> *mut c_char {
+    let auth_id_str = match unsafe { CStr::from_ptr(auth_id_cstr).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert authority ID C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mut rng = ark_std::rand::thread_rng();
+    let (partial_msk, partial_mpk) = scheme::setup_partial(&mut rng, auth_id_str);
+
+    let mut msk_bytes = Vec::new();
+    if partial_msk.serialize_compressed(&mut msk_bytes).is_err() {
+        eprintln!("[accless-abe4-rs] Failed to serialize PartialMSK");
+        return std::ptr::null_mut();
+    }
+
+    let mut mpk_bytes = Vec::new();
+    if partial_mpk.serialize_compressed(&mut mpk_bytes).is_err() {
+        eprintln!("[accless-abe4-rs] Failed to serialize PartialMPK");
+        return std::ptr::null_mut();
+    }
+
+    let output = SetupOutput {
+        msk: general_purpose::STANDARD.encode(&msk_bytes),
+        mpk: general_purpose::STANDARD.encode(&mpk_bytes),
+    };
+
+    let output_json = match serde_json::to_string(&output) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to serialize output to JSON: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    match CString::new(output_json) {
+        Ok(s) => s.into_raw(),
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to create CString: {}", e);
+            std::ptr::null_mut()
+        }
+    }
+}
+
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn setup_abe4(auths_json: *const c_char) -> *mut c_char {
@@ -99,6 +173,128 @@ pub unsafe extern "C" fn setup_abe4(auths_json: *const c_char) -> *mut c_char {
         Ok(s) => s.into_raw(),
         Err(e) => {
             eprintln!("[accless-abe4-rs] Failed to create CString: {}", e);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// # Description
+///
+/// FFI wrapper for the CP-ABE key generation function for a single authority.
+///
+/// This function takes a C-style string representing the global identifier
+/// (GID) of the user, a base64-encoded partial Master Secret Key (MSK), and
+/// a JSON string representing the user's attributes. It generates a partial
+/// User Secret Key (USK) for the given user and attributes.
+///
+/// # Arguments
+///
+/// * `gid_cstr`: A C-style string containing the global identifier of the user.
+/// * `partial_msk_b64_cstr`: A C-style string containing the base64-encoded
+///   partial Master Secret Key.
+/// * `user_attrs_json`: A C-style string containing a JSON array of user
+///   attributes.
+///
+/// # Returns
+///
+/// A C-style string containing the base64-encoded partial User Secret Key.
+///
+/// Returns a null pointer on error.
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn keygen_partial_abe4(
+    gid_cstr: *const c_char,
+    partial_msk_b64_cstr: *const c_char,
+    user_attrs_json: *const c_char,
+) -> *mut c_char {
+    let gid_str = match unsafe { CStr::from_ptr(gid_cstr).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert GID C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let partial_msk_b64_str = match unsafe { CStr::from_ptr(partial_msk_b64_cstr).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert partial MSK C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let partial_msk_bytes = match general_purpose::STANDARD.decode(partial_msk_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to decode partial MSK from base64: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let partial_msk: scheme::types::PartialMSK =
+        match scheme::types::PartialMSK::deserialize_compressed(&partial_msk_bytes[..]) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("[accless-abe4-rs] Failed to deserialize PartialMSK: {}", e);
+                return std::ptr::null_mut();
+            }
+        };
+
+    let user_attrs_str = match unsafe { CStr::from_ptr(user_attrs_json).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert user attributes C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let user_attrs: Vec<UserAttribute> = match serde_json::from_str(user_attrs_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to parse user attributes JSON: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let iota = Iota::new(&user_attrs);
+    let mut rng = ark_std::rand::thread_rng();
+
+    let user_attrs_refs: Vec<&UserAttribute> = user_attrs.iter().collect();
+    let partial_usk =
+        scheme::keygen_partial(&mut rng, gid_str, &partial_msk, &user_attrs_refs, &iota);
+
+    let mut partial_usk_bytes = Vec::new();
+    if partial_usk
+        .serialize_compressed(&mut partial_usk_bytes)
+        .is_err()
+    {
+        eprintln!("[accless-abe4-rs] Failed to serialize PartialUSK");
+        return std::ptr::null_mut();
+    }
+
+    let partial_usk_b64 = general_purpose::STANDARD.encode(&partial_usk_bytes);
+    match CString::new(partial_usk_b64) {
+        Ok(s) => s.into_raw(),
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to create CString for PartialUSK: {}",
+                e
+            );
             std::ptr::null_mut()
         }
     }

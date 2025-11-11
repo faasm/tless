@@ -237,8 +237,8 @@ impl Docker {
             let output = run_cmd.output()?;
             if !output.status.success() {
                 error!("failed to execute docker run (cmd={run_cmd:?})");
-                error!("stdout: {}", String::from_utf8_lossy(&output.stdout).to_string());
-                error!("stderr: {}", String::from_utf8_lossy(&output.stderr).to_string());
+                error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+                error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
                 anyhow::bail!("failed to execute docker run");
             }
             Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()))

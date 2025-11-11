@@ -1,7 +1,7 @@
 use crate::{
     intel::{INTEL_PCS_URL, IntelCa, SgxCollateral, SgxQuote},
     jwt::JwtClaims,
-    request::NodeData,
+    request::{NodeData, Tee},
     state::AttestationServiceState,
 };
 use aes_gcm::{
@@ -371,6 +371,10 @@ pub async fn verify_sgx_report(
             "enclave held data does not match verified report data (expected={raw_pubkey_bytes:?}, got={:?})",
             report_data_bytes
         );
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "enclave held data does not match verified report data" })),
+        );
     }
 
     debug!("parsing pub key bytes to SEC1 format");
@@ -451,7 +455,7 @@ pub async fn verify_sgx_report(
     debug!("encoding JWT with server's private key (for authenticity)");
     let claims = match JwtClaims::new(
         &state,
-        "sgx",
+        &Tee::Sgx,
         &payload.node_data.gid,
         &payload.node_data.workflow_id,
         &payload.node_data.node_id,
