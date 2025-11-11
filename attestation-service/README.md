@@ -38,3 +38,19 @@ the TEE implementation they:
    derived shared key.
 
 ## A Note On Certificates
+
+The attestation service generates its own TLS certificates. These certificates
+need to be hard-coded in the TEEs. In particular, we need to pass the path
+to the certificate's PEM file to the application build process:
+
+```bash
+accli applications build --clean --cert-path /path/to/cert.pem
+```
+
+when starting the attestation service, you may force re-generation of the
+certificates, or specify the directory where to output the private key and
+the certificate PEM file with:
+
+```bash
+accli attestation-service run [--certs-dir] [--force-clean-certs]
+```

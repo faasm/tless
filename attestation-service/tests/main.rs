@@ -36,7 +36,10 @@ async fn health_check(client: &Client) -> Result<()> {
             _ => {
                 attempts += 1;
                 if attempts >= max_attempts {
-                    return Err(anyhow::anyhow!("Health check failed after {} attempts", max_attempts));
+                    return Err(anyhow::anyhow!(
+                        "Health check failed after {} attempts",
+                        max_attempts
+                    ));
                 }
                 tokio::time::sleep(delay).await;
                 delay *= 2;

@@ -1,4 +1,3 @@
-
 [package]
 name = "template-graph"
 version.workspace = true
@@ -7,6 +6,12 @@ edition.workspace = true
 authors.workspace = true
 description = "A library to parse and work with Accless workflow template graphs"
 homepage.workspace = true
+
+[lib]
+name = "template_graph"
+path = "src/lib.rs"
+# doctests trigger weird bug
+doctest = false
 
 [dependencies]
 abe4.workspace = true
