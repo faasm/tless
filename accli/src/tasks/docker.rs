@@ -167,6 +167,9 @@ impl Docker {
         if capture_output {
             let output = exec_cmd.output()?;
             if !output.status.success() {
+                error!("failed to execute docker exec (cmd={:?})", exec_cmd);
+                error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+                error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
                 anyhow::bail!("failed to execute docker exec");
             }
             Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()))
