@@ -349,7 +349,10 @@ enum AcclessCommand {
         debug: bool,
     },
     /// Test the Accless C++ library
-    Test {},
+    Test {
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -363,8 +366,6 @@ enum ApplicationsCommand {
         #[arg(long)]
         cert_path: Option<String>,
     },
-    /// Test the Accless applications
-    Test {},
 }
 
 #[tokio::main]
@@ -387,8 +388,8 @@ async fn main() -> anyhow::Result<()> {
             AcclessCommand::Build { clean, debug } => {
                 Accless::build(*clean, *debug)?;
             }
-            AcclessCommand::Test {} => {
-                Accless::test()?;
+            AcclessCommand::Test { args } => {
+                Accless::test(args)?;
             }
         },
         Command::Applications {
@@ -400,9 +401,6 @@ async fn main() -> anyhow::Result<()> {
                 cert_path,
             } => {
                 Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
-            }
-            ApplicationsCommand::Test {} => {
-                Applications::test()?;
             }
         },
         Command::Dev { dev_command } => match dev_command {

@@ -32,22 +32,4 @@ impl Applications {
             capture_output,
         )
     }
-
-    pub fn test() -> anyhow::Result<()> {
-        let cmd = vec![
-            "ctest".to_string(),
-            "--".to_string(),
-            "--output-on-failure".to_string(),
-        ];
-        let workdir = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join("applications/build-native");
-        Docker::run(
-            &cmd,
-            true,
-            Some(workdir.to_str().unwrap()),
-            &[],
-            false,
-            false,
-        )?;
-        Ok(())
-    }
 }

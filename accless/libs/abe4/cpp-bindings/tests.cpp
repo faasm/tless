@@ -1,16 +1,19 @@
 #include "abe4.h"
-#include "base64.h" // New include
+#include "base64.h"  // New include
+#include <algorithm> // Added for std::sort
 #include <gtest/gtest.h>
 #include <optional>
 
 TEST(abe4, setup) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::setup(auths);
     SUCCEED(); // If setup doesn't throw, it's a success for now
 }
 
 TEST(Abe4Test, PartialKeyDeserialization) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
 
     accless::abe4::SetupOutput output = accless::abe4::setup(auths);
     ASSERT_FALSE(output.mpk.empty());
@@ -37,6 +40,7 @@ TEST(Abe4Test, PartialKeyDeserialization) {
 
 TEST(Abe4Test, Keygen) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.msk.empty());
 
@@ -60,6 +64,7 @@ TEST(Abe4Test, Keygen) {
 
 TEST(Abe4Test, Encrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.mpk.empty());
 
@@ -73,6 +78,7 @@ TEST(Abe4Test, Encrypt) {
 
 TEST(Abe4Test, Decrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.msk.empty());
     ASSERT_FALSE(setup_output.mpk.empty());
@@ -95,6 +101,7 @@ TEST(Abe4Test, Decrypt) {
 
 TEST(Abe4Test, PackFullKey) {
     std::vector<std::string> auths = {"auth1", "auth2"};
+    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.mpk.empty());
 
