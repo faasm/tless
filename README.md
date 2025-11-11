@@ -6,10 +6,10 @@
   </p>
 
   <p>
-  <a href="https://github.com/faasm/tless/actions/workflows/tests.yml">
-    <img src="https://github.com/faasm/tless/actions/workflows/tests.yml/badge.svg"
-         alt="Integration Tests" />
-  </a>
+    <a href="https://github.com/faasm/tless/actions/workflows/tests.yml">
+      <img src="https://github.com/faasm/tless/actions/workflows/tests.yml/badge.svg"
+           alt="Integration Tests" />
+    </a>
   </p>
   <hr>
 </div>
