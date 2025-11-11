@@ -36,3 +36,5 @@ the TEE implementation they:
    its private key (mapped to a well-known certificate).
 9. For secrecy, it wraps the signed JWT in an encrypted payload, using the
    derived shared key.
+
+## A Note On Certificates

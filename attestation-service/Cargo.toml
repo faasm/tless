@@ -53,6 +53,7 @@ ureq = { workspace = true, features = ["json"] }
 [dev-dependencies]
 accli.workspace = true
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+serial_test = "2.0.0"
 tempfile.workspace = true
 
 [build-dependencies]

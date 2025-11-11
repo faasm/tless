@@ -20,9 +20,6 @@ fn main() {
         entries.push_str(&format!("    include_str!(r\"{path}\"),\n"));
     }
 
-    // You can add more entries here in the future if you want more dynamic certs.
-    // e.g. read a list of paths from another env var, loop, etc.
-
     let contents = format!(
         "/// Auto-generated; do not edit.\n\
          pub static INJECTED_X5C_CERTS: &[&str] = &[\n{entries}];\n"

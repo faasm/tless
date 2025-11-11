@@ -6,6 +6,7 @@ use anyhow::Result;
 use log::{error, info};
 use reqwest::Client;
 use serde_json::Value;
+use serial_test::serial;
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -25,9 +26,23 @@ impl Drop for ChildGuard {
 
 // FIXME: I doubt this is working
 async fn health_check(client: &Client) -> Result<()> {
-    let res = client.get("https://localhost:8443/health").send().await?;
-    assert!(res.status().is_success());
-    Ok(())
+    let mut attempts = 0;
+    let max_attempts = 5;
+    let mut delay = Duration::from_secs(1);
+
+    loop {
+        match client.get("https://localhost:8443/health").send().await {
+            Ok(res) if res.status().is_success() => return Ok(()),
+            _ => {
+                attempts += 1;
+                if attempts >= max_attempts {
+                    return Err(anyhow::anyhow!("Health check failed after {} attempts", max_attempts));
+                }
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+        }
+    }
 }
 
 /// # Description
@@ -54,6 +69,7 @@ pub fn remap_host_path_to_container(host_path: &Path) -> Result<PathBuf> {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_spawn_as() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
@@ -72,6 +88,7 @@ async fn test_spawn_as() -> Result<()> {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_spawn_as_no_clean() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
@@ -92,6 +109,7 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 /// compiled. The former can be (re-)compiled with `cargo build -p accli` and
 /// the latter with `accli applications build test`
 #[tokio::test]
+#[serial]
 async fn test_att_client_sgx() -> Result<()> {
     attestation_service::init_logging(true);
 
@@ -150,18 +168,17 @@ async fn test_att_client_sgx() -> Result<()> {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_get_state() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
     let child = common::spawn_as(certs_dir.to_str().unwrap(), true, false)?;
     let _child_guard = ChildGuard(child);
 
-    // Give the service time to start.
-    tokio::time::sleep(Duration::from_secs(2)).await;
-
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()?;
+    health_check(&client).await?;
 
     let res = client.get("https://localhost:8443/state").send().await?;
     assert!(res.status().is_success());
