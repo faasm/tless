@@ -120,3 +120,34 @@ TEST(Abe4Test, PackFullKey) {
         accless::abe4::packFullKey(authorities, partial_keys_b64);
     EXPECT_EQ(packed_mpk_b64, setup_output.mpk);
 }
+
+TEST(Abe4Test, EndToEndSingleAuthority) {
+    std::string auth = "auth1";
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup({auth});
+    ASSERT_FALSE(setup_output.msk.empty());
+    ASSERT_FALSE(setup_output.mpk.empty());
+
+    std::string gid = "test_gid";
+    std::string wfId = "foo";
+    std::string nodeId = "bar";
+
+    std::string policy =
+        auth + ".wf:" + wfId + " & " + auth + ".node:" + nodeId;
+
+    accless::abe4::EncryptOutput encrypt_output =
+        accless::abe4::encrypt(setup_output.mpk, policy);
+    ASSERT_FALSE(encrypt_output.gt.empty());
+    ASSERT_FALSE(encrypt_output.ciphertext.empty());
+
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {auth, "wf", wfId}, {auth, "node", nodeId}};
+
+    std::string usk_b64 =
+        accless::abe4::keygen(gid, setup_output.msk, user_attrs);
+    ASSERT_FALSE(usk_b64.empty());
+
+    std::optional<std::string> decrypted_gt =
+        accless::abe4::decrypt(usk_b64, gid, policy, encrypt_output.ciphertext);
+    ASSERT_TRUE(decrypted_gt.has_value());
+    EXPECT_EQ(decrypted_gt.value(), encrypt_output.gt);
+}

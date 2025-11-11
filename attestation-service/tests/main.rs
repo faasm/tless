@@ -1,3 +1,7 @@
+use accli::tasks::{
+    applications::Applications,
+    docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker},
+};
 use anyhow::Result;
 use reqwest::Client;
 use serde_json::Value;
@@ -6,9 +10,7 @@ use std::{
     time::Duration,
 };
 use tempfile::tempdir;
-use tokio::process::{Child, Command};
-
-const CTR_ROOT: &'static str = "/code/accless";
+use tokio::process::Child;
 
 mod common;
 
@@ -31,7 +33,7 @@ async fn health_check(client: &Client) -> Result<()> {
 ///
 /// Get the path of SGX's attestation client from _inside_ the docker container.
 fn get_att_client_sgx_path_in_ctr() -> Result<PathBuf> {
-    let path = PathBuf::from(CTR_ROOT)
+    let path = PathBuf::from(DOCKER_ACCLESS_CODE_MOUNT_DIR)
         .join("applications")
         .join("build-native")
         .join("test")
@@ -48,20 +50,6 @@ pub fn remap_host_path_to_container(host_path: &Path) -> Result<PathBuf> {
     let prefix = Path::new(env!("ACCLESS_ROOT_DIR"));
     let rel = host_path.strip_prefix(prefix)?;
     Ok(Path::new("/code/accless").join(rel))
-}
-
-/// # Description
-///
-/// Get the path of accli to launch a docker container.
-fn get_accli_path() -> Result<PathBuf> {
-    let path = PathBuf::from(env!("ACCLESS_ROOT_DIR"))
-        .join("target")
-        .join("release")
-        .join("accli");
-    if !path.exists() {
-        return Err(anyhow::anyhow!("accli not found at: {:?}", path));
-    }
-    Ok(path)
 }
 
 #[tokio::test]
@@ -109,42 +97,24 @@ async fn test_att_client_sgx() -> Result<()> {
     let child = common::spawn_as(certs_dir.to_str().unwrap(), true, true)?;
     let _child_guard = ChildGuard(child);
 
-    // Give the service time to start.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    let cert_path =
+        remap_host_path_to_container(&crate::common::get_public_certificate_path(certs_dir))?;
 
+    // While it is starting, rebuild the test application so that we can inject the new
+    // certificates. Note that we need to pass the certificate's path _inside_ the container, as
+    // application build happens inside the container.
+    Applications::build(true, false, cert_path.to_str());
+
+    // Health-check the attestation service.
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
         .build()?;
     health_check(&client).await?;
 
-    // FINISH ME: call inside the container!
-    let accli_path = get_accli_path()?;
+    // Run the client application inside the container.
     let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
-    let cert_path =
-        remap_host_path_to_container(&crate::common::get_public_certificate_path(certs_dir))?;
-    let output = Command::new(accli_path)
-        .arg("docker")
-        .arg("run")
-        .arg("--mount")
-        .arg("--net")
-        .arg("--env")
-        .arg("ACCLESS_AS_URL=\"https://0.0.0.0:8443\"")
-        .arg("--env")
-        .arg(format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()))
-        .arg(att_client_sgx_path)
-        .output()
-        .await?;
-
-    println!(
-        "att-client-sgx stdout: {}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-    println!(
-        "att-client-sgx stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    assert!(output.status.success());
+    let env_vars = ["ACCLESS_AS_URL=\"https://0.0.0.0:8443\"".to_string(), format!("ACCLESS_AS_CERT_PATH={}", cert_path.display())];
+    Docker::run(&[att_client_sgx_path.display().to_string()], true, None, &env_vars, true);
 
     Ok(())
 }

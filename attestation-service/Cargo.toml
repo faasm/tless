@@ -43,6 +43,7 @@ tokio-rustls.workspace = true
 ureq = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
+accli.workspace = true
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 tempfile.workspace = true
 

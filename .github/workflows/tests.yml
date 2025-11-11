@@ -47,9 +47,7 @@ jobs:
         uses: actions/checkout@v4
       - name: "Build C++ code"
         shell: bash
-        run: |
-          ./scripts/accli_wrapper.sh docker run --mount --cwd /code/accless/accless python3 build.py
+        run: ./scripts/accli_wrapper.sh accless build --clean
       - name: "Run C++ unit tests"
         shell: bash
-        run: |
-          ./scripts/accli_wrapper.sh docker run --mount --cwd /code/accless/accless/build-native  ctest -- --output-on-failure
+        run: ./scripts/accli_wrapper.sh accless test

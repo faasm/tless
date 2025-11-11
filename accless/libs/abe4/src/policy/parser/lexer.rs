@@ -87,7 +87,7 @@ fn ident(input: &[u8], start: usize) -> Result<(Token, usize)> {
 #[test]
 fn test_lexer() {
     let input = "x.b:a & (!x.b:a2 | orr.y:u) | anda.z:z";
-    let tokens = lex(input);
+    let tokens = lex(input).unwrap();
     assert_eq!(tokens.len(), 26);
     assert_eq!(tokens[0], Token::Ident(String::from("x")));
     assert_eq!(tokens[1], Token::Dot);

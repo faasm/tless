@@ -7,6 +7,14 @@ authors.workspace = true
 description = "CLI tool for Accless"
 homepage.workspace = true
 
+[[bin]]
+name = "accli"
+path = "src/main.rs"
+
+[lib]
+name = "accli"
+path = "src/lib.rs"
+
 [dependencies]
 aes-gcm.workspace = true
 aes-gcm-siv.workspace = true

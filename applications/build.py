@@ -24,10 +24,10 @@ def compile(wasm=False, native=False, debug=False, clean=False, cert_path=None):
     if not exists(build_dir):
         makedirs(build_dir)
 
-    if cert_path is not None and not exists(cert_path):
-        print(f"ERROR: passed --cert-path variable but path does not exist")
-        exit(1)
-    else:
+    if cert_path is not None:
+        if not exists(cert_path):
+            print(f"ERROR: passed --cert-path variable but path does not exist")
+            exit(1)
         cert_path = abspath(cert_path)
 
     # if wasm:
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug", action="store_true", help="Build in debug mode."
     )
-    parser.add_argument("--cert-path", type=str, help="Path to certificate.")
+    parser.add_argument("--cert-path", type=str, help="Path to certificate PEM file.")
     args = parser.parse_args()
 
     if args.clean:

@@ -21,6 +21,7 @@ homepage = "https://github.com/faasm/tless"
 
 [workspace.dependencies]
 abe4 = { path = "./accless/libs/abe4" }
+accli = { path = "./accli" }
 aes-gcm = "0.10.3"
 aes-gcm-siv = { version = "0.11.1"}
 anyhow = "^1.0.0"

@@ -505,6 +505,7 @@ name = "attestation-service"
 version = "0.8.1"
 dependencies = [
  "abe4",
+ "accli",
  "aes-gcm",
  "anyhow",
  "ark-serialize",

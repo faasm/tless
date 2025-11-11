@@ -50,6 +50,13 @@ pub fn assert_decryption_fail(user_attrs: Vec<&str>, policy: &str) {
 // Handcrafted test cases (single auth)
 
 #[test]
+fn superset_attributes_ok() {
+    let user_attrs = vec!["A.a:0", "A.b:0"];
+    let policy = "A.a:0";
+    assert_decryption_ok(user_attrs, policy);
+}
+
+#[test]
 fn single_auth_single_ok() {
     let user_attrs = vec!["A.a:0"];
     let policy = "A.a:0";

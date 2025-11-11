@@ -82,6 +82,11 @@ impl JwtClaims {
             abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
             abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_NODE_LABEL, node_id),
         ];
+        debug!("Generating partial USK for gid: {}", gid);
+        debug!("- Workflow ID: {}", workflow_id);
+        debug!("- Node ID: {}", node_id);
+        debug!("- User Attributes: {:?}", user_attributes);
+
         let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
         let iota = abe4::scheme::iota::Iota::new(&user_attributes);
         let partial_usk: PartialUSK =

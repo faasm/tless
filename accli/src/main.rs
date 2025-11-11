@@ -4,7 +4,6 @@ use crate::{
         accless::Accless,
         applications::Applications,
         azure::Azure,
-        dag::Dag,
         dev::Dev,
         docker::{Docker, DockerContainer},
         eval::{Eval, EvalExperiment, EvalRunArgs},
@@ -40,11 +39,6 @@ enum Command {
     Applications {
         #[command(subcommand)]
         applications_command: ApplicationsCommand,
-    },
-    /// Register and manage workflows expressed as DAGs
-    Dag {
-        #[command(subcommand)]
-        dag_command: DagCommand,
     },
     /// Development-related tasks
     Dev {
@@ -407,11 +401,6 @@ async fn main() -> anyhow::Result<()> {
             }
             ApplicationsCommand::Test {} => {
                 Applications::test();
-            }
-        },
-        Command::Dag { dag_command } => match dag_command {
-            DagCommand::Upload { name, yaml_path } => {
-                Dag::upload(name, yaml_path).await?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
