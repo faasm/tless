@@ -16,7 +16,7 @@ SetupOutput setup(const std::vector<std::string> &auths) {
         std::cerr << "accless(abe4): FFI call to setup_abe4 failed. See Rust "
                      "logs for details."
                   << std::endl;
-        return {};
+        throw std::runtime_error("accless(abe4): setup_abe4 FFI call failed");
     }
 
     auto result_json = nlohmann::json::parse(result);
@@ -57,7 +57,7 @@ std::string keygen(const std::string &gid, const std::string &msk,
         std::cerr << "accless(abe4): FFI call to keygen_abe4 failed. See Rust "
                      "logs for details."
                   << std::endl;
-        return "";
+        throw std::runtime_error("accless(abe4): keygen_abe4 FFI call failed");
     }
 
     std::string usk_b64(result);
@@ -99,7 +99,7 @@ EncryptOutput encrypt(const std::string &mpk, const std::string &policy) {
         std::cerr << "accless(abe4): FFI call to encrypt_abe4 failed. See Rust "
                      "logs for details."
                   << std::endl;
-        return {};
+        throw std::runtime_error("accless(abe4): encrypt_abe4 FFI call failed");
     }
 
     auto result_json = nlohmann::json::parse(result);
