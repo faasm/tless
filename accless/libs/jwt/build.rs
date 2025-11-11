@@ -22,6 +22,7 @@ fn main() {
 
     let contents = format!(
         "/// Auto-generated; do not edit.\n\
+         #[rustfmt::skip]\n\
          pub static INJECTED_X5C_CERTS: &[&str] = &[\n{entries}];\n"
     );
 

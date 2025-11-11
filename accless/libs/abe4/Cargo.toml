@@ -15,9 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true
-ark-bls12-377.workspace = true
 ark-bls12-381.workspace = true
-ark-mnt4-298.workspace = true
 ark-ec.workspace = true
 ark-ff.workspace = true
 ark-std = { workspace = true, features = ["std"] }

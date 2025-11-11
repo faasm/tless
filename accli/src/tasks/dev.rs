@@ -209,7 +209,7 @@ impl Dev {
         }
 
         fn is_excluded(entry: &walkdir::DirEntry) -> bool {
-            let excluded_dirs = ["build-wasm", "build-native", "target", "venv"];
+            let excluded_dirs = ["build-wasm", "build-native", "target", "venv", "venv-bm"];
             entry.file_type().is_dir()
                 && entry
                     .file_name()

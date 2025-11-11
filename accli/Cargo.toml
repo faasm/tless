@@ -16,8 +16,6 @@ name = "accli"
 path = "src/lib.rs"
 
 [dependencies]
-aes-gcm.workspace = true
-aes-gcm-siv.workspace = true
 anyhow.workspace = true
 base64.workspace = true
 bytes.workspace = true
@@ -32,13 +30,11 @@ indicatif.workspace = true
 log.workspace = true
 minio.workspace = true
 plotters.workspace = true
-rabe.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-serde_yaml.workspace = true
 shellexpand.workspace = true
 sha2.workspace = true
 shell-words.workspace = true
