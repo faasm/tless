@@ -13,6 +13,14 @@ azure-cvm = []
 sgx = []
 snp = []
 
+[[bin]]
+name = "attestation-service"
+path = "src/main.rs"
+
+[lib]
+name = "attestation_service"
+path = "src/lib.rs"
+
 [dependencies]
 abe4.workspace = true
 aes-gcm.workspace = true

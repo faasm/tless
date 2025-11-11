@@ -1,5 +1,6 @@
 use crate::env::Env;
 use clap::ValueEnum;
+use log::error;
 use std::{
     fmt,
     process::{Command, Stdio},
@@ -143,7 +144,12 @@ impl Docker {
         String::from_utf8_lossy(&gid.stdout).trim().to_string()
     }
 
-    fn exec_cmd(cmd: &[String], cwd: Option<&str>, interactive: bool) {
+    fn exec_cmd(
+        cmd: &[String],
+        cwd: Option<&str>,
+        interactive: bool,
+        capture_output: bool,
+    ) -> anyhow::Result<Option<String>> {
         let mut exec_cmd = Command::new("docker");
         exec_cmd.arg("exec");
         if interactive {
@@ -158,11 +164,23 @@ impl Docker {
             exec_cmd.arg("-c").arg(cmd.join(" "));
         }
 
-        exec_cmd
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .expect("failed to execute docker exec");
+        if capture_output {
+            let output = exec_cmd.output()?;
+            if !output.status.success() {
+                anyhow::bail!("failed to execute docker exec");
+            }
+            Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()))
+        } else {
+            let status = exec_cmd
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+
+            if !status.success() {
+                anyhow::bail!("failed to execute docker exec");
+            }
+            Ok(None)
+        }
     }
 
     fn run_cmd(
@@ -172,7 +190,8 @@ impl Docker {
         interactive: bool,
         env: &[String],
         net: bool,
-    ) {
+        capture_output: bool,
+    ) -> anyhow::Result<Option<String>> {
         let image_tag = Self::get_docker_tag(&DockerContainer::Experiments);
         let mut run_cmd = Command::new("docker");
         run_cmd
@@ -214,16 +233,32 @@ impl Docker {
             run_cmd.arg("bash");
         }
 
-        run_cmd
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()
-            .expect("failed to execute docker run");
+        if capture_output {
+            let output = run_cmd.output()?;
+            if !output.status.success() {
+                error!("failed to execute docker run (cmd={run_cmd:?})");
+                error!("stdout: {}", String::from_utf8_lossy(&output.stdout).to_string());
+                error!("stderr: {}", String::from_utf8_lossy(&output.stderr).to_string());
+                anyhow::bail!("failed to execute docker run");
+            }
+            Ok(Some(String::from_utf8_lossy(&output.stdout).to_string()))
+        } else {
+            let status = run_cmd
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+
+            if !status.success() {
+                error!("failed to execute docker run (cmd={run_cmd:?})");
+                anyhow::bail!("failed to execute docker run");
+            }
+            Ok(None)
+        }
     }
 
-    pub fn cli(net: bool) {
+    pub fn cli(net: bool) -> anyhow::Result<()> {
         if Self::is_container_running() {
-            Self::exec_cmd(&[], Some(DOCKER_ACCLESS_CODE_MOUNT_DIR), true);
+            Self::exec_cmd(&[], Some(DOCKER_ACCLESS_CODE_MOUNT_DIR), true, false)?;
         } else {
             Self::run_cmd(
                 &[],
@@ -232,20 +267,29 @@ impl Docker {
                 true,
                 &[],
                 net,
-            );
+                false,
+            )?;
         }
+        Ok(())
     }
 
-    pub fn run(cmd: &[String], mount: bool, cwd: Option<&str>, env: &[String], net: bool) {
+    pub fn run(
+        cmd: &[String],
+        mount: bool,
+        cwd: Option<&str>,
+        env: &[String],
+        net: bool,
+        capture_output: bool,
+    ) -> anyhow::Result<Option<String>> {
         if Self::is_container_running() {
             if !mount {
                 panic!(
                     "Container is already running, but --mount flag was not provided. This is required to ensure code consistency."
                 );
             }
-            Self::exec_cmd(cmd, cwd, true);
+            Self::exec_cmd(cmd, cwd, true, capture_output)
         } else {
-            Self::run_cmd(cmd, mount, cwd, true, env, net);
+            Self::run_cmd(cmd, mount, cwd, false, env, net, capture_output)
         }
     }
 }

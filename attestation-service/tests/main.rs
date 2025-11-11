@@ -93,6 +93,8 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 /// the latter with `accli applications build test`
 #[tokio::test]
 async fn test_att_client_sgx() -> Result<()> {
+    attestation_service::init_logging(true);
+
     let certs_dir = Path::new(env!("ACCLESS_ROOT_DIR"))
         .join("config")
         .join("test-certs");
@@ -109,7 +111,7 @@ async fn test_att_client_sgx() -> Result<()> {
     // new certificates. Note that we need to pass the certificate's path
     // _inside_ the container, as application build happens inside the
     // container.
-    Applications::build(true, false, cert_path.to_str());
+    Applications::build(false, false, cert_path.to_str(), true)?;
 
     // Health-check the attestation service.
     let client = reqwest::Client::builder()
@@ -120,7 +122,7 @@ async fn test_att_client_sgx() -> Result<()> {
     // Run the client application inside the container.
     let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
     let env_vars = [
-        "ACCLESS_AS_URL=\"https://0.0.0.0:8443\"".to_string(),
+        "ACCLESS_AS_URL=\"https://127.0.0.1:8443\"".to_string(),
         format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()),
     ];
     Docker::run(
@@ -129,7 +131,8 @@ async fn test_att_client_sgx() -> Result<()> {
         None,
         &env_vars,
         true,
-    );
+        false
+    )?;
 
     match std::fs::remove_dir_all(&certs_dir) {
         Ok(()) => {}

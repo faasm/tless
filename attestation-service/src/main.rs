@@ -53,17 +53,11 @@ async fn health() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-fn init_logger() {
-    env_logger::init_from_env(
-        env_logger::Env::default().default_filter_or("error,attestation_service=info"),
-    );
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialise logging and parse CLI arguments.
-    init_logger();
     let cli = Cli::parse();
+    attestation_service::init_logging(false);
 
     // Initialise crypto provider and TLS config, this also sets up the TLS
     // certificates if necessary.

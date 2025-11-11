@@ -15,5 +15,6 @@ datasets*
 
 agent-plans
 
-# Default path for auto-generated TLS certiificats.
+# Default path for auto-generated TLS certificates.
 config/certs
+config/test-certs

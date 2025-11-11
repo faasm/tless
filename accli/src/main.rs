@@ -134,7 +134,6 @@ enum DockerCommand {
     },
     /// Run a command inside the experiments container
     Run {
-        /// Command to run inside the container
         cmd: Vec<String>,
         /// Mount the current directory to /code/tless
         #[arg(long)]
@@ -148,6 +147,9 @@ enum DockerCommand {
         /// Connect the container to the host's network
         #[arg(long)]
         net: bool,
+        /// Capture the standard output of the command
+        #[arg(long)]
+        capture_output: bool,
     },
 }
 
@@ -383,10 +385,10 @@ async fn main() -> anyhow::Result<()> {
     match &cli.task {
         Command::Accless { accless_command } => match accless_command {
             AcclessCommand::Build { clean, debug } => {
-                Accless::build(*clean, *debug);
+                Accless::build(*clean, *debug)?;
             }
             AcclessCommand::Test {} => {
-                Accless::test();
+                Accless::test()?;
             }
         },
         Command::Applications {
@@ -397,10 +399,10 @@ async fn main() -> anyhow::Result<()> {
                 debug,
                 cert_path,
             } => {
-                Applications::build(*clean, *debug, cert_path.as_deref());
+                Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
             }
             ApplicationsCommand::Test {} => {
-                Applications::test();
+                Applications::test()?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
@@ -440,7 +442,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             DockerCommand::Cli { net } => {
-                Docker::cli(*net);
+                Docker::cli(*net)?;
             }
             DockerCommand::Run {
                 cmd,
@@ -448,8 +450,9 @@ async fn main() -> anyhow::Result<()> {
                 cwd,
                 env,
                 net,
+                capture_output,
             } => {
-                Docker::run(cmd, *mount, cwd.as_deref(), env, *net);
+                Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
             }
         },
         Command::Eval { eval_command } => match eval_command {
