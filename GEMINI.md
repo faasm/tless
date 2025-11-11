@@ -70,7 +70,7 @@ the `./scripts/accli_wrapper.sh` that you should use whenever you want to
 run a commadn in `accli`. All commands and subcommands in `accli` take an
 optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
-## Coding Guideleins
+## Coding Guidelines
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
   the file, and run the code formatting specified above.
