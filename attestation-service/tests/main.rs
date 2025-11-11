@@ -3,7 +3,7 @@ use accli::tasks::{
     docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker},
 };
 use anyhow::Result;
-use log::error;
+use log::{error, info};
 use reqwest::Client;
 use serde_json::Value;
 use std::{
@@ -110,8 +110,10 @@ async fn test_att_client_sgx() -> Result<()> {
     // While it is starting, rebuild the test application so that we can inject the
     // new certificates. Note that we need to pass the certificate's path
     // _inside_ the container, as application build happens inside the
-    // container.
-    Applications::build(false, false, cert_path.to_str(), true)?;
+    // container. We also _must_ set the `clean` flag to true, to force
+    // recompilation.
+    info!("re-building mock sgx-client with new certificates, this will take a while...");
+    Applications::build(true, false, cert_path.to_str(), true)?;
 
     // Health-check the attestation service.
     let client = reqwest::Client::builder()
@@ -122,9 +124,11 @@ async fn test_att_client_sgx() -> Result<()> {
     // Run the client application inside the container.
     let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
     let env_vars = [
-        "ACCLESS_AS_URL=\"https://127.0.0.1:8443\"".to_string(),
+        "ACCLESS_AS_URL=https://127.0.0.1:8443".to_string(),
         format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()),
     ];
+
+    info!("running mock sgx client...");
     Docker::run(
         &[att_client_sgx_path.display().to_string()],
         true,
