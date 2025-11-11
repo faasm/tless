@@ -47,13 +47,14 @@ pub async fn get_state(
         id: state.id.clone(),
         mpk: general_purpose::STANDARD.encode(&mpk_bytes),
     };
-    let response_json = match serde_json::to_string(&response) {
-        Ok(json) => serde_json::Value::String(json),
+
+    let response_json = match serde_json::to_value(&response) {
+        Ok(value) => value,
         Err(e) => {
-            error!("error serializing response to JSON (error={e:?})");
+            error!("error serializing response to JSON value (error={e:?})");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "error serializing response to JSON" })),
+                Json(json!({ "error": "error serializing response to JSON value" })),
             );
         }
     };

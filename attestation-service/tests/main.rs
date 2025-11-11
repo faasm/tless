@@ -3,6 +3,7 @@ use accli::tasks::{
     docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker},
 };
 use anyhow::Result;
+use log::error;
 use reqwest::Client;
 use serde_json::Value;
 use std::{
@@ -92,17 +93,22 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 /// the latter with `accli applications build test`
 #[tokio::test]
 async fn test_att_client_sgx() -> Result<()> {
-    let temp_dir = tempdir()?;
-    let certs_dir = temp_dir.path();
+    let certs_dir = Path::new(env!("ACCLESS_ROOT_DIR"))
+        .join("config")
+        .join("test-certs");
     let child = common::spawn_as(certs_dir.to_str().unwrap(), true, true)?;
     let _child_guard = ChildGuard(child);
 
-    let cert_path =
-        remap_host_path_to_container(&crate::common::get_public_certificate_path(certs_dir))?;
+    // Give the service time to start.
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // While it is starting, rebuild the test application so that we can inject the new
-    // certificates. Note that we need to pass the certificate's path _inside_ the container, as
-    // application build happens inside the container.
+    let cert_path =
+        remap_host_path_to_container(&crate::common::get_public_certificate_path(&certs_dir))?;
+
+    // While it is starting, rebuild the test application so that we can inject the
+    // new certificates. Note that we need to pass the certificate's path
+    // _inside_ the container, as application build happens inside the
+    // container.
     Applications::build(true, false, cert_path.to_str());
 
     // Health-check the attestation service.
@@ -113,8 +119,25 @@ async fn test_att_client_sgx() -> Result<()> {
 
     // Run the client application inside the container.
     let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
-    let env_vars = ["ACCLESS_AS_URL=\"https://0.0.0.0:8443\"".to_string(), format!("ACCLESS_AS_CERT_PATH={}", cert_path.display())];
-    Docker::run(&[att_client_sgx_path.display().to_string()], true, None, &env_vars, true);
+    let env_vars = [
+        "ACCLESS_AS_URL=\"https://0.0.0.0:8443\"".to_string(),
+        format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()),
+    ];
+    Docker::run(
+        &[att_client_sgx_path.display().to_string()],
+        true,
+        None,
+        &env_vars,
+        true,
+    );
+
+    match std::fs::remove_dir_all(&certs_dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            error!("error removing certs dir (error={e:?}, dir={certs_dir:?})");
+        }
+    }
 
     Ok(())
 }
