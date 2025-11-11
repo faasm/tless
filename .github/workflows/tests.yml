@@ -23,8 +23,8 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-      - name: "Install clang-format"
-        run: sudo apt install -y clang-format
+      - name: "Install APT deps"
+        run: ./scripts/apt.sh
       - name: "Build workspace (needed for auto-generated modules)"
         run: cargo build
       - name: "Run formatting checks"

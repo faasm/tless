@@ -37,10 +37,7 @@ export FAASM_VERSION=0.33.0
 # APT deps
 # ----------------------------
 
-sudo apt install -y \
-    libfontconfig1-dev \
-    libssl-dev \
-    pkg-config > /dev/null 2>&1
+source ${THIS_DIR}/apt.sh
 
 # ----------------------------
 # Python deps
