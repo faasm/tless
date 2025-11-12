@@ -13,7 +13,7 @@ endif ()
 
 add_library(jwt_rust_lib STATIC IMPORTED GLOBAL)
 
-# This cert path can be set from: -DACCLESS_ATTEST_CERT_PEM=/path/to/cert.pem
+# This cert path can be set from: -DACCLESS_AS_CERT_PEM=/path/to/cert.pem
 message(STATUS "Injecting AS certificates to JWT library from: '${ACCLESS_AS_CERT_PEM}'")
 add_custom_command(
     OUTPUT ${JWT_RUST_LIBRARY}

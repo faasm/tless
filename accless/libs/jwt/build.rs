@@ -1,5 +1,6 @@
-/// ! This build file generates a file with optionally-injected certificates
-/// from (one or different) ! attestation services.
+//! This build file generates a file with optionally-injected certificates from
+//! (one or different) attestation services and hard-codes them into the JWT
+//! library.
 use std::{env, fs, path::PathBuf};
 
 fn main() {

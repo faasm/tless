@@ -12,8 +12,8 @@ const TEST_CERT: &str = r#"-----BEGIN CERTIFICATE-----
 MIIFCTCCAvGgAwIBAgIUIfCvnY9eL7gCAMnilTlwJTjV1ekwDQYJKoZIhvcNAQELBQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MDQxMzA5MzM1MFoXDTI2MDQxMzA5MzM1MFowFDESMBAGA1UEAwwJbG9jYWxob3N0MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAxiqavAStTeJz0b2fEbIOzzJBBdxKlZhkixFd1IbHbxCwp+pAkPSoMuNr4zhbQNMOCqTWx0yIsKA2rJw2DohFtQWQSIUor8OLyMV/I2XIJydR9pcW/ZLx4LcSbv5Q9PiJXk1VB+IjYoW/2b2BHc9lCEZB+RLVDCVXGex1Wi3IeGcNhTDJHquwIojo+1HGtEH/a3K9wgRdy1D0PmDQCNCxQoBajATA0u4/TpsVsjsZzB7ZJpI020m7BCMvi7Dy68kDq18CZpAW0ZT7YsvCY1X+D0BvXd0NVNg/udqMPeQvhSXkQsiPqWar3zsR8JC5oKGVei6bHhtX17/9PiOChyIDzWwcrVNtJnmdS4jzuFdNOaBlCFGseXf3Pxkee3N/9vF3mn6RPYJfgj7yjr9qmxnRj02L8wbw3E8YjhOkznLiARDVCivzggEaHRNgDv7p3bQACkYae2gzJh+roBSm7fVmUH46Rgk8rz54uh/kKqoGpyxFV9njVZ8Q5JO+LI2aUjAxE13mZqkd89DYuvgHp7K5UDw/Bi5S2CWb/mLTX/WKur53t+B7iE3kJFx0A8G2UxLg3q9yhH+n2p64suLMq9iZcIlU+pSQj3jMSpuJH/6IHRHvJojgnx1T0bPxFtevIkXCNCXdgAHXmr+J5M60au2xIODk974QMfin8rGhwKdkpP0CAwEAAaNTMFEwHQYDVR0OBBYEFOc0rW9L90ySukKVg879piXRzDU0MB8GA1UdIwQYMBaAFOc0rW9L90ySukKVg879piXRzDU0MA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggIBAD5pxBGpsYvEfhppvVfMakn9DaEKmDp2GGs5SElJY5QS89dWjV4h4GGSVHPlPJ3TIdM9Qkvr34JMsLvkBNrAhlmPMQJAPnjqo6kuLoDCk1PNTQPZA9rO9ljoTMNcTCZue3Hu5G96PwV9z3kzGZZaBndmEnBVQ5JLXxZ/2221kyPxeV5sKoSfR2ZhfQcZiaiudY89kdJSg+2KovUoRzxoWvkZZyRz2UZX/VGF8luUbw6UFZf/SlV+JK7bcD5kNuMrFVZdm8hLu07wrRuRVSmM9wbZtdpjcRNtledNd1a7Nd9k1Oqqn/JZO3DfzoPzclje26mNh2ASNhqmO1SifoBgJDMU7ZmO4KS/Euqb2hgzQbjOG1FRflz1XJ5yKjY1T/4YwBqw8zUVVtmMUj0ksNWvYByh1+ZWZZNm03ioWkER4z+9MwTbPUVPwtg+HwnJXoV8C6Er16/blCuS1xgYMrBB5mK86MXFgNdJ3xrdvuukDhE7Eil9iC5419giya4Rli81VUdSvdzd6bldXAKQqCf0jB3kjTx0lno5CtgTG1s23Gnm/mitSWbnoy5TGjgX8wsIFdYmGhljouan7kOKiOkSgfnsbhd/aqCwt5NuU5WQMSfQ50BsIkT0HftXqaagNqXGUgQ8vrUa4wo8vlgGv5fwS6kzPDJW45w0uwIS1uEbHN1T
 -----END CERTIFICATE-----"#;
 
-fn base64_url_decode(input: &str) -> Vec<u8> {
-    URL_SAFE_NO_PAD.decode(input).unwrap()
+fn base64_url_decode(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    URL_SAFE_NO_PAD.decode(input)
 }
 
 fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
@@ -24,7 +24,10 @@ fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
     }
 
     let header_and_payload = format!("{}.{}", parts[0], parts[1]);
-    let tmp = base64_url_decode(parts[2]);
+    let tmp = match base64_url_decode(parts[2]) {
+        Ok(tmp) => tmp,
+        Err(_) => return false,
+    };
     let signature: rsa::pkcs1v15::Signature = match tmp.as_slice().try_into() {
         Ok(signature) => signature,
         Err(_) => return false,
@@ -40,8 +43,10 @@ fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
             Err(_) => return false,
         };
         let public_key = certpem.public_key();
-        let rsa_pub_key =
-            RsaPublicKey::from_pkcs1_der(&public_key.subject_public_key.data).unwrap();
+        let rsa_pub_key = match RsaPublicKey::from_pkcs1_der(&public_key.subject_public_key.data) {
+            Ok(key) => key,
+            Err(_) => return false,
+        };
         let is_valid = rsa::pkcs1v15::VerifyingKey::<Sha256>::new(rsa_pub_key)
             .verify(header_and_payload.as_bytes(), &signature);
 
@@ -57,12 +62,24 @@ fn verify_jwt_signature(jwt: &str, x5c_certs: &[&str]) -> bool {
 fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     let parts: Vec<&str> = jwt.split('.').collect();
 
-    let header_bytes = base64_url_decode(parts[0]);
-    let payload_bytes = base64_url_decode(parts[1]);
+    let header_bytes = match base64_url_decode(parts[0]) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    let payload_bytes = match base64_url_decode(parts[1]) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
 
     // Parse the header and payload as JSON
-    let header: Value = serde_json::from_slice(&header_bytes).unwrap();
-    let payload: Value = serde_json::from_slice(&payload_bytes).unwrap();
+    let header: Value = match serde_json::from_slice(&header_bytes) {
+        Ok(val) => val,
+        Err(_) => return false,
+    };
+    let payload: Value = match serde_json::from_slice(&payload_bytes) {
+        Ok(val) => val,
+        Err(_) => return false,
+    };
 
     // Check in header
     if let Some(obj) = header.as_object()
@@ -70,9 +87,10 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     {
         let value = obj
             .get(property)
-            .and_then(|value| value.as_str().map(|s| s.to_string()))
-            .unwrap();
-        return value == exp_value;
+            .and_then(|value| value.as_str().map(|s| s.to_string()));
+        if let Some(value) = value {
+            return value == exp_value;
+        }
     }
 
     // Check in body
@@ -81,9 +99,10 @@ fn check_jwt_property(jwt: &str, property: &str, exp_value: &str) -> bool {
     {
         let value = obj
             .get(property)
-            .and_then(|value| value.as_str().map(|s| s.to_string()))
-            .unwrap();
-        return value == exp_value;
+            .and_then(|value| value.as_str().map(|s| s.to_string()));
+        if let Some(value) = value {
+            return value == exp_value;
+        }
     }
 
     false
@@ -114,7 +133,10 @@ pub unsafe extern "C" fn get_property(
         return ptr::null_mut();
     }
 
-    let payload_bytes = base64_url_decode(parts[1]);
+    let payload_bytes = match base64_url_decode(parts[1]) {
+        Ok(bytes) => bytes,
+        Err(_) => return ptr::null_mut(),
+    };
 
     let payload_json: Value = match serde_json::from_slice(&payload_bytes) {
         Ok(val) => val,
@@ -174,9 +196,22 @@ pub unsafe extern "C" fn check_property(
     property_cstr: *const c_char,
     exp_value_cstr: *const c_char,
 ) -> bool {
-    let jwt = unsafe { CStr::from_ptr(jwt_cstr).to_str().unwrap() };
-    let property = unsafe { CStr::from_ptr(property_cstr).to_str().unwrap() };
-    let exp_value = unsafe { CStr::from_ptr(exp_value_cstr).to_str().unwrap() };
+    if jwt_cstr.is_null() || property_cstr.is_null() || exp_value_cstr.is_null() {
+        return false;
+    }
+
+    let jwt = match unsafe { CStr::from_ptr(jwt_cstr).to_str() } {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let property = match unsafe { CStr::from_ptr(property_cstr).to_str() } {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let exp_value = match unsafe { CStr::from_ptr(exp_value_cstr).to_str() } {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
 
     check_jwt_property(jwt, property, exp_value)
 }
