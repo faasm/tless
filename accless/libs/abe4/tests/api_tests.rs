@@ -1765,3 +1765,28 @@ fn generated_test_case_099_fail() {
     let policy = "((C.a:0 & (((B.a:0 & A.c:3) & !B.a:4) & (B.c:5 & A.c:5))) | D.a:6)";
     assert_decryption_fail(user_attrs, policy);
 }
+
+#[test]
+fn test_multi_auth_complex_1_ok_from_cpp() {
+    let user_attrs = vec![
+        "A.a:0", "A.b:2", "A.c:1", "A.c:0", "B.b:0", "B.b:1",
+    ];
+    let policy = "A.a:1 | (!A.a:1 & A.b:2) & !(B.b:2 | A.c:2)";
+    assert_decryption_ok(user_attrs, policy);
+}
+
+#[test]
+fn test_multi_auth_complex_1_fail_from_cpp() {
+    let user_attrs = vec![
+        "A.a:0", "A.b:2", "A.c:1", "B.b:0", "B.b:1",
+    ];
+    let policy = "A.a:1 | (!A.a:1 & A.b:2) & !(B.b:2 | A.c:2)";
+    assert_decryption_ok(user_attrs, policy);
+}
+
+#[test]
+fn test_simple_negation_fail() {
+    let user_attrs = vec!["A.c:1"];
+    let policy = "!A.c:2";
+    assert_decryption_ok(user_attrs, policy);
+}

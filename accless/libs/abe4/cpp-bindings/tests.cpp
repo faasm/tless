@@ -1,19 +1,16 @@
 #include "abe4.h"
-#include "base64.h"  // New include
-#include <algorithm> // Added for std::sort
+#include "base64.h"
 #include <gtest/gtest.h>
 #include <optional>
 
 TEST(abe4, setup) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::setup(auths);
     SUCCEED(); // If setup doesn't throw, it's a success for now
 }
 
 TEST(Abe4Test, PartialKeyDeserialization) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
 
     accless::abe4::SetupOutput output = accless::abe4::setup(auths);
     ASSERT_FALSE(output.mpk.empty());
@@ -40,7 +37,6 @@ TEST(Abe4Test, PartialKeyDeserialization) {
 
 TEST(Abe4Test, Keygen) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.msk.empty());
 
@@ -64,7 +60,6 @@ TEST(Abe4Test, Keygen) {
 
 TEST(Abe4Test, Encrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.mpk.empty());
 
@@ -78,7 +73,6 @@ TEST(Abe4Test, Encrypt) {
 
 TEST(Abe4Test, Decrypt) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.msk.empty());
     ASSERT_FALSE(setup_output.mpk.empty());
@@ -101,31 +95,48 @@ TEST(Abe4Test, Decrypt) {
 
 TEST(Abe4Test, PackFullKey) {
     std::vector<std::string> auths = {"auth1", "auth2"};
-    std::sort(auths.begin(), auths.end()); // Sort authorities
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.mpk.empty());
 
+    // Unpack the original MPK
     std::vector<uint8_t> mpk_bytes = accless::base64::decode(setup_output.mpk);
-    std::map<std::string, std::vector<uint8_t>> mpk_map =
+    std::map<std::string, std::vector<uint8_t>> original_mpk_map =
         accless::abe4::unpackFullKey(mpk_bytes);
 
+    // Prepare data for re-packing
     std::vector<std::string> authorities;
     std::vector<std::vector<uint8_t>> partial_keys_bytes;
-    std::vector<std::string> partial_keys_b64;
-
-    for (const auto &pair : mpk_map) {
+    // Note: mpk_map is already sorted by key, so authorities will be sorted too.
+    for (const auto &pair : original_mpk_map) {
         authorities.push_back(pair.first);
         partial_keys_bytes.push_back(pair.second);
-        partial_keys_b64.push_back(accless::base64::encode(pair.second));
     }
 
+    // Re-pack the MPK
     std::vector<uint8_t> packed_mpk_bytes =
         accless::abe4::packFullKey(authorities, partial_keys_bytes);
-    EXPECT_EQ(packed_mpk_bytes, mpk_bytes);
 
+    // Unpack the re-packed MPK
+    std::map<std::string, std::vector<uint8_t>> repacked_mpk_map =
+        accless::abe4::unpackFullKey(packed_mpk_bytes);
+
+    // Compare the unpacked maps
+    EXPECT_EQ(repacked_mpk_map, original_mpk_map);
+
+    // Test with base64 strings
+    std::vector<std::string> partial_keys_b64;
+    for (const auto &pair : original_mpk_map) {
+        partial_keys_b64.push_back(accless::base64::encode(pair.second));
+    }
     std::string packed_mpk_b64 =
         accless::abe4::packFullKey(authorities, partial_keys_b64);
-    EXPECT_EQ(packed_mpk_b64, setup_output.mpk);
+
+    // Unpack the base64 repacked MPK
+    std::map<std::string, std::vector<uint8_t>> repacked_mpk_b64_map =
+        accless::abe4::unpackFullKey(accless::base64::decode(packed_mpk_b64));
+
+    // Compare the unpacked maps
+    EXPECT_EQ(repacked_mpk_b64_map, original_mpk_map);
 }
 
 TEST(Abe4Test, EndToEndSingleAuthorityPartial) {

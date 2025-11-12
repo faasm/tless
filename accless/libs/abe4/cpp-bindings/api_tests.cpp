@@ -185,3 +185,26 @@ TEST_F(Abe4ApiTest, MultiLetterAuth) {
     std::string policy = "AUTH1.a:0 & AUTH2.b:1";
     assert_decryption_ok(auths, user_attrs, policy);
 }
+
+TEST_F(Abe4ApiTest, MultiAuthComplex1OkFromCpp) {
+    std::vector<std::string> auths = {"A", "B"};
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {"A", "a", "0"},
+        {"A", "b", "2"},
+        {"A", "c", "1"},
+        {"A", "c", "0"},
+        {"B", "b", "0"},
+        {"B", "b", "1"},
+    };
+    std::string policy = "A.a:1 | (!A.a:1 & A.b:2) & !(B.b:2 | A.c:2)";
+    assert_decryption_ok(auths, user_attrs, policy);
+}
+
+TEST_F(Abe4ApiTest, SimpleNegationOk) {
+    std::vector<std::string> auths = {"A"};
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {"A", "c", "1"},
+    };
+    std::string policy = "!A.c:2";
+    assert_decryption_ok(auths, user_attrs, policy);
+}
