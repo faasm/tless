@@ -26,10 +26,12 @@ impl Accless {
     }
 
     pub fn test(args: &[String]) -> anyhow::Result<()> {
-        // Then run them.
-        let mut cmd = vec!["ctest".to_string()];
+        let mut cmd = vec![
+            "ctest".to_string(),
+            "--".to_string(),
+            "--output-on-failure".to_string(),
+        ];
         if !args.is_empty() {
-            cmd.push("--".to_string());
             cmd.extend(args.iter().cloned());
         }
         let workdir = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join("accless/build-native");

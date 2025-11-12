@@ -18,6 +18,7 @@ char *setup_partial_abe4(const char *auth_id_cstr);
 char *keygen_partial_abe4(const char *gid_cstr,
                           const char *partial_msk_b64_cstr,
                           const char *user_attrs_json);
+char *policy_authorities_abe4(const char *policy_str);
 
 } // extern "C"
 
@@ -195,4 +196,16 @@ packFullKey(const std::vector<std::string> &authorities,
  */
 std::string packFullKey(const std::vector<std::string> &authorities,
                         const std::vector<std::string> &partial_keys_b64);
+
+/**
+ * @brief Parses the authorities from a policy string.
+ *
+ * This helper method parses the unique set of authorities from a given policy.
+ * It is useful to leverage the policy parsing features of abe4, without
+ * relying on code duplication on the C++ side.
+ *
+ * @param policy A policy string.
+ * @return A vector with all the attributes that appear in the policy.
+ */
+std::vector<std::string> getPolicyAuthorities(const std::string &policy);
 } // namespace accless::abe4

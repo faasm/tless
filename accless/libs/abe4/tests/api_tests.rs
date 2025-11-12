@@ -1768,18 +1768,14 @@ fn generated_test_case_099_fail() {
 
 #[test]
 fn test_multi_auth_complex_1_ok_from_cpp() {
-    let user_attrs = vec![
-        "A.a:0", "A.b:2", "A.c:1", "A.c:0", "B.b:0", "B.b:1",
-    ];
+    let user_attrs = vec!["A.a:0", "A.b:2", "A.c:1", "A.c:0", "B.b:0", "B.b:1"];
     let policy = "A.a:1 | (!A.a:1 & A.b:2) & !(B.b:2 | A.c:2)";
     assert_decryption_ok(user_attrs, policy);
 }
 
 #[test]
 fn test_multi_auth_complex_1_fail_from_cpp() {
-    let user_attrs = vec![
-        "A.a:0", "A.b:2", "A.c:1", "B.b:0", "B.b:1",
-    ];
+    let user_attrs = vec!["A.a:0", "A.b:2", "A.c:1", "B.b:0", "B.b:1"];
     let policy = "A.a:1 | (!A.a:1 & A.b:2) & !(B.b:2 | A.c:2)";
     assert_decryption_ok(user_attrs, policy);
 }

@@ -15,6 +15,7 @@ use scheme::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     ffi::{CStr, CString},
     os::raw::c_char,
 };
@@ -29,6 +30,58 @@ use std::{
 pub unsafe extern "C" fn free_string(s: *mut c_char) {
     if !s.is_null() {
         unsafe { drop(CString::from_raw(s)) };
+    }
+}
+
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn policy_authorities_abe4(policy_str: *const c_char) -> *mut c_char {
+    let policy_cstr = unsafe { CStr::from_ptr(policy_str) };
+    let policy_str = match policy_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert policy C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let policy = match Policy::parse(policy_str) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to parse policy: {:?}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mut authorities = BTreeSet::new();
+    for idx in 0..policy.len() {
+        authorities.insert(policy.get(idx).0.authority().to_string());
+    }
+
+    let authorities: Vec<String> = authorities.into_iter().collect();
+    let json = match serde_json::to_string(&authorities) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to serialize policy authorities to JSON: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    match CString::new(json) {
+        Ok(s) => s.into_raw(),
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to create CString for policy authorities: {}",
+                e
+            );
+            std::ptr::null_mut()
+        }
     }
 }
 

@@ -203,4 +203,21 @@ std::string packFullKey(const std::vector<std::string> &authorities,
     return accless::base64::encode(full_key_bytes);
 }
 
+std::vector<std::string> getPolicyAuthorities(const std::string &policy) {
+    char *result = policy_authorities_abe4(policy.c_str());
+    if (!result) {
+        std::cerr << "accless(abe4): FFI call to policy_authorities_abe4 "
+                     "failed. See Rust "
+                     "logs for details."
+                  << std::endl;
+        throw std::runtime_error(
+            "accless(abe4): policy_authorities_abe4 FFI call failed");
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return result_json.get<std::vector<std::string>>();
+}
+
 } // namespace accless::abe4

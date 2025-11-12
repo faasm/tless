@@ -98,45 +98,28 @@ TEST(Abe4Test, PackFullKey) {
     accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
     ASSERT_FALSE(setup_output.mpk.empty());
 
-    // Unpack the original MPK
     std::vector<uint8_t> mpk_bytes = accless::base64::decode(setup_output.mpk);
-    std::map<std::string, std::vector<uint8_t>> original_mpk_map =
-        accless::abe4::unpackFullKey(mpk_bytes);
+    auto original_mpk_map = accless::abe4::unpackFullKey(mpk_bytes);
 
-    // Prepare data for re-packing
     std::vector<std::string> authorities;
     std::vector<std::vector<uint8_t>> partial_keys_bytes;
-    // Note: mpk_map is already sorted by key, so authorities will be sorted too.
+    std::vector<std::string> partial_keys_b64;
     for (const auto &pair : original_mpk_map) {
         authorities.push_back(pair.first);
         partial_keys_bytes.push_back(pair.second);
-    }
-
-    // Re-pack the MPK
-    std::vector<uint8_t> packed_mpk_bytes =
-        accless::abe4::packFullKey(authorities, partial_keys_bytes);
-
-    // Unpack the re-packed MPK
-    std::map<std::string, std::vector<uint8_t>> repacked_mpk_map =
-        accless::abe4::unpackFullKey(packed_mpk_bytes);
-
-    // Compare the unpacked maps
-    EXPECT_EQ(repacked_mpk_map, original_mpk_map);
-
-    // Test with base64 strings
-    std::vector<std::string> partial_keys_b64;
-    for (const auto &pair : original_mpk_map) {
         partial_keys_b64.push_back(accless::base64::encode(pair.second));
     }
-    std::string packed_mpk_b64 =
+
+    auto repacked_mpk_bytes =
+        accless::abe4::packFullKey(authorities, partial_keys_bytes);
+    auto repacked_map = accless::abe4::unpackFullKey(repacked_mpk_bytes);
+    EXPECT_EQ(repacked_map, original_mpk_map);
+
+    auto repacked_mpk_b64 =
         accless::abe4::packFullKey(authorities, partial_keys_b64);
-
-    // Unpack the base64 repacked MPK
-    std::map<std::string, std::vector<uint8_t>> repacked_mpk_b64_map =
-        accless::abe4::unpackFullKey(accless::base64::decode(packed_mpk_b64));
-
-    // Compare the unpacked maps
-    EXPECT_EQ(repacked_mpk_b64_map, original_mpk_map);
+    auto repacked_b64_map =
+        accless::abe4::unpackFullKey(accless::base64::decode(repacked_mpk_b64));
+    EXPECT_EQ(repacked_b64_map, original_mpk_map);
 }
 
 TEST(Abe4Test, EndToEndSingleAuthorityPartial) {
