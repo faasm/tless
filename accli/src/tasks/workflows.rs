@@ -1,7 +1,4 @@
-use crate::{
-    env::Env,
-    tasks::{dag::Dag, s3::S3},
-};
+use crate::{env::Env, tasks::s3::S3};
 use clap::ValueEnum;
 use log::debug;
 use std::{env, fmt, path::PathBuf, str::FromStr};
@@ -75,11 +72,12 @@ impl Workflows {
         }
 
         // First, upload the DAG
-        let yaml_path = Env::proj_root()
+        let _yaml_path = Env::proj_root()
             .join("workflows")
             .join(format!("{workflow}"))
             .join("accless.yaml");
-        Dag::upload(format!("{workflow}").as_str(), yaml_path.to_str().unwrap()).await?;
+        // Dag::upload(format!("{workflow}").as_str(),
+        // yaml_path.to_str().unwrap()).await?;
 
         if dag_only {
             return Ok(());

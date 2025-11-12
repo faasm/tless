@@ -7,7 +7,7 @@ bool verify_jwt(const char *jwt);
 bool check_property(const char *jwt, const char *property,
                     const char *exp_value);
 char *get_property(const char *jwt, const char *property);
-void free_string(char *ptr);
+void jwt_free_string(char *ptr);
 }
 
 namespace accless::jwt {

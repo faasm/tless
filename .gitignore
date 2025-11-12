@@ -13,4 +13,8 @@ ansible/inventory/vms.ini
 
 datasets*
 
-gemini-plans
+agent-plans
+
+# Default path for auto-generated TLS certificates.
+config/certs
+config/test-certs

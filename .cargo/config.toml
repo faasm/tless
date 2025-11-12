@@ -1,0 +1,4 @@
+[alias]
+clean-accless = "clean -p abe4 -p accless-jwt"
+build-accless = "build -p abe4 -p accless-jwt"
+test-accless  = "test  -p abe4 -p accless-jwt"

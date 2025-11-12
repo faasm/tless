@@ -16,12 +16,24 @@ set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
     ${azguestattestation_SOURCE_DIR}/external/jsoncpp-0.10.7/include
 )
 
-add_library(${CMAKE_PROJECT_TARGET} attestation.cpp)
-target_compile_options(${CMAKE_PROJECT_TARGET} PUBLIC
-    # This warning comes from upstream code in the attestation library
-    -Wno-delete-abstract-non-virtual-dtor
+add_library(${CMAKE_PROJECT_TARGET}
+    attestation.cpp
+    mock_sgx.cpp
 )
-target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC azguestattestation curl)
-target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC ${AZ_GUEST_ATTESTATION_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
+    azguestattestation
+    ${OPENSSL_CRYPTO_LIBRARY}
+    ${CURL_LIBRARY}
+    nlohmann_json::nlohmann_json
+    accless::base64
+)
+target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
+    ${AZ_GUEST_ATTESTATION_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+    ${CURL_INCLUDE_DIR}
+    ${ACCLESS_ROOT}/libs/base64
+)
+# Silence OpenSSL deprecation warnings in mock_sgx.cpp
+target_compile_definitions(attestation PRIVATE OPENSSL_API_COMPAT=0x10100000L)
 
 add_library(accless::attestation ALIAS ${CMAKE_PROJECT_TARGET})

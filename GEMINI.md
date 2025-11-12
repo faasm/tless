@@ -70,10 +70,10 @@ the `./scripts/accli_wrapper.sh` that you should use whenever you want to
 run a commadn in `accli`. All commands and subcommands in `accli` take an
 optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 
-## Coding Guideleins
+## Coding Guidelines
 
 - Whenever you edit a file, make sure you add a trailing newline to the end of
-  the file.
+  the file, and run the code formatting specified above.
 - For each new function you add, make sure to add one or multiple unit tests.
 
 ### Rust Coding Guidelines
@@ -111,15 +111,34 @@ time you need to test some C++ feature, you need to run the command inside
 the sysroot container. To do so, you may use `accli` as follows:
 
 ```
-# <cwd> must be an absolute path!
-./scripts/accli_wrapper.sh docker run [--cwd <cwd>] [--mount] "<your bash command here>"
-```
-
-After doing any C++ code modifications, make sure to format the code, and run
-the tests:
-
-```
+# Format code.
 ./scripts/accli_wrapper.sh dev format-code
-./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless --mount python3 build.py
-./scripts/accli_wrapper.sh docker run --cwd /code/accless/accless/build-native --mount ctest -- --output-on-failure
+
+# To build/test Accless library.
+./scripts/accli_wrapper.sh accless {build,test}
+
+# To build/test applications.
+./scripts/accli_wrapper.sh applications {build,test}
+```
+
+For C++ code, only add block comments in header files (if present) and use
+doxygen-style documentation, e.g:
+
+```
+/**
+ * @brief Packs a FullKey from a vector of authorities and base64-encoded
+ * partial keys.
+ *
+ * This is an overload of packFullKey that accepts partial keys as
+ * base64-encoded strings. It decodes the keys and then calls the primary
+ * packFullKey function, finally returning a base64-encoded string of the packed
+ * key.
+ *
+ * @param authorities A const reference to a vector of authority strings.
+ * @param partial_keys_b64 A const reference to a vector of base64-encoded
+ * partial key strings.
+ * @return A std::string containing the base64-encoded serialized FullKey.
+ */
+std::string packFullKey(const std::vector<std::string> &authorities,
+                        const std::vector<std::string> &partial_keys_b64);
 ```

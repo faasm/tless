@@ -62,7 +62,7 @@ impl UserAttribute {
         &self.attribute
     }
 
-    pub fn parse(s: &str) -> Result<Self, String> {
+    pub fn parse(s: &str) -> Result<Self> {
         let (auth, lbl, attr) = parser::Parser::parse_user_attr(s)?;
         Ok(UserAttribute {
             authority: auth,

@@ -19,7 +19,7 @@ std::string getProperty(const std::string &jwt, const std::string &property) {
 
     auto propertyOut = std::string(result);
     // Release Rust-side memory
-    free_string(result);
+    jwt_free_string(result);
 
     return propertyOut;
 }

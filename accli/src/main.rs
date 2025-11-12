@@ -1,8 +1,9 @@
 use crate::{
     env::Env,
     tasks::{
+        accless::Accless,
+        applications::Applications,
         azure::Azure,
-        dag::Dag,
         dev::Dev,
         docker::{Docker, DockerContainer},
         eval::{Eval, EvalExperiment, EvalRunArgs},
@@ -29,10 +30,15 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Register and manage workflows expressed as DAGs
-    Dag {
+    /// Build or test the main Accless library
+    Accless {
         #[command(subcommand)]
-        dag_command: DagCommand,
+        accless_command: AcclessCommand,
+    },
+    /// Build or test the Accless applications
+    Applications {
+        #[command(subcommand)]
+        applications_command: ApplicationsCommand,
     },
     /// Development-related tasks
     Dev {
@@ -121,10 +127,13 @@ enum DockerCommand {
         nocache: bool,
     },
     /// Get a CLI interface to the experiments container
-    Cli {},
+    Cli {
+        /// Connect the container to the host's network
+        #[arg(long)]
+        net: bool,
+    },
     /// Run a command inside the experiments container
     Run {
-        /// Command to run inside the container
         cmd: Vec<String>,
         /// Mount the current directory to /code/tless
         #[arg(long)]
@@ -132,6 +141,15 @@ enum DockerCommand {
         /// Set the working directory inside the container
         #[arg(long)]
         cwd: Option<String>,
+        /// Set environment variables inside the container
+        #[arg(long, value_name = "KEY=VALUE")]
+        env: Vec<String>,
+        /// Connect the container to the host's network
+        #[arg(long)]
+        net: bool,
+        /// Capture the standard output of the command
+        #[arg(long)]
+        capture_output: bool,
     },
 }
 
@@ -321,6 +339,35 @@ enum AzureSubCommand {
     Delete {},
 }
 
+#[derive(Debug, Subcommand)]
+enum AcclessCommand {
+    /// Build the Accless C++ library
+    Build {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        debug: bool,
+    },
+    /// Test the Accless C++ library
+    Test {
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ApplicationsCommand {
+    /// Build the Accless applications
+    Build {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        debug: bool,
+        #[arg(long)]
+        cert_path: Option<String>,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -337,9 +384,23 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match &cli.task {
-        Command::Dag { dag_command } => match dag_command {
-            DagCommand::Upload { name, yaml_path } => {
-                Dag::upload(name, yaml_path).await?;
+        Command::Accless { accless_command } => match accless_command {
+            AcclessCommand::Build { clean, debug } => {
+                Accless::build(*clean, *debug)?;
+            }
+            AcclessCommand::Test { args } => {
+                Accless::test(args)?;
+            }
+        },
+        Command::Applications {
+            applications_command,
+        } => match applications_command {
+            ApplicationsCommand::Build {
+                clean,
+                debug,
+                cert_path,
+            } => {
+                Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
@@ -378,11 +439,18 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            DockerCommand::Cli {} => {
-                Docker::cli();
+            DockerCommand::Cli { net } => {
+                Docker::cli(*net)?;
             }
-            DockerCommand::Run { cmd, mount, cwd } => {
-                Docker::run(cmd, *mount, cwd.as_deref());
+            DockerCommand::Run {
+                cmd,
+                mount,
+                cwd,
+                env,
+                net,
+                capture_output,
+            } => {
+                Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
             }
         },
         Command::Eval { eval_command } => match eval_command {

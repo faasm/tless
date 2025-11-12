@@ -7,7 +7,7 @@
 
 pub mod policy_compiler;
 
-use accless_abe4::policy::Policy;
+use abe4::policy::Policy;
 use log::error;
 use serde::{Deserialize, de::Error};
 use std::path::PathBuf;

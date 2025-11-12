@@ -4,6 +4,8 @@ use base64::{Engine as _, engine::general_purpose};
 use reqwest::{Client, tls};
 use std::{env, fs};
 
+// FIXME: this is all old code, probably can delete
+
 fn get_as_url() -> Result<String> {
     env::var("AS_URL").context("AS_URL env. var not set")
 }

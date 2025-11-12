@@ -3,6 +3,7 @@ use crate::policy::{
     parser::lexer::{Token, lex},
 };
 use anyhow::Result;
+use log::error;
 
 mod lexer;
 
@@ -81,7 +82,7 @@ impl Parser {
     }
 
     pub fn parse_policy(input: &str) -> Result<ParsedPolicy> {
-        let tokens = lex(input);
+        let tokens = lex(input)?;
         let mut parser = Parser::new(tokens);
 
         let res = parser.or();
@@ -101,12 +102,15 @@ impl Parser {
         }
     }
 
-    pub fn parse_user_attr(attr: &str) -> Result<(String, String, String), String> {
-        let tokens = lex(attr);
+    pub fn parse_user_attr(attr: &str) -> Result<(String, String, String)> {
+        let tokens = lex(attr)?;
         let mut parser = Parser::new(tokens);
         let res = parser.lit();
         if parser.had_error {
-            return Err(parser.err_msg.as_ref().unwrap().clone());
+            if let Some(err_msg) = parser.err_msg.as_ref() {
+                error!("error parsing user attribute (attr={attr}, error={err_msg})");
+            }
+            anyhow::bail!("error parsing user attribute (attr={attr})");
         }
         match res {
             Some(Expr::Lit((_, user_attr))) => Ok((
