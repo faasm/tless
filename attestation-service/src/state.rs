@@ -36,9 +36,9 @@ pub struct AttestationServiceState {
     /// collaterals.
     #[cfg(feature = "sgx")]
     pub sgx_collateral_cache: RwLock<HashMap<(String, IntelCa), SgxCollateral>>,
-    /// Run the SGX handler in mock mode, skipping quote verification while
-    /// still exercising the rest of the request flow.
-    pub mock_sgx: bool,
+    /// Run the attestation handlers in mock mode, skipping quote verification
+    /// while still exercising the rest of the request flow.
+    pub mock_attestation: bool,
 }
 
 impl AttestationServiceState {
@@ -48,7 +48,7 @@ impl AttestationServiceState {
     pub fn new(
         certs_dir: Option<PathBuf>,
         sgx_pccs_url: Option<PathBuf>,
-        mock_sgx: bool,
+        mock_attestation: bool,
     ) -> Result<Self> {
         let certs_dir = certs_dir.unwrap_or_else(get_default_certs_dir);
 
@@ -68,7 +68,7 @@ impl AttestationServiceState {
             sgx_pccs_url,
             #[cfg(feature = "sgx")]
             sgx_collateral_cache: RwLock::new(HashMap::new()),
-            mock_sgx,
+            mock_attestation,
         })
     }
 }

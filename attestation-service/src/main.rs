@@ -16,6 +16,7 @@ use tokio::net::TcpListener;
 
 #[cfg(feature = "azure-cvm")]
 mod azure_cvm;
+mod ecdhe;
 #[cfg(feature = "sgx")]
 mod intel;
 mod jwt;
@@ -44,9 +45,9 @@ struct Cli {
     /// Whether to overwrite the existing TLS certificates (if any).
     #[arg(long)]
     force_clean_certs: bool,
-    /// Run the SGX handler in mock mode, skipping quote verification.
+    /// Run the attestation service in mock mode, skipping quote verification.
     #[arg(long, default_value_t = false)]
-    mock_sgx: bool,
+    mock: bool,
 }
 
 async fn health() -> impl IntoResponse {
@@ -69,7 +70,7 @@ async fn main() -> Result<()> {
     let state = Arc::new(AttestationServiceState::new(
         cli.certs_dir,
         cli.sgx_pccs_url.clone(),
-        cli.mock_sgx,
+        cli.mock,
     )?);
 
     // Start HTTPS server.

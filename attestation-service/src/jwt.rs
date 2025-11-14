@@ -1,11 +1,16 @@
 use crate::{request::Tee, state::AttestationServiceState, tls};
 use abe4::{policy::UserAttribute, scheme::types::PartialUSK};
+use aes_gcm::{
+    Aes128Gcm, KeyInit, Nonce,
+    aead::{Aead, OsRng, rand_core::RngCore},
+};
 use anyhow::Result;
 use ark_serialize::CanonicalSerialize;
 use base64::engine::{Engine as _, general_purpose};
 use jsonwebtoken::EncodingKey;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::path::Path;
 
 /// # Description
@@ -102,4 +107,49 @@ impl JwtClaims {
             partial_usk_b64: general_purpose::STANDARD.encode(&partial_usk_bytes),
         })
     }
+}
+
+/// # Description
+///
+/// Encrypts a JWT using AES-128-GCM with a derived shared secret.
+///
+/// # Arguments
+///
+/// - `jwt`: The JWT string to encrypt.
+/// - `shared_secret`: The shared secret derived from ECDH.
+/// - `server_pub_key_b64`: The base64-encoded public key of the server.
+///
+/// # Returns
+///
+/// A `serde_json::Value` containing the encrypted token and the server's public
+/// key.
+pub fn encrypt_jwt(
+    jwt: String,
+    shared_secret: Vec<u8>,
+    server_pub_key_b64: String,
+) -> Result<serde_json::Value> {
+    debug!("generating AES-128-GCM key from ECDH secret");
+    let cipher = Aes128Gcm::new_from_slice(&shared_secret[..16])
+        .map_err(|e| anyhow::anyhow!("error initializing AES 128 GCM cipher: {:?}", e))?;
+
+    debug!("encrypting JWT with ECDH-derived AES key (for confidentiality)");
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(&nonce, jwt.as_bytes())
+        .map_err(|e| anyhow::anyhow!("error encrypting JWT: {:?}", e))?;
+
+    // Return base64(nonce + ciphertext) as a JSON payload
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend_from_slice(&ciphertext);
+
+    let encrypted_b64 = general_purpose::STANDARD.encode(&combined);
+    let response = json!({
+        "encrypted_token": encrypted_b64,
+        "server_pubkey": server_pub_key_b64
+    });
+
+    Ok(response)
 }
