@@ -14,6 +14,16 @@ export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/scripts/env.sh
 
+# ----------------------------
+# Git
+# ----------------------------
+
+git config --local core.hooksPath "${PROJ_ROOT}/config/githooks"
+
+# ----------------------------
+# Aliases
+# ----------------------------
+
 alias accli="cargo run --release -p accli -q --"
 
 # ----------------------------
