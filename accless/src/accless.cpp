@@ -91,9 +91,8 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
     __accless_get_attestation_jwt(&jwt, &jwtSize);
     std::string jwtStr(jwt);
 #else
-    // TODO: instead of a nullopt we can pass a public key here
-    auto snpReport = accless::attestation::getSnpReport(std::nullopt);
-    std::string jwtStr = accless::attestation::asGetJwtFromReport(snpReport);
+    // FIXME: get the gid/wid/nid from the message somehow
+    std::string jwtStr = accless::attestation::snp::getAttestationJwt("gid", "wid", "nid");
 #endif
 
 #ifdef ACCLESS_UBENCH
