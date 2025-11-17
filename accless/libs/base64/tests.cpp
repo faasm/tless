@@ -40,3 +40,19 @@ TEST(Base64Test, EncodeDecodeLongString) {
     std::vector<uint8_t> decoded = accless::base64::decode(encoded);
     EXPECT_EQ(decoded, input);
 }
+
+TEST(Base64UrlSafeTest, EncodeDecodeUrlSafeSimple) {
+    std::vector<uint8_t> input = {'a', 'b', 'c'};
+    std::string encoded = accless::base64::encodeUrlSafe(input);
+    EXPECT_EQ(encoded, "YWJj");
+    std::vector<uint8_t> decoded = accless::base64::decodeUrlSafe(encoded);
+    EXPECT_EQ(decoded, input);
+}
+
+TEST(Base64UrlSafeTest, EncodeDecodeUrlSafeWithSpecialChars) {
+    std::vector<uint8_t> input = {0xfb, 0xff, 0xbf};
+    std::string encoded = accless::base64::encodeUrlSafe(input);
+    EXPECT_EQ(encoded, "-__v");
+    std::vector<uint8_t> decoded = accless::base64::decodeUrlSafe(encoded);
+    EXPECT_EQ(decoded, input);
+}

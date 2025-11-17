@@ -105,4 +105,27 @@ std::vector<uint8_t> decode(const std::string &input) {
     return decoded_bytes;
 }
 
+std::string encodeUrlSafe(const std::vector<uint8_t> &data) {
+    std::string encoded = encode(data);
+    for (char &c : encoded) {
+        if (c == '+') {
+            c = '-';
+        } else if (c == '/') {
+            c = '_';
+        }
+    }
+    return encoded;
+}
+
+std::vector<uint8_t> decodeUrlSafe(const std::string &data) {
+    std::string decoded = data;
+    for (char &c : decoded) {
+        if (c == '-') {
+            c = '+';
+        } else if (c == '_') {
+            c = '/';
+        }
+    }
+    return decode(decoded);
+}
 } // namespace accless::base64
