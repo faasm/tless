@@ -20,6 +20,7 @@ mod ecdhe;
 #[cfg(feature = "sgx")]
 mod intel;
 mod jwt;
+mod mock;
 mod request;
 #[cfg(feature = "sgx")]
 mod sgx;

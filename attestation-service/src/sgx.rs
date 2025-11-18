@@ -2,10 +2,11 @@ use crate::{
     ecdhe,
     intel::{INTEL_PCS_URL, IntelCa, SgxCollateral, SgxQuote},
     jwt::{self, JwtClaims},
+    mock::{MockQuote, MockQuoteType},
     request::{NodeData, Tee},
     state::AttestationServiceState,
 };
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
 use log::{debug, error, info};
@@ -29,47 +30,6 @@ struct InitTimeData {
 struct RuntimeData {
     data: String,
     _data_type: String,
-}
-
-const MOCK_QUOTE_MAGIC: &[u8; 8] = b"ACCLSGX!";
-const MOCK_QUOTE_VERSION: u32 = 1;
-const MOCK_QUOTE_HEADER_LEN: usize = 16;
-
-struct MockSgxQuote {
-    report_data: [u8; 64],
-}
-
-impl MockSgxQuote {
-    fn parse(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() != MOCK_QUOTE_HEADER_LEN + 64 {
-            return Err(anyhow!(
-                "mock SGX quote must be {} bytes (got={})",
-                MOCK_QUOTE_HEADER_LEN + 64,
-                bytes.len()
-            ));
-        }
-
-        if bytes[..MOCK_QUOTE_MAGIC.len()] != *MOCK_QUOTE_MAGIC {
-            return Err(anyhow!("invalid mock SGX quote header"));
-        }
-
-        let version_bytes: [u8; 4] = bytes[MOCK_QUOTE_MAGIC.len()..MOCK_QUOTE_MAGIC.len() + 4]
-            .try_into()
-            .expect("slice size already checked");
-        let version = u32::from_le_bytes(version_bytes);
-        if version != MOCK_QUOTE_VERSION {
-            return Err(anyhow!(
-                "unsupported mock SGX quote version (expected={}, got={})",
-                MOCK_QUOTE_VERSION,
-                version
-            ));
-        }
-
-        let mut report_data = [0u8; 64];
-        report_data.copy_from_slice(&bytes[MOCK_QUOTE_HEADER_LEN..]);
-
-        Ok(Self { report_data })
-    }
 }
 
 /// # Description
@@ -191,10 +151,17 @@ pub async fn verify_sgx_report(
     };
 
     let report_data_bytes: Vec<u8> = if state.mock_attestation {
-        match MockSgxQuote::parse(&quote_bytes) {
+        match MockQuote::from_bytes(&quote_bytes) {
             Ok(mock_quote) => {
+                if mock_quote.quote_type != MockQuoteType::Sgx {
+                    error!("invalid mock SGX quote (error=wrong quote type)");
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({ "error": "invalid mock SGX quote" })),
+                    );
+                }
                 info!("received mock SGX quote, skipping DCAP verification");
-                mock_quote.report_data.to_vec()
+                mock_quote.user_data
             }
             Err(e) => {
                 error!("invalid mock SGX quote (error={e:?})");
