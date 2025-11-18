@@ -6,9 +6,10 @@
 
 #include <openssl/ec.h>
 
-#define REPORT_DATA_SIZE 64
-
 namespace accless::attestation::ec {
+
+constexpr size_t REPORT_DATA_SIZE = 64;
+
 class EcKeyPair {
   public:
     EcKeyPair();

@@ -38,7 +38,7 @@ target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
     ${CURL_INCLUDE_DIR}
     ${ACCLESS_ROOT}/libs/base64
 )
-# Silence OpenSSL deprecation warnings in mock_sgx.cpp
+# FIXME(#52): move OpenSSL usage to 3.X API.
 target_compile_definitions(attestation PRIVATE OPENSSL_API_COMPAT=0x10100000L)
 
 add_library(accless::attestation ALIAS ${CMAKE_PROJECT_TARGET})

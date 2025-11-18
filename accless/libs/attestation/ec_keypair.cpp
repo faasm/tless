@@ -1,5 +1,6 @@
 #include "ec_keypair.h"
 
+#include <memory>
 #include <stdexcept>
 
 #include <openssl/bn.h>
@@ -7,6 +8,21 @@
 #include <openssl/obj_mac.h>
 
 namespace accless::attestation::ec {
+// RAII handles over OpenSSL's BN resources.
+struct BnCtxDeleter {
+    void operator()(BN_CTX *p) const { BN_CTX_free(p); }
+};
+struct BigNumDeleter {
+    void operator()(BIGNUM *p) const { BN_free(p); }
+};
+struct EcPointDeleter {
+    void operator()(EC_POINT *p) const { EC_POINT_free(p); }
+};
+
+using BnCtxPtr = std::unique_ptr<BN_CTX, BnCtxDeleter>;
+using BigNumPtr = std::unique_ptr<BIGNUM, BigNumDeleter>;
+using EcPointPtr = std::unique_ptr<EC_POINT, EcPointDeleter>;
+
 EcKeyPair::EcKeyPair() : key_(EC_KEY_new_by_curve_name(NID_X9_62_prime256v1)) {
     if (key_ == nullptr || EC_KEY_generate_key(key_) != 1) {
         if (key_ != nullptr) {
@@ -32,35 +48,29 @@ std::array<uint8_t, REPORT_DATA_SIZE> EcKeyPair::getReportData() const {
         throw std::runtime_error("accless(att): missing EC public key");
     }
 
-    BN_CTX *ctx = BN_CTX_new();
+    BnCtxPtr ctx(BN_CTX_new());
     if (ctx == nullptr) {
         throw std::runtime_error("accless(att): BN_CTX allocation failed");
     }
-    BIGNUM *x = BN_new();
-    BIGNUM *y = BN_new();
+
+    BigNumPtr x(BN_new());
+    BigNumPtr y(BN_new());
     if (x == nullptr || y == nullptr) {
-        BN_CTX_free(ctx);
-        BN_free(x);
-        BN_free(y);
         throw std::runtime_error("accless(att): BN allocation failed");
     }
-    if (EC_POINT_get_affine_coordinates(group, point, x, y, ctx) != 1) {
-        BN_CTX_free(ctx);
-        BN_free(x);
-        BN_free(y);
+
+    if (EC_POINT_get_affine_coordinates(group, point, x.get(), y.get(),
+                                        ctx.get()) != 1) {
         throw std::runtime_error(
             "accless(att): failed to read EC public coordinates");
     }
 
     std::array<uint8_t, REPORT_DATA_SIZE / 2> gx_be{};
     std::array<uint8_t, REPORT_DATA_SIZE / 2> gy_be{};
-    if (BN_bn2binpad(x, gx_be.data(), gx_be.size()) !=
+    if (BN_bn2binpad(x.get(), gx_be.data(), gx_be.size()) !=
             static_cast<int>(gx_be.size()) ||
-        BN_bn2binpad(y, gy_be.data(), gy_be.size()) !=
+        BN_bn2binpad(y.get(), gy_be.data(), gy_be.size()) !=
             static_cast<int>(gy_be.size())) {
-        BN_CTX_free(ctx);
-        BN_free(x);
-        BN_free(y);
         throw std::runtime_error(
             "accless(att): failed serialising EC coordinates");
     }
@@ -70,10 +80,6 @@ std::array<uint8_t, REPORT_DATA_SIZE> EcKeyPair::getReportData() const {
         report[i] = gx_be[REPORT_DATA_SIZE / 2 - 1 - i];
         report[REPORT_DATA_SIZE / 2 + i] = gy_be[REPORT_DATA_SIZE / 2 - 1 - i];
     }
-
-    BN_CTX_free(ctx);
-    BN_free(x);
-    BN_free(y);
 
     return report;
 }
@@ -89,15 +95,11 @@ EcKeyPair::deriveSharedSecret(const std::vector<uint8_t> &serverPubKey) const {
         throw std::runtime_error("accless(att): EC group missing");
     }
 
-    BN_CTX *ctx = BN_CTX_new();
-    BIGNUM *x = BN_new();
-    BIGNUM *y = BN_new();
-    EC_POINT *point = EC_POINT_new(group);
+    BnCtxPtr ctx(BN_CTX_new());
+    BigNumPtr x(BN_new());
+    BigNumPtr y(BN_new());
+    EcPointPtr point(EC_POINT_new(group));
     if (ctx == nullptr || x == nullptr || y == nullptr || point == nullptr) {
-        BN_CTX_free(ctx);
-        BN_free(x);
-        BN_free(y);
-        EC_POINT_free(point);
         throw std::runtime_error("accless(att): failed allocating EC helpers");
     }
 
@@ -108,24 +110,16 @@ EcKeyPair::deriveSharedSecret(const std::vector<uint8_t> &serverPubKey) const {
         gy_be[i] = serverPubKey[REPORT_DATA_SIZE - 1 - i];
     }
 
-    if (BN_bin2bn(gx_be.data(), gx_be.size(), x) == nullptr ||
-        BN_bin2bn(gy_be.data(), gy_be.size(), y) == nullptr ||
-        EC_POINT_set_affine_coordinates(group, point, x, y, ctx) != 1) {
-        BN_CTX_free(ctx);
-        BN_free(x);
-        BN_free(y);
-        EC_POINT_free(point);
+    if (BN_bin2bn(gx_be.data(), gx_be.size(), x.get()) == nullptr ||
+        BN_bin2bn(gy_be.data(), gy_be.size(), y.get()) == nullptr ||
+        EC_POINT_set_affine_coordinates(group, point.get(), x.get(), y.get(),
+                                        ctx.get()) != 1) {
         throw std::runtime_error("accless(att): failed to set peer pub key");
     }
 
     std::vector<uint8_t> secret(REPORT_DATA_SIZE / 2);
-    int secretSize =
-        ECDH_compute_key(secret.data(), secret.size(), point, key_, nullptr);
-
-    BN_CTX_free(ctx);
-    BN_free(x);
-    BN_free(y);
-    EC_POINT_free(point);
+    int secretSize = ECDH_compute_key(secret.data(), secret.size(), point.get(),
+                                      key_, nullptr);
 
     if (secretSize <= 0) {
         throw std::runtime_error("accless(att): failed to derive shared key");
