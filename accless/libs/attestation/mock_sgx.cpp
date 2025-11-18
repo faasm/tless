@@ -6,6 +6,7 @@
 
 namespace accless::attestation::mock {
 
+constexpr size_t SGX_REPORT_DATA_SIZE = 64;
 const std::array<uint8_t, 8> MOCK_QUOTE_MAGIC_SGX = {'A', 'C', 'C', 'L',
                                                      'S', 'G', 'X', '!'};
 
@@ -14,7 +15,8 @@ std::string getMockSgxAttestationJwt() {
     accless::attestation::ec::EcKeyPair keyPair;
 
     // Embed EC keypair in empty (mocked) SGX quote.
-    auto reportData = keyPair.getReportData();
+    std::array<uint8_t, SGX_REPORT_DATA_SIZE> reportData =
+        keyPair.getReportData();
     std::vector<uint8_t> reportVec(reportData.begin(), reportData.end());
 
     // Populate the mocked quote.

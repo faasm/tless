@@ -11,29 +11,10 @@
 
 namespace accless::attestation {
 
-// We copy this structures from:
-// https://github.com/torvalds/linux/blob/master/include/uapi/linux/sev-guest.h#L80
-constexpr size_t SNP_REPORT_USER_DATA_SIZE = 64;
-constexpr size_t SNP_REPORT_RESP_SIZE = 4000;
-
-// FIXME: check if all of these are used
-constexpr size_t SGX_REPORT_DATA_SIZE = 64;
-constexpr size_t SNP_REPORT_DATA_SIZE = 64;
-constexpr size_t MOCK_QUOTE_HEADER_SIZE = 16;
-constexpr uint32_t MOCK_QUOTE_VERSION = 1;
+// FIXME(#44): eventually move this to an accless AES-GCM library.
 constexpr size_t AES_128_KEY_SIZE = 16;
 constexpr size_t AES_GCM_IV_SIZE = 12;
 constexpr size_t AES_GCM_TAG_SIZE = 16;
-
-struct snp_report_req {
-    uint8_t user_data[SNP_REPORT_USER_DATA_SIZE];
-    uint32_t vmpl;
-    uint8_t rsvd[28];
-};
-
-struct snp_report_resp {
-    uint8_t data[SNP_REPORT_RESP_SIZE];
-};
 
 namespace utils {
 // Helper methods

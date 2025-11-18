@@ -197,7 +197,7 @@ std::string getAttestationJwt(const std::string &gid,
     accless::attestation::ec::EcKeyPair keyPair;
 
     // Get auxiliary report data: serialized public halve of the EC keypair.
-    std::array<uint8_t, SGX_REPORT_DATA_SIZE> reportData =
+    std::array<uint8_t, SNP_REPORT_USER_DATA_SIZE> reportData =
         keyPair.getReportData();
     std::vector<uint8_t> reportDataVec(reportData.begin(), reportData.end());
 
