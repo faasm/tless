@@ -1,15 +1,15 @@
 [package]
-name = "accless-jwt"
+name = "jwt"
 version.workspace = true
 license-file.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "JWT manipulation library"
+description = "JWT manipulation library for Accless"
 homepage.workspace = true
 build = "build.rs"
 
 [lib]
-name="accless_jwt"
+name="jwt"
 crate-type=["staticlib"]
 path = "src/lib.rs"
 
