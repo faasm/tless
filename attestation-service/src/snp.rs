@@ -184,8 +184,7 @@ pub async fn verify_snp_report(
         };
 
     let server_pub_key_le = ecdhe::sec1_pubkey_to_raw(&server_pub_key).unwrap();
-    // FIXME: probably URL_SAFE is better here
-    let server_pub_b64 = general_purpose::STANDARD.encode(server_pub_key_le);
+    let server_pub_b64 = general_purpose::URL_SAFE.encode(server_pub_key_le);
 
     debug!("encoding JWT with server's private key (for authenticity)");
     let claims = match JwtClaims::new(

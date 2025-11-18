@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint> // For uint8_t
+#include <cstdint>
 #include <string>
 #include <vector>
 

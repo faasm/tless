@@ -36,8 +36,10 @@ std::string getMockSgxAttestationJwt() {
                                                             "server_pubkey");
 
     // Decode response values.
-    std::vector<uint8_t> encrypted = accless::base64::decode(encryptedB64);
-    std::vector<uint8_t> serverPubKey = accless::base64::decode(serverKeyB64);
+    std::vector<uint8_t> encrypted =
+        accless::base64::decodeUrlSafe(encryptedB64);
+    std::vector<uint8_t> serverPubKey =
+        accless::base64::decodeUrlSafe(serverKeyB64);
 
     // Derive shared secret necessary to decrypt JWT.
     std::vector<uint8_t> sharedSecret =
