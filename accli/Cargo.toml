@@ -41,3 +41,7 @@ shell-words.workspace = true
 subtle.workspace = true
 tokio = { workspace = true, features = ["full"] }
 walkdir.workspace = true
+
+[build-dependencies]
+serde = { workspace = true }
+serde_json.workspace = true
