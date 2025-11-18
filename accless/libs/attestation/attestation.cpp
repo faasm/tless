@@ -102,7 +102,8 @@ std::pair<std::string, std::string> getAttestationServiceState() {
 
 // endpoint must be one in `/verify-snp-report` or `/verify-sgx-report`.
 // the report here is a JSON-string
-std::string getJwtFromReport(const std::string& endpoint, const std::string &reportJson) {
+std::string getJwtFromReport(const std::string &endpoint,
+                             const std::string &reportJson) {
     std::string jwt;
 
     CURL *curl = curl_easy_init();
@@ -118,15 +119,15 @@ std::string getJwtFromReport(const std::string& endpoint, const std::string &rep
     curl_easy_setopt(curl, CURLOPT_CAINFO, certPath.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, reportJson.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(reportJson.size()));
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
+                     static_cast<long>(reportJson.size()));
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &jwt);
 
     // TODO: set error-buffer in C++ format
 
     struct curl_slist *headers = nullptr;
-    headers =
-        curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "Content-Type: application/json");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
     // Perform the request

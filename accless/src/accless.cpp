@@ -92,7 +92,8 @@ static bool validHardwareAttestation(std::string &jwtStrOut) {
     std::string jwtStr(jwt);
 #else
     // FIXME: get the gid/wid/nid from the message somehow
-    std::string jwtStr = accless::attestation::snp::getAttestationJwt("gid", "wid", "nid");
+    std::string jwtStr =
+        accless::attestation::snp::getAttestationJwt("gid", "wid", "nid");
 #endif
 
 #ifdef ACCLESS_UBENCH

@@ -97,4 +97,4 @@ std::string postMockQuote(const std::string &url, const std::string &certPath,
     return response;
 }
 */
-} // namespace accless::attestation
+} // namespace accless::attestation::mock

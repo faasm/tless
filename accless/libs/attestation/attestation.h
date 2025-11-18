@@ -59,13 +59,13 @@ std::string buildRequestBody(const std::string &quoteB64,
                              const std::string &gid,
                              const std::string &workflowId,
                              const std::string &nodeId);
-} // namespace accless::attestation::utils
+} // namespace utils
 
 // Mock helpers used in integration tests.
 namespace mock {
 std::string getMockSgxAttestationJwt();
 std::string getMockSnpAttestationJwt();
-} // namespace accless::attestation::mock
+} // namespace mock
 
 // SNP-related methods
 namespace snp {
@@ -91,14 +91,17 @@ class Logger : public attest::AttestationLogger {
  * @param nodeId The node ID.
  * @return A JSON string representing the JWT.
  */
-std::string getAttestationJwt(const std::string& gid, const std::string& workflowId, const std::string& nodeId);
-} // namespace accless::attestation::snp
+std::string getAttestationJwt(const std::string &gid,
+                              const std::string &workflowId,
+                              const std::string &nodeId);
+} // namespace snp
 
 // Attestation-service methods
 std::string getAttestationServiceUrl();
 std::string getAttestationServiceCertPath();
 std::pair<std::string, std::string> getAttestationServiceState();
-std::string getJwtFromReport(const std::string& endpoint, const std::string& reportJson);
+std::string getJwtFromReport(const std::string &endpoint,
+                             const std::string &reportJson);
 std::string decryptJwt(const std::vector<uint8_t> &encrypted,
                        const std::vector<uint8_t> &aesKey);
 } // namespace accless::attestation

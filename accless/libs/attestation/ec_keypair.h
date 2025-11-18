@@ -24,10 +24,12 @@ class EcKeyPair {
      * exchange by derving a shared secret from the public counter-part of
      * another EC keypair.
      *
-     * @param otherPubKey The public key of the other part involved in the exchange.
+     * @param otherPubKey The public key of the other part involved in the
+     * exchange.
      * @return A byte-array with the shared secret.
      */
-    std::vector<uint8_t> deriveSharedSecret(const std::vector<uint8_t> &otherPubKey) const;
+    std::vector<uint8_t>
+    deriveSharedSecret(const std::vector<uint8_t> &otherPubKey) const;
 
     /**
      * @brief Generate the report data field for an extended attestation quote.

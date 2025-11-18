@@ -11,12 +11,12 @@
 #include <array>
 #include <fcntl.h>
 #include <filesystem>
+#include <iostream> // Added for std::cerr and std::endl
 #include <optional>
+#include <stdexcept> // Added for std::runtime_error
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <vector>
-#include <stdexcept> // Added for std::runtime_error
-#include <iostream>  // Added for std::cerr and std::endl
 
 using namespace attest;
 
@@ -176,8 +176,7 @@ getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> userData,
     return report;
 }
 
-std::vector<uint8_t>
-getReport(std::array<uint8_t, 64> reportData) {
+std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData) {
     if (std::filesystem::exists("/dev/sev-guest")) {
         return getSnpReportFromDev(reportData, std::nullopt);
     }
@@ -191,22 +190,23 @@ getReport(std::array<uint8_t, 64> reportData) {
     throw std::runtime_error("No known SNP device found!");
 }
 
-std::string getAttestationJwt(const std::string& gid,
-                              const std::string& workflowId,
-                              const std::string& nodeId)
-{
+std::string getAttestationJwt(const std::string &gid,
+                              const std::string &workflowId,
+                              const std::string &nodeId) {
     // Generate ephemeral EC keypair.
     accless::attestation::ec::EcKeyPair keyPair;
 
     // Get auxiliary report data: serialized public halve of the EC keypair.
-    std::array<uint8_t, SGX_REPORT_DATA_SIZE> reportData = keyPair.getReportData();
+    std::array<uint8_t, SGX_REPORT_DATA_SIZE> reportData =
+        keyPair.getReportData();
     std::vector<uint8_t> reportDataVec(reportData.begin(), reportData.end());
 
     // Fetch HW attestation report and include the auxiliary report data in
     // the signature.
     std::vector<uint8_t> report;
     if (gid == mock::MOCK_GID) {
-        report = accless::attestation::mock::buildMockQuote(reportDataVec, mock::MOCK_QUOTE_MAGIC_SNP);
+        report = accless::attestation::mock::buildMockQuote(
+            reportDataVec, mock::MOCK_QUOTE_MAGIC_SNP);
     } else {
         report = getReport(reportData);
     }
@@ -214,12 +214,18 @@ std::string getAttestationJwt(const std::string& gid,
     // Get the attestation service request body.
     std::string reportB64 = accless::base64::encodeUrlSafe(report);
     std::string runtimeDataB64 = accless::base64::encodeUrlSafe(reportDataVec);
-    std::string body = accless::attestation::utils::buildRequestBody(reportB64, runtimeDataB64, gid, workflowId, nodeId);
+    std::string body = accless::attestation::utils::buildRequestBody(
+        reportB64, runtimeDataB64, gid, workflowId, nodeId);
 
     // Send the request, and get the response back.
-    std::string response = accless::attestation::getJwtFromReport("/verify-snp-report", body);
-    std::string encryptedB64 = accless::attestation::utils::extractJsonStringField(response, "encrypted_token");
-    std::string serverKeyB64 = accless::attestation::utils::extractJsonStringField(response, "server_pubkey");
+    std::string response =
+        accless::attestation::getJwtFromReport("/verify-snp-report", body);
+    std::string encryptedB64 =
+        accless::attestation::utils::extractJsonStringField(response,
+                                                            "encrypted_token");
+    std::string serverKeyB64 =
+        accless::attestation::utils::extractJsonStringField(response,
+                                                            "server_pubkey");
 
     // Decode response values.
     // FIXME: do we need URL safe here?
@@ -227,7 +233,8 @@ std::string getAttestationJwt(const std::string& gid,
     std::vector<uint8_t> serverPubKey = accless::base64::decode(serverKeyB64);
 
     // Derive shared secret necessary to decrypt JWT.
-    std::vector<uint8_t> sharedSecret = keyPair.deriveSharedSecret(serverPubKey);
+    std::vector<uint8_t> sharedSecret =
+        keyPair.deriveSharedSecret(serverPubKey);
     if (sharedSecret.size() < AES_128_KEY_SIZE) {
         throw std::runtime_error("accless(att): derived secret too small");
     }

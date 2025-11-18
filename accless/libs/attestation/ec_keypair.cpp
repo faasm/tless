@@ -68,8 +68,7 @@ std::array<uint8_t, REPORT_DATA_SIZE> EcKeyPair::getReportData() const {
     std::array<uint8_t, REPORT_DATA_SIZE> report{};
     for (size_t i = 0; i < REPORT_DATA_SIZE / 2; i++) {
         report[i] = gx_be[REPORT_DATA_SIZE / 2 - 1 - i];
-        report[REPORT_DATA_SIZE / 2 + i] =
-            gy_be[REPORT_DATA_SIZE / 2 - 1 - i];
+        report[REPORT_DATA_SIZE / 2 + i] = gy_be[REPORT_DATA_SIZE / 2 - 1 - i];
     }
 
     BN_CTX_free(ctx);
@@ -120,8 +119,8 @@ EcKeyPair::deriveSharedSecret(const std::vector<uint8_t> &serverPubKey) const {
     }
 
     std::vector<uint8_t> secret(REPORT_DATA_SIZE / 2);
-    int secretSize = ECDH_compute_key(secret.data(), secret.size(), point,
-                                      key_, nullptr);
+    int secretSize =
+        ECDH_compute_key(secret.data(), secret.size(), point, key_, nullptr);
 
     BN_CTX_free(ctx);
     BN_free(x);

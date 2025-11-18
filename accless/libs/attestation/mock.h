@@ -16,4 +16,4 @@ const std::string MOCK_NODE_ID = "bar";
 
 std::vector<uint8_t> buildMockQuote(const std::vector<uint8_t> &reportData,
                                     const std::array<uint8_t, 8> &magic);
-} // namespace accless::attestation
+} // namespace accless::attestation::mock
