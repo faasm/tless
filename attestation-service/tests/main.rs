@@ -64,6 +64,20 @@ fn get_att_client_sgx_path_in_ctr() -> Result<PathBuf> {
 
 /// # Description
 ///
+/// Get the path of SNP's attestation client from _inside_ the docker container.
+fn get_att_client_snp_path_in_ctr() -> Result<PathBuf> {
+    let path = PathBuf::from(DOCKER_ACCLESS_CODE_MOUNT_DIR)
+        .join("applications")
+        .join("build-native")
+        .join("test")
+        .join("att-client-snp")
+        .join("att-client-snp");
+
+    Ok(path)
+}
+
+/// # Description
+///
 /// Remap an absolute path the host to the mounted container.
 pub fn remap_host_path_to_container(host_path: &Path) -> Result<PathBuf> {
     let prefix = Path::new(env!("ACCLESS_ROOT_DIR"));
@@ -113,7 +127,7 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 /// the latter with `accli applications build test`
 #[tokio::test]
 #[serial]
-async fn test_att_client_sgx() -> Result<()> {
+async fn test_att_clients() -> Result<()> {
     attestation_service::init_logging(true);
 
     let certs_dir = Path::new(env!("ACCLESS_ROOT_DIR"))
@@ -133,7 +147,7 @@ async fn test_att_client_sgx() -> Result<()> {
     // _inside_ the container, as application build happens inside the
     // container. We also _must_ set the `clean` flag to true, to force
     // recompilation.
-    info!("re-building mock sgx-client with new certificates, this will take a while...");
+    info!("re-building mock clients with new certificates, this will take a while...");
     Applications::build(true, false, cert_path.to_str(), true)?;
 
     // Health-check the attestation service.
@@ -142,8 +156,9 @@ async fn test_att_client_sgx() -> Result<()> {
         .build()?;
     health_check(&client).await?;
 
-    // Run the client application inside the container.
+    // Run the client applications inside the container.
     let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
+    let att_client_snp_path = get_att_client_snp_path_in_ctr()?;
     let env_vars = [
         "ACCLESS_AS_URL=https://127.0.0.1:8443".to_string(),
         format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()),
@@ -152,6 +167,16 @@ async fn test_att_client_sgx() -> Result<()> {
     info!("running mock sgx client...");
     Docker::run(
         &[att_client_sgx_path.display().to_string()],
+        true,
+        None,
+        &env_vars,
+        true,
+        false,
+    )?;
+
+    info!("running mock snp client...");
+    Docker::run(
+        &[att_client_snp_path.display().to_string()],
         true,
         None,
         &env_vars,

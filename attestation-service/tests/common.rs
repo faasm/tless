@@ -5,7 +5,7 @@ use std::{
 };
 use tokio::process::{Child, Command};
 
-pub fn spawn_as(certs_dir: &str, clean_certs: bool, mock_sgx: bool) -> Result<Child> {
+pub fn spawn_as(certs_dir: &str, clean_certs: bool, mock: bool) -> Result<Child> {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_attestation-service"));
     cmd.arg("--certs-dir")
         .arg(certs_dir)
@@ -16,8 +16,8 @@ pub fn spawn_as(certs_dir: &str, clean_certs: bool, mock_sgx: bool) -> Result<Ch
         cmd.arg("--force-clean-certs");
     }
 
-    if mock_sgx {
-        cmd.arg("--mock-sgx");
+    if mock {
+        cmd.arg("--mock");
     }
 
     Ok(cmd.spawn()?)

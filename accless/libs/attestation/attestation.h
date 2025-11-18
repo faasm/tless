@@ -11,34 +11,45 @@
 
 namespace accless::attestation {
 
-// We copy this structures from:
-// https://github.com/torvalds/linux/blob/master/include/uapi/linux/sev-guest.h#L80
-constexpr size_t SNP_REPORT_USER_DATA_SIZE = 64;
-constexpr size_t SNP_REPORT_RESP_SIZE = 4000;
+// FIXME(#44): eventually move this to an accless AES-GCM library.
+constexpr size_t AES_128_KEY_SIZE = 16;
+constexpr size_t AES_GCM_IV_SIZE = 12;
+constexpr size_t AES_GCM_TAG_SIZE = 16;
 
-struct snp_report_req {
-    uint8_t user_data[SNP_REPORT_USER_DATA_SIZE];
-    uint32_t vmpl;
-    uint8_t rsvd[28];
-};
+namespace utils {
+// Helper methods
+std::string extractJsonStringField(const std::string &json,
+                                   const std::string &field);
 
-struct snp_report_resp {
-    uint8_t data[SNP_REPORT_RESP_SIZE];
-};
+/**
+ * @brief Builds a JSON request body for attestation.
+ *
+ * This function constructs a JSON request body containing attestation-related
+ * data, including a base64-encoded quote, runtime data, and node-specific
+ * identifiers.
+ *
+ * @param quoteB64 The base64-encoded attestation quote.
+ * @param runtimeB64 The base64-encoded runtime data.
+ * @param gid The group ID of the node.
+ * @param workflowId The workflow ID of the node.
+ * @param nodeId The node ID.
+ * @return A JSON string representing the request body.
+ */
+std::string buildRequestBody(const std::string &quoteB64,
+                             const std::string &runtimeB64,
+                             const std::string &gid,
+                             const std::string &workflowId,
+                             const std::string &nodeId);
+} // namespace utils
 
-struct snp_guest_request_ioctl {
-    uint8_t msg_version;
-    uint64_t req_data;
-    uint64_t resp_data;
-    union {
-        uint64_t exitinfo2;
-        struct {
-            uint32_t fw_error;
-            uint32_t vmm_error;
-        };
-    };
-};
+// Mock helpers used in integration tests.
+namespace mock {
+std::string getMockSgxAttestationJwt();
+std::string getMockSnpAttestationJwt();
+} // namespace mock
 
+// SNP-related methods
+namespace snp {
 // Utility methods
 class Logger : public attest::AttestationLogger {
   public:
@@ -46,29 +57,32 @@ class Logger : public attest::AttestationLogger {
              const char *function, const int line, const char *fmt, ...);
 };
 
-// vTPM-related methods
-std::vector<uint8_t> getSnpReportFromTPM();
-void tpmRenewAkCert();
-
-// SNP-related methods
-std::vector<uint8_t>
-getSnpReportFromDev(std::optional<std::array<uint8_t, 64>> reportData,
-                    std::optional<uint32_t> vmpl);
-
-// Main entrypoint method to get SNP report
-std::vector<uint8_t>
-getSnpReport(std::optional<std::array<uint8_t, 64>> reportData);
+/**
+ * @brief Gets an attestation JWT for an SNP cVM.
+ *
+ * This function is the main entrypoint to run the attribute-minting protocol
+ * for an SNP cVM. When called iniside an SNP cVM, this function will fetch
+ * the hardware attestation report, generate an ephemeral keypair, and
+ * initiate a remote attestation protocol with the attestation service. If
+ * succesful, it will receive a key corresponding to the user, workflow and
+ * node ids provided as arguments.
+ *
+ * @param gid The unique ID of the end-user.
+ * @param workflowId The workflow ID of the node.
+ * @param nodeId The node ID.
+ * @return A JSON string representing the JWT.
+ */
+std::string getAttestationJwt(const std::string &gid,
+                              const std::string &workflowId,
+                              const std::string &nodeId);
+} // namespace snp
 
 // Attestation-service methods
 std::string getAttestationServiceUrl();
 std::string getAttestationServiceCertPath();
-std::string asGetJwtFromReport(const std::vector<uint8_t> &snpReport);
-
-// SGX mock helpers used in integration tests
-std::string getMockSgxAttestationJwt();
 std::pair<std::string, std::string> getAttestationServiceState();
-
-// Helper methods
-std::string extractJsonStringField(const std::string &json,
-                                   const std::string &field);
+std::string getJwtFromReport(const std::string &endpoint,
+                             const std::string &reportJson);
+std::string decryptJwt(const std::vector<uint8_t> &encrypted,
+                       const std::vector<uint8_t> &aesKey);
 } // namespace accless::attestation

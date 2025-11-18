@@ -18,7 +18,12 @@ set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
 
 add_library(${CMAKE_PROJECT_TARGET}
     attestation.cpp
+    ec_keypair.cpp
+    mock.cpp
     mock_sgx.cpp
+    mock_snp.cpp
+    utils.cpp
+    snp.cpp
 )
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
     azguestattestation
@@ -33,7 +38,7 @@ target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
     ${CURL_INCLUDE_DIR}
     ${ACCLESS_ROOT}/libs/base64
 )
-# Silence OpenSSL deprecation warnings in mock_sgx.cpp
+# FIXME(#52): move OpenSSL usage to 3.X API.
 target_compile_definitions(attestation PRIVATE OPENSSL_API_COMPAT=0x10100000L)
 
 add_library(accless::attestation ALIAS ${CMAKE_PROJECT_TARGET})
