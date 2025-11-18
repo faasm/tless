@@ -52,7 +52,7 @@ TEST(Base64UrlSafeTest, EncodeDecodeUrlSafeSimple) {
 TEST(Base64UrlSafeTest, EncodeDecodeUrlSafeWithSpecialChars) {
     std::vector<uint8_t> input = {0xfb, 0xff, 0xbf};
     std::string encoded = accless::base64::encodeUrlSafe(input);
-    EXPECT_EQ(encoded, "-__v");
+    EXPECT_EQ(encoded, "-_-_");
     std::vector<uint8_t> decoded = accless::base64::decodeUrlSafe(encoded);
     EXPECT_EQ(decoded, input);
 }
