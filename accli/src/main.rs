@@ -292,10 +292,13 @@ enum AcclessCommand {
 enum ApplicationsCommand {
     /// Build the Accless applications
     Build {
+        /// Force a clean build.
         #[arg(long)]
         clean: bool,
+        /// Force a debug build.
         #[arg(long)]
         debug: bool,
+        /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
         cert_path: Option<String>,
     },
