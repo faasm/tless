@@ -1,15 +1,15 @@
-#include "accless.h"
-#include "base64.h"
-#include "dag.h"
-#include "jwt.h"
-#include "utils.h"
+#include "accless/accless.h"
+#include "accless/base64/base64.h"
+#include "accless/dag.h"
+#include "accless/jwt/jwt.h"
+#include "accless/utils.h"
 
 #ifdef __faasm
 // Faasm includes
 #include <faasm/core.h>
 #else
-#include "attestation/attestation.h"
-#include "s3/S3Wrapper.hpp"
+#include "accless/attestation/attestation.h"
+#include "accless/s3/S3Wrapper.hpp"
 #endif
 
 #include <iostream>

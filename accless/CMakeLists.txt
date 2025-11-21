@@ -65,12 +65,24 @@ add_subdirectory(./libs/jwt/cpp-bindings)
 add_subdirectory(./libs/abe4/cpp-bindings)
 add_subdirectory(./libs/base64)
 
-set(ACCLESS_COMMON_HEADERS
-    ${ACCLESS_ROOT}/include
-    ${ACCLESS_ROOT}/libs/jwt/cpp-bindings
-    ${ACCLESS_ROOT}/libs/abe4/cpp-bindings
-    ${ACCLESS_ROOT}/libs/base64
-)
+# Create a directory for namespaced headers. This allows including accless
+# headers with a namespace prefix, e.g. #include "accless/attestation/attestation.h"
+set(ACCLESS_INCLUDE_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/include_prefix)
+set(ACCLESS_INCLUDE_PREFIX_DIR ${ACCLESS_INCLUDE_PREFIX_DIR} PARENT_SCOPE)
+if (EXISTS ${ACCLESS_INCLUDE_PREFIX_DIR})
+    file(REMOVE_RECURSE ${ACCLESS_INCLUDE_PREFIX_DIR})
+endif()
+file(MAKE_DIRECTORY ${ACCLESS_INCLUDE_PREFIX_DIR}/accless)
+# Create symlinks for common libraries
+set(ACCLESS_LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
+file(CREATE_LINK ${ACCLESS_LIBS_DIR}/jwt/cpp-bindings ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/jwt SYMBOLIC)
+file(CREATE_LINK ${ACCLESS_LIBS_DIR}/abe4/cpp-bindings ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/abe4 SYMBOLIC)
+file(CREATE_LINK ${ACCLESS_LIBS_DIR}/base64 ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/base64 SYMBOLIC)
+# Symlink individual headers from accless/include
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/include/accless.h ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/accless.h SYMBOLIC)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/include/dag.h ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/dag.h SYMBOLIC)
+file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/include/utils.h ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/utils.h SYMBOLIC)
+
 set(ACCLESS_COMMON_LIBRARIES accless::jwt accless::abe4 accless::base64)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
@@ -96,18 +108,20 @@ else ()
     add_subdirectory(./libs/attestation)
     add_subdirectory(./libs/s3)
 
+    # Create symlinks for native-only libraries
+    file(CREATE_LINK ${ACCLESS_LIBS_DIR}/attestation ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/attestation SYMBOLIC)
+    file(CREATE_LINK ${ACCLESS_LIBS_DIR}/s3 ${ACCLESS_INCLUDE_PREFIX_DIR}/accless/s3 SYMBOLIC)
+
     set(ACCLESS_LIBRARIES
         accless::s3
         accless::attestation
         # We use the installed curl as part of azure-cvm-attestation
         /usr/local/attestationcurl/lib/libcurl.a
     )
-    set(ACCLESS_HEADERS ${ACCLESS_ROOT}/libs)
 endif()
 
 target_include_directories(${CMAKE_PROJECT_TARGET} PUBLIC
-    ${ACCLESS_COMMON_HEADERS}
-    ${ACCLESS_HEADERS}
+    ${ACCLESS_INCLUDE_PREFIX_DIR}
 )
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
     ${ACCLESS_COMMON_LIBRARIES}
