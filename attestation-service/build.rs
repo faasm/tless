@@ -1,11 +1,10 @@
+//! This build.rs file parses cargo's metadata and exposes an environment
+//! variable that can be consumed in the attestation-service to get the absolute
+//! path to the workspace root, independently on whether the attestation-service
+//! is being invoked as an individual package or from the workspace itself.
+
 use serde::Deserialize;
 use std::{env, process::Command};
-
-/// ! This build.rs file parses cargo's metadata and exposes an environment
-/// variable that can be ! consumed in the attestation-service to get the
-/// absolute path to the workspace root, ! independently on whether the
-/// attestation-service is being invoked as an individual package or ! from the
-/// workspace itself.
 
 // A minimal struct to deserialize only the `workspace_root` field
 #[derive(Deserialize)]
