@@ -6,9 +6,8 @@ use crate::{
         azure::Azure,
         dev::Dev,
         docker::{Docker, DockerContainer},
-        eval::{Eval, EvalExperiment, EvalRunArgs},
+        experiments::{E2eSubScommand, Experiment, UbenchSubCommand},
         s3::S3,
-        ubench::{MicroBenchmarks, Ubench, UbenchRunArgs},
     },
 };
 use clap::{Parser, Subcommand};
@@ -40,6 +39,11 @@ enum Command {
         #[command(subcommand)]
         applications_command: ApplicationsCommand,
     },
+    /// Provision SGX or SNP capable VMs on Azure
+    Azure {
+        #[command(subcommand)]
+        az_command: AzureCommand,
+    },
     /// Development-related tasks
     Dev {
         #[command(subcommand)]
@@ -51,24 +55,14 @@ enum Command {
         docker_command: DockerCommand,
     },
     /// Run evaluation experiments and plot results
-    Eval {
+    Experiment {
         #[command(subcommand)]
-        eval_command: EvalCommand,
-    },
-    /// Run microbenchmark
-    Ubench {
-        #[command(subcommand)]
-        ubench_command: UbenchCommand,
+        experiments_command: Experiment,
     },
     /// Interact with an S3 (MinIO server)
     S3 {
         #[command(subcommand)]
         s3_command: S3Command,
-    },
-    /// Provision SGX or SNP capable VMs on Azure
-    Azure {
-        #[command(subcommand)]
-        az_command: AzureCommand,
     },
 }
 
@@ -151,67 +145,6 @@ enum DockerCommand {
         #[arg(long)]
         capture_output: bool,
     },
-}
-
-#[derive(Debug, Subcommand)]
-enum EvalSubCommand {
-    /// Run
-    Run(EvalRunArgs),
-    /// Plot
-    Plot {},
-    UploadState {
-        /// Whereas we are using S3 with 'faasm' or 'knative'
-        system: String,
-    },
-    UploadWasm {},
-}
-
-#[derive(Debug, Subcommand)]
-enum EvalCommand {
-    /// Measure the CDF of cold-starts with or w/out our access control
-    ColdStart {
-        #[command(subcommand)]
-        eval_sub_command: EvalSubCommand,
-    },
-    /// Evaluate end-to-end execution latency for different workflows
-    E2eLatency {
-        #[command(subcommand)]
-        eval_sub_command: EvalSubCommand,
-    },
-    /// Evaluate end-to-end execution latency (cold) for different workflows
-    E2eLatencyCold {
-        #[command(subcommand)]
-        eval_sub_command: EvalSubCommand,
-    },
-    /// Evaluate the latency when scaling-up the number of functions in the
-    /// workflow
-    ScaleUpLatency {
-        #[command(subcommand)]
-        eval_sub_command: EvalSubCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum UbenchCommand {
-    /// Measure the cost per user of different configurations
-    EscrowCost {
-        #[command(subcommand)]
-        ubench_sub_command: UbenchSubCommand,
-    },
-    /// Measure the throughput of the trusted escrow as we increase the number
-    /// of parallel authorization requests
-    EscrowXput {
-        #[command(subcommand)]
-        ubench_sub_command: UbenchSubCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum UbenchSubCommand {
-    /// Run
-    Run(UbenchRunArgs),
-    /// Plot
-    Plot {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -453,79 +386,33 @@ async fn main() -> anyhow::Result<()> {
                 Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
             }
         },
-        Command::Eval { eval_command } => match eval_command {
-            EvalCommand::ColdStart { eval_sub_command } => match eval_sub_command {
-                EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::ColdStart, run_args).await?;
+        Command::Experiment {
+            experiments_command: exp,
+        } => match exp {
+            Experiment::ColdStart { eval_sub_command }
+            | Experiment::E2eLatency { eval_sub_command }
+            | Experiment::E2eLatencyCold { eval_sub_command }
+            | Experiment::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
+                E2eSubScommand::Run(run_args) => {
+                    tasks::experiments::e2e::run(exp, run_args).await?;
                 }
-                EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::ColdStart)?;
+                E2eSubScommand::Plot {} => {
+                    tasks::experiments::plot::plot(exp)?;
                 }
-                EvalSubCommand::UploadState { system } => {
-                    Eval::upload_state(&EvalExperiment::ColdStart, system).await?;
+                E2eSubScommand::UploadState { system } => {
+                    tasks::experiments::e2e::upload_state(exp, system).await?;
                 }
-                EvalSubCommand::UploadWasm {} => {
-                    Eval::upload_wasm(&EvalExperiment::ColdStart)?;
-                }
-            },
-            EvalCommand::E2eLatency { eval_sub_command } => match eval_sub_command {
-                EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatency, run_args).await?;
-                }
-                EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatency)?;
-                }
-                EvalSubCommand::UploadState { system } => {
-                    Eval::upload_state(&EvalExperiment::E2eLatency, system).await?;
-                }
-                EvalSubCommand::UploadWasm {} => {
-                    Eval::upload_wasm(&EvalExperiment::E2eLatency)?;
+                E2eSubScommand::UploadWasm {} => {
+                    tasks::experiments::e2e::upload_wasm(exp)?;
                 }
             },
-            EvalCommand::E2eLatencyCold { eval_sub_command } => match eval_sub_command {
-                EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::E2eLatencyCold, run_args).await?;
-                }
-                EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::E2eLatencyCold)?;
-                }
-                EvalSubCommand::UploadState { system } => {
-                    Eval::upload_state(&EvalExperiment::E2eLatencyCold, system).await?;
-                }
-                EvalSubCommand::UploadWasm {} => {
-                    Eval::upload_wasm(&EvalExperiment::E2eLatencyCold)?;
-                }
-            },
-            EvalCommand::ScaleUpLatency { eval_sub_command } => match eval_sub_command {
-                EvalSubCommand::Run(run_args) => {
-                    Eval::run(&EvalExperiment::ScaleUpLatency, run_args).await?;
-                }
-                EvalSubCommand::Plot {} => {
-                    Eval::plot(&EvalExperiment::ScaleUpLatency)?;
-                }
-                EvalSubCommand::UploadState { system } => {
-                    Eval::upload_state(&EvalExperiment::ScaleUpLatency, system).await?;
-                }
-                EvalSubCommand::UploadWasm {} => {
-                    Eval::upload_wasm(&EvalExperiment::ScaleUpLatency)?;
-                }
-            },
-        },
-        Command::Ubench { ubench_command } => match ubench_command {
-            UbenchCommand::EscrowCost { ubench_sub_command } => match ubench_sub_command {
+            Experiment::EscrowCost { ubench_sub_command }
+            | Experiment::EscrowXput { ubench_sub_command } => match ubench_sub_command {
                 UbenchSubCommand::Run(run_args) => {
-                    Ubench::run(&MicroBenchmarks::EscrowCost, run_args).await;
+                    tasks::experiments::ubench::run(exp, run_args).await?;
                 }
                 UbenchSubCommand::Plot {} => {
-                    Ubench::plot(&MicroBenchmarks::EscrowCost);
-                }
-            },
-            UbenchCommand::EscrowXput { ubench_sub_command } => match ubench_sub_command {
-                UbenchSubCommand::Run(run_args) => {
-                    Ubench::run(&MicroBenchmarks::EscrowXput, run_args).await;
-                }
-                UbenchSubCommand::Plot {} => {
-                    Ubench::plot(&MicroBenchmarks::EscrowXput);
+                    tasks::experiments::plot::plot(exp)?;
                 }
             },
         },

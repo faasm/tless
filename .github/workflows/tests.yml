@@ -39,7 +39,12 @@ jobs:
       - name: "Run Rust unit tests"
         run: |
           source ./scripts/workon.sh
-          cargo test
+          # The integration tests part of the attestation-service use custom
+          # C++ applications that require a clean rebuild of some rust
+          # libraries. The clean build wipes out other test targets, so we
+          # must execute it in isolation.
+          cargo test --workspace --exclude attestation-service
+          cargo test -p attestation-service
 
   cpp-unit-tests:
     if: github.event.pull_request.draft == false

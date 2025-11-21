@@ -1,7 +1,7 @@
 //! This build.rs file parses cargo's metadata and exposes an environment
-//! variable that can be consumed in the attestation-service to get the absolute
-//! path to the workspace root, independently on whether the attestation-service
-//! is being invoked as an individual package or from the workspace itself.
+//! variable that can be consumend in the accli crate to get the absolute path
+//! of the workspace root, independently on whether the project is being invoked
+//! as an individual package or from the workspace itself.
 
 use serde::Deserialize;
 use std::{env, process::Command};

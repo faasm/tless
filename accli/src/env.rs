@@ -12,8 +12,7 @@ impl Env {
     pub const SYS_NAME: &'static str = "invrs";
 
     pub fn proj_root() -> PathBuf {
-        let cargo_root: PathBuf = env!("CARGO_MANIFEST_DIR").into();
-        cargo_root.parent().unwrap().to_path_buf()
+        env!("ACCLESS_ROOT_DIR").into()
     }
 
     pub fn ansible_root() -> PathBuf {
@@ -27,6 +26,12 @@ impl Env {
         let mut path = Self::proj_root();
         path.push("config");
         path.push("docker");
+        path
+    }
+
+    pub fn experiments_root() -> PathBuf {
+        let mut path = Self::proj_root();
+        path.push("experiments");
         path
     }
 

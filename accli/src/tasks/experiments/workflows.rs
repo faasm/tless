@@ -4,45 +4,45 @@ use log::debug;
 use std::{env, fmt, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ValueEnum)]
-pub enum AvailableWorkflow {
+pub enum Workflow {
     Finra,
     MlTraining,
     MlInference,
     WordCount,
 }
 
-impl fmt::Display for AvailableWorkflow {
+impl fmt::Display for Workflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AvailableWorkflow::Finra => write!(f, "finra"),
-            AvailableWorkflow::MlTraining => write!(f, "ml-training"),
-            AvailableWorkflow::MlInference => write!(f, "ml-inference"),
-            AvailableWorkflow::WordCount => write!(f, "word-count"),
+            Workflow::Finra => write!(f, "finra"),
+            Workflow::MlTraining => write!(f, "ml-training"),
+            Workflow::MlInference => write!(f, "ml-inference"),
+            Workflow::WordCount => write!(f, "word-count"),
         }
     }
 }
 
-impl FromStr for AvailableWorkflow {
+impl FromStr for Workflow {
     type Err = ();
 
-    fn from_str(input: &str) -> Result<AvailableWorkflow, Self::Err> {
+    fn from_str(input: &str) -> Result<Workflow, Self::Err> {
         match input {
-            "finra" => Ok(AvailableWorkflow::Finra),
-            "ml-inference" => Ok(AvailableWorkflow::MlInference),
-            "ml-training" => Ok(AvailableWorkflow::MlTraining),
-            "word-count" => Ok(AvailableWorkflow::WordCount),
+            "finra" => Ok(Workflow::Finra),
+            "ml-inference" => Ok(Workflow::MlInference),
+            "ml-training" => Ok(Workflow::MlTraining),
+            "word-count" => Ok(Workflow::WordCount),
             _ => Err(()),
         }
     }
 }
 
-impl AvailableWorkflow {
-    pub fn iter_variants() -> std::slice::Iter<'static, AvailableWorkflow> {
-        static VARIANTS: [AvailableWorkflow; 4] = [
-            AvailableWorkflow::Finra,
-            AvailableWorkflow::MlTraining,
-            AvailableWorkflow::MlInference,
-            AvailableWorkflow::WordCount,
+impl Workflow {
+    pub fn iter_variants() -> std::slice::Iter<'static, Workflow> {
+        static VARIANTS: [Workflow; 4] = [
+            Workflow::Finra,
+            Workflow::MlTraining,
+            Workflow::MlInference,
+            Workflow::WordCount,
         ];
         VARIANTS.iter()
     }
@@ -59,7 +59,7 @@ impl Workflows {
     }
 
     pub async fn upload_workflow_state(
-        workflow: &AvailableWorkflow,
+        workflow: &Workflow,
         bucket_name: &str,
         clean: bool,
         dag_only: bool,
@@ -85,7 +85,7 @@ impl Workflows {
 
         // Then, upload the respective state
         match workflow {
-            AvailableWorkflow::Finra => {
+            Workflow::Finra => {
                 debug!("foo");
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
@@ -94,7 +94,7 @@ impl Workflows {
                 S3::upload_file(bucket_name, host_path.to_str().unwrap(), &s3_path).await;
                 debug!("bar");
             }
-            AvailableWorkflow::MlTraining => {
+            Workflow::MlTraining => {
                 // We upload both datasets until we decide which one to use
                 for dataset in ["mnist-images-2k", "mnist-images-10k"] {
                     let mut host_path = S3::get_datasets_root();
@@ -108,7 +108,7 @@ impl Workflows {
                     .await;
                 }
             }
-            AvailableWorkflow::MlInference => {
+            Workflow::MlInference => {
                 for dataset in ["images-inference-1k", "model"] {
                     let mut host_path = S3::get_datasets_root();
                     host_path.push(format!("{workflow}"));
@@ -121,7 +121,7 @@ impl Workflows {
                     .await;
                 }
             }
-            AvailableWorkflow::WordCount => {
+            Workflow::WordCount => {
                 let mut host_path = S3::get_datasets_root();
                 host_path.push(format!("{workflow}"));
                 host_path.push("fewer-files");
@@ -147,24 +147,22 @@ impl Workflows {
         }
 
         // Upload state for different workflows
-        for workflow in AvailableWorkflow::iter_variants() {
+        for workflow in Workflow::iter_variants() {
             Self::upload_workflow_state(workflow, bucket_name, clean, dag_only).await?;
         }
 
         Ok(())
     }
 
-    pub fn get_faasm_cmdline(workflow: &AvailableWorkflow) -> &str {
+    pub fn get_faasm_cmdline(workflow: &Workflow) -> &str {
         match workflow {
-            AvailableWorkflow::Finra => "finra/yfinance.csv 20",
+            Workflow::Finra => "finra/yfinance.csv 20",
             // ML Training workflow with SGX on mnist-10k takes ~30'
-            // AvailableWorkflow::MlTraining => "ml-training/mnist-images-10k 4 8",
-            AvailableWorkflow::MlTraining => "ml-training/mnist-images-2k 2 8",
+            // Workflow::MlTraining => "ml-training/mnist-images-10k 4 8",
+            Workflow::MlTraining => "ml-training/mnist-images-2k 2 8",
             // ML Inference relies on the model outputed by ML Training
-            AvailableWorkflow::MlInference => {
-                "ml-inference/model ml-inference/images-inference-1k 16"
-            }
-            AvailableWorkflow::WordCount => "word-count/few-files",
+            Workflow::MlInference => "ml-inference/model ml-inference/images-inference-1k 16",
+            Workflow::WordCount => "word-count/few-files",
         }
     }
 }
