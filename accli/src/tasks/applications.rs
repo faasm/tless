@@ -18,18 +18,28 @@ impl Applications {
         if debug {
             cmd.push("--debug".to_string());
         }
-        if let Some(cert_path) = cert_path {
+        if let Some(cert_path_str) = cert_path {
+            let cert_path = Path::new(cert_path_str);
+            if !cert_path.exists() {
+                anyhow::bail!("Certificate path does not exist: {}", cert_path.display());
+            }
+            if !cert_path.is_file() {
+                anyhow::bail!("Certificate path is not a file: {}", cert_path.display());
+            }
+            let docker_cert_path = Docker::get_docker_path(cert_path)?;
             cmd.push("--cert-path".to_string());
-            cmd.push(cert_path.to_string());
+            let docker_cert_path_str = docker_cert_path.to_str().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Docker path for certificate is not valid UTF-8: {}",
+                    docker_cert_path.display()
+                )
+            })?;
+            cmd.push(docker_cert_path_str.to_string());
         }
         let workdir = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join("applications");
-        Docker::run(
-            &cmd,
-            true,
-            Some(workdir.to_str().unwrap()),
-            &[],
-            false,
-            capture_output,
-        )
+        let workdir_str = workdir.to_str().ok_or_else(|| {
+            anyhow::anyhow!("Workdir path is not valid UTF-8: {}", workdir.display())
+        })?;
+        Docker::run(&cmd, true, Some(workdir_str), &[], false, capture_output)
     }
 }

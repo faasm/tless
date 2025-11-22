@@ -3,6 +3,7 @@ use clap::ValueEnum;
 use log::error;
 use std::{
     fmt,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -49,6 +50,53 @@ pub const DOCKER_ACCLESS_CODE_MOUNT_DIR: &str = "/code/accless";
 
 impl Docker {
     const ACCLESS_DEV_CONTAINER_NAME: &'static str = "accless-dev";
+
+    /// # Description
+    ///
+    /// This function takes a path from the host filesystem and maps it to the
+    /// corresponding path inside the Docker container.
+    /// It first converts the `host_path` to an absolute path and canonicalizes
+    /// it. This process also verifies that the path exists.
+    /// Then, it checks if the path is within the project's root directory.
+    /// If it is, it strips the project root prefix and prepends the Docker
+    /// mount directory path (`/code/accless`).
+    ///
+    /// # Arguments
+    ///
+    /// * `host_path` - A reference to a `Path` on the host filesystem. It can
+    ///   be either an absolute path or a path relative to the current working
+    ///   directory.
+    ///
+    /// # Returns
+    ///
+    /// A `anyhow::Result<PathBuf>` which is:
+    /// - `Ok(PathBuf)`: The mapped path inside the Docker container.
+    /// - `Err(anyhow::Error)`: An error if:
+    ///   - The path does not exist or cannot be canonicalized.
+    ///   - The path is outside the project's root directory.
+    pub fn get_docker_path(host_path: &Path) -> anyhow::Result<PathBuf> {
+        let absolute_host_path = if host_path.is_absolute() {
+            host_path.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(host_path)
+        };
+        let absolute_host_path = absolute_host_path.canonicalize().map_err(|e| {
+            anyhow::anyhow!("Error canonicalizing path {}: {}", host_path.display(), e)
+        })?;
+
+        let proj_root = Env::proj_root();
+        if absolute_host_path.starts_with(&proj_root) {
+            let relative_path = absolute_host_path.strip_prefix(&proj_root).unwrap();
+            let docker_path = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join(relative_path);
+            Ok(docker_path)
+        } else {
+            anyhow::bail!(
+                "Path {} is outside the project root directory {}",
+                absolute_host_path.display(),
+                proj_root.display()
+            );
+        }
+    }
 
     pub fn get_docker_tag(ctr: &DockerContainer) -> String {
         // Prepare image tag

@@ -209,7 +209,14 @@ impl Dev {
         }
 
         fn is_excluded(entry: &walkdir::DirEntry) -> bool {
-            let excluded_dirs = ["build-wasm", "build-native", "target", "venv", "venv-bm"];
+            let excluded_dirs = [
+                "build-wasm",
+                "build-native",
+                "output",
+                "target",
+                "venv",
+                "venv-bm",
+            ];
             entry.file_type().is_dir()
                 && entry
                     .file_name()
@@ -218,7 +225,7 @@ impl Dev {
                     .unwrap_or(false)
         }
 
-        for entry in walkdir::WalkDir::new(".")
+        for entry in walkdir::WalkDir::new(Env::proj_root())
             .into_iter()
             .filter_entry(|e| !is_excluded(e))
             .filter_map(Result::ok)
