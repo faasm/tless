@@ -268,6 +268,10 @@ impl Docker {
             run_cmd.arg("--network").arg("host");
         }
 
+        if Path::new("/dev/sev-guest").exists() {
+            run_cmd.arg("--device=/dev/sev-guest");
+        }
+
         if mount {
             run_cmd
                 .arg("-v")
