@@ -1,5 +1,6 @@
 pub mod accless;
 pub mod applications;
+pub mod attestation_service;
 pub mod azure;
 pub mod dev;
 pub mod docker;

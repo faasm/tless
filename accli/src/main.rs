@@ -3,6 +3,7 @@ use crate::{
     tasks::{
         accless::Accless,
         applications::Applications,
+        attestation_service::AttestationService,
         azure::Azure,
         dev::Dev,
         docker::{Docker, DockerContainer},
@@ -11,7 +12,7 @@ use crate::{
     },
 };
 use clap::{Parser, Subcommand};
-use std::{collections::HashMap, process};
+use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
 pub mod env;
@@ -63,6 +64,44 @@ enum Command {
     S3 {
         #[command(subcommand)]
         s3_command: S3Command,
+    },
+    /// Build and run the attestation service
+    AttestationService {
+        #[command(subcommand)]
+        attestation_service_command: AttestationServiceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AttestationServiceCommand {
+    /// Build the attestation service
+    Build {},
+    /// Run the attestation service
+    Run {
+        /// Directory where to look-for and store TLS certificates.
+        #[arg(long)]
+        certs_dir: Option<PathBuf>,
+        /// Port to bind the server to.
+        #[arg(long)]
+        port: Option<u16>,
+        /// URL to fetch SGX platform collateral information.
+        #[arg(long)]
+        sgx_pccs_url: Option<PathBuf>,
+        /// Whether to overwrite the existing TLS certificates (if any).
+        #[arg(long)]
+        force_clean_certs: bool,
+        /// Run the attestation service in mock mode, skipping quote
+        /// verification.
+        #[arg(long, default_value_t = false)]
+        mock: bool,
+    },
+    Health {
+        /// URL of the attestation service
+        #[arg(long)]
+        url: Option<String>,
+        /// Path to the attestation service's public certificate PEM file
+        #[arg(long)]
+        cert_path: Option<PathBuf>,
     },
 }
 
@@ -759,6 +798,31 @@ async fn main() -> anyhow::Result<()> {
                     Azure::delete_snp_guest("tless-trustee-server");
                 }
             },
+        },
+        Command::AttestationService {
+            attestation_service_command,
+        } => match attestation_service_command {
+            AttestationServiceCommand::Build {} => {
+                AttestationService::build()?;
+            }
+            AttestationServiceCommand::Run {
+                certs_dir,
+                port,
+                sgx_pccs_url,
+                force_clean_certs,
+                mock,
+            } => {
+                AttestationService::run(
+                    certs_dir.as_deref(),
+                    *port,
+                    sgx_pccs_url.as_deref(),
+                    *force_clean_certs,
+                    *mock,
+                )?;
+            }
+            AttestationServiceCommand::Health { url, cert_path } => {
+                AttestationService::health(url.clone(), cert_path.clone()).await?;
+            }
         },
     }
 
