@@ -1,0 +1,43 @@
+#cloud-config
+
+users:
+  - name: ubuntu
+    gecos: Ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: [sudo, docker]
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "${SSH_PUB_KEY}"
+
+growpart:
+    mode: auto
+    devices: ['/']
+    ignore_growroot_disabled: false
+
+package_update: true
+packages:
+    - cargo
+    - docker.io
+    - git
+    - linux-generic
+    - rustc
+
+runcmd:
+    # Make sure ubuntu is in docker group (in case group created after user).
+    - [ sh, -c, 'usermod -aG docker ubuntu || true' ]
+    # Enable and start docker.
+    - [ systemctl, enable, --now, docker ]
+    # Enable and start sshd.
+    - [ systemctl, enable, --now, ssh.service ]
+    # Load SEV guest driver so /dev/sev-guest exists.
+    - [ sh, -c, 'modprobe sev-guest || echo "modprobe sev-guest failed (maybe built-in?)"' ]
+    # Change password.
+    - [ sh, -c, 'echo "ubuntu:ubuntu" | chpasswd' ]
+    # Make sure home is owned by ubuntu>
+    - [ chown, "-R", "ubuntu:ubuntu", "/home/ubuntu" ]
+    # Clone Accless repo.
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "cd /home/ubuntu && git clone https://github.com/faasm/accless.git accless" ]
+    # Quick debug markers in console.
+    - [ sh, -c, 'echo "[cloud-init] Docker + chpasswd + sev-guest setup done"' ]
+
+final_message: "Accless SNP test instance v2 is ready."

@@ -4,4 +4,6 @@ sudo apt install -y \
     clang-format \
     libfontconfig1-dev \
     libssl-dev \
-    pkg-config > /dev/null 2>&1
+    ovmf \
+    pkg-config \
+    qemu-system-x86 > /dev/null 2>&1
