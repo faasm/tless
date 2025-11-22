@@ -31,11 +31,9 @@ set(ACCLESS_HEADERS ${ACCLESS_INCLUDE_PREFIX_DIR})
 # Application subdirectories
 # =============================================================================
 
-# Test applications.
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    add_subdirectory(./functions)
     add_subdirectory(./test)
 endif ()
 
 # To-Do: add workflows
-
-# To-Do: add functions
