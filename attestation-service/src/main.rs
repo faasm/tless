@@ -85,6 +85,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await;
 
     info!("Accless attestation server running on https://{}", addr);
+    info!("External IP: {}", tls::get_node_url()?);
     loop {
         let (stream, _) = listener.as_ref().expect("error listening").accept().await?;
         let service = TowerToHyperService::new(app.clone());

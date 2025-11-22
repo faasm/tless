@@ -59,7 +59,7 @@ pub fn get_public_certificate_path(certs_dir: &Path) -> PathBuf {
 /// # Returns
 ///
 /// The external node IP as a string.
-fn get_node_url() -> Result<String> {
+pub fn get_node_url() -> Result<String> {
     let output = Command::new("ip")
         .args(["-o", "route", "get", "to", "8.8.8.8"])
         .output()?;
