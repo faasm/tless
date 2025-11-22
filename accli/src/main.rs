@@ -94,6 +94,9 @@ enum AttestationServiceCommand {
         /// verification.
         #[arg(long, default_value_t = false)]
         mock: bool,
+        /// Rebuild the attestation service before running.
+        #[arg(long, default_value_t = false)]
+        rebuild: bool,
     },
     Health {
         /// URL of the attestation service
@@ -811,6 +814,7 @@ async fn main() -> anyhow::Result<()> {
                 sgx_pccs_url,
                 force_clean_certs,
                 mock,
+                rebuild,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -818,6 +822,7 @@ async fn main() -> anyhow::Result<()> {
                     sgx_pccs_url.as_deref(),
                     *force_clean_certs,
                     *mock,
+                    *rebuild,
                 )?;
             }
             AttestationServiceCommand::Health { url, cert_path } => {

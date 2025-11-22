@@ -29,7 +29,12 @@ impl AttestationService {
         sgx_pccs_url: Option<&std::path::Path>,
         force_clean_certs: bool,
         mock: bool,
+        rebuild: bool,
     ) -> Result<()> {
+        if rebuild {
+            Self::build()?;
+        }
+
         let mut cmd = Command::new(
             Env::proj_root()
                 .join("target")
