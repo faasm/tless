@@ -16,11 +16,10 @@ growpart:
 
 package_update: true
 packages:
-    - cargo
     - docker.io
     - git
-    - linux-generic
-    - rustc
+    - linux-modules-extra-${GUEST_KERNEL_VERSION}
+    - python3-venv
 
 runcmd:
     # Make sure ubuntu is in docker group (in case group created after user).
@@ -33,10 +32,37 @@ runcmd:
     - [ sh, -c, 'modprobe sev-guest || echo "modprobe sev-guest failed (maybe built-in?)"' ]
     # Change password.
     - [ sh, -c, 'echo "ubuntu:ubuntu" | chpasswd' ]
+    - [ bash, -c, '
+        if [ "$(id -u ubuntu)" -eq 1000 ]; then
+            echo "[cloud-init] Changing ubuntu UID/GID from 1000 to 2000";
+
+            # Change group first
+            groupmod -g 2000 ubuntu;
+
+            # Change user UID
+            usermod -u 2000 ubuntu;
+
+            # Fix ownership of files that still belong to uid/gid 1000
+            # Restrict to typical places to avoid scanning the whole fs if you prefer
+            for path in /home /var /etc; do
+                  find "$path" -xdev -uid 1000 -exec chown -h 2000:2000 {} \; || true
+                  find "$path" -xdev -gid 1000 -exec chgrp -h 2000 {} \; || true
+            done
+
+            echo "[cloud-init] ubuntu is now: $(id ubuntu)";
+          else
+            echo "[cloud-init] ubuntu UID is $(id -u ubuntu), not 1000; skipping UID change.";
+          fi
+    ' ]
     # Make sure home is owned by ubuntu>
     - [ chown, "-R", "ubuntu:ubuntu", "/home/ubuntu" ]
+    # Install rust.
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y" ]
     # Clone Accless repo.
-    - [ sudo, "-u", "ubuntu", "bash", "-lc", "cd /home/ubuntu && git clone https://github.com/faasm/accless.git accless" ]
+    # FIXME: remove branch name.
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "cd /home/ubuntu && git clone -b feature-escrow-func https://github.com/faasm/tless.git accless" ]
+    # Fetch Accless docker image.
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "docker pull ghcr.io/faasm/accless-experiments:${ACCLESS_VERSION}" ]
     # Quick debug markers in console.
     - [ sh, -c, 'echo "[cloud-init] Docker + chpasswd + sev-guest setup done"' ]
 

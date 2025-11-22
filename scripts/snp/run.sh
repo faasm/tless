@@ -28,6 +28,7 @@ run_qemu() {
     local qemu_bios_dir="${qemu_dir}/pc-bios"
 
     local kernel="${OUTPUT_DIR}/vmlinuz-noble"
+    local initrd="${OUTPUT_DIR}/initrd-noble"
     local ovmf="${OUTPUT_DIR}/ovmf/ovmf-${OVMF_VERSION}/Build/AmdSev/RELEASE_GCC5/FV/OVMF.fd"
     local disk_image="${OUTPUT_DIR}/disk.img"
     local seed_image="${OUTPUT_DIR}/seed.img"
@@ -43,9 +44,12 @@ run_qemu() {
         -cpu EPYC-v4 \
         -smp 6 -m 6G \
         -bios ${ovmf} \
+        -kernel ${kernel} \
+        -append "root=/dev/vda1 console=ttyS0" \
+        -initrd ${initrd} \
         -object memory-backend-memfd,id=ram1,size=6G,share=true,prealloc=false \
         -machine memory-backend=ram1 \
-        -object sev-snp-guest,id=sev0,cbitpos=${cbitpos},reduced-phys-bits=1 \
+        -object sev-snp-guest,id=sev0,cbitpos=${cbitpos},reduced-phys-bits=1,kernel-hashes=on \
         -drive "if=virtio,format=qcow2,file=${disk_image}" \
         -drive "if=virtio,format=raw,file=${seed_image}" \
         -netdev user,id=net0,hostfwd=tcp::2222-:22 \

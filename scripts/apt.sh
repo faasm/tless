@@ -1,9 +1,8 @@
 #!/bin/bash
 
 sudo apt install -y \
+    build-essential \
     clang-format \
     libfontconfig1-dev \
     libssl-dev \
-    ovmf \
-    pkg-config \
-    qemu-system-x86 > /dev/null 2>&1
+    pkg-config > /dev/null 2>&1

@@ -4,6 +4,7 @@ set -euo pipefail
 
 THIS_DIR="$(dirname "$(realpath "$0")")"
 SCRIPTS_DIR="${THIS_DIR}/.."
+ROOT_DIR="${SCRIPTS_DIR}/.."
 OUTPUT_DIR="${THIS_DIR}/output"
 
 source "${SCRIPTS_DIR}/common/utils.sh"
@@ -78,12 +79,23 @@ build_ovmf() {
 fetch_kernel() {
     print_info "Fetching Linux kernel..."
     wget \
-        https://cloud-images.ubuntu.com/noble/20251113/unpacked/noble-server-cloudimg-amd64-vmlinuz-generic \
+        https://cloud-images.ubuntu.com/noble/${UBUNTU_VERSION}/unpacked/noble-server-cloudimg-amd64-vmlinuz-generic \
         -O ${OUTPUT_DIR}/vmlinuz-noble > /dev/null 2>&1
     if [ $? -eq 0 ]; then
         print_success "Linux kernel fetched successfully."
     else
         print_error "Failed to fetch Linux kernel."
+        exit 1
+    fi
+
+    print_info "Fetching initrd..."
+    wget \
+        https://cloud-images.ubuntu.com/noble/${UBUNTU_VERSION}/unpacked/noble-server-cloudimg-amd64-initrd-generic \
+        -O ${OUTPUT_DIR}/initrd-noble > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        print_success "Kernel initrd fetched successfully."
+    else
+        print_error "Failed to fetch kernel initrd."
         exit 1
     fi
 }
@@ -129,7 +141,10 @@ prepare_cloudinit_image() {
     mkdir -p ${out_dir}
     INSTANCE_ID="accless-snp-$(date +%s)" envsubst '${INSTANCE_ID}' \
         < ${in_dir}/meta-data.in > ${out_dir}/meta-data
-    SSH_PUB_KEY=$(cat "${OUTPUT_DIR}/snp-key.pub") envsubst '${SSH_PUB_KEY}' \
+    ACCLESS_VERSION=$(cat "${ROOT_DIR}/VERSION") \
+    GUEST_KERNEL_VERSION=${GUEST_KERNEL_VERSION} \
+    SSH_PUB_KEY=$(cat "${OUTPUT_DIR}/snp-key.pub") \
+    envsubst '${ACCLESS_VERSION} ${GUEST_KERNEL_VERSION} ${SSH_PUB_KEY}' \
         < ${in_dir}/user-data.in > ${out_dir}/user-data
 
     cloud-localds "${OUTPUT_DIR}/seed.img" "${out_dir}/user-data" "${out_dir}/meta-data"
