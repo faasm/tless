@@ -1,5 +1,17 @@
 use crate::tasks::docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker};
+use clap::ValueEnum;
 use std::path::Path;
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum ApplicationType {
+    Function,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Functions {
+    #[value(name = "escrow-xput")]
+    EscrowXput,
+}
 
 #[derive(Debug)]
 pub struct Applications {}
@@ -41,5 +53,26 @@ impl Applications {
             anyhow::anyhow!("Workdir path is not valid UTF-8: {}", workdir.display())
         })?;
         Docker::run(&cmd, true, Some(workdir_str), &[], false, capture_output)
+    }
+
+    pub fn run(app_type: ApplicationType, app_name: Functions) -> anyhow::Result<Option<String>> {
+        let binary_path = match app_type {
+            ApplicationType::Function => {
+                let binary_name = match app_name {
+                    Functions::EscrowXput => "escrow-xput",
+                };
+                Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR)
+                    .join("applications/build-native/functions")
+                    .join(binary_name)
+                    .join(binary_name)
+            }
+        };
+
+        let binary_path_str = binary_path.to_str().ok_or_else(|| {
+            anyhow::anyhow!("Binary path is not valid UTF-8: {}", binary_path.display())
+        })?;
+        let cmd = vec![binary_path_str.to_string()];
+
+        Docker::run(&cmd, true, None, &[], false, false)
     }
 }

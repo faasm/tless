@@ -2,7 +2,7 @@ use crate::{
     env::Env,
     tasks::{
         accless::Accless,
-        applications::Applications,
+        applications::{self, Applications},
         attestation_service::AttestationService,
         azure::Azure,
         dev::Dev,
@@ -344,6 +344,15 @@ enum ApplicationsCommand {
         #[arg(long)]
         cert_path: Option<String>,
     },
+    /// Run one of the Accless applications
+    Run {
+        /// Type of the application to run
+        #[arg(long)]
+        app_type: applications::ApplicationType,
+        /// Name of the application to run
+        #[arg(long)]
+        app_name: applications::Functions,
+    },
 }
 
 #[tokio::main]
@@ -379,6 +388,9 @@ async fn main() -> anyhow::Result<()> {
                 cert_path,
             } => {
                 Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
+            }
+            ApplicationsCommand::Run { app_type, app_name } => {
+                Applications::run(app_type.clone(), app_name.clone())?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
