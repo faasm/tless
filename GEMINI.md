@@ -84,10 +84,10 @@ optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
   error handling through the `anyhow` crate.
 - For each new method, make sure to add extensive documentation in the following format:
 ```rust
+/// <short_description>
 ///
-/// # Description
-///
-/// <description>
+/// <long_description>
+/// <long_description>
 ///
 /// # Arguments
 ///
@@ -102,6 +102,13 @@ optional `--help` flag: `./scrips/accli_wrapper.sh --help`.
 ///
 /// <code snippet if applicable
 ```
+- Make extensive use of logging using the `log!` macros:
+    - `info!`: for high-level, important messages. We enable `info!` by default
+               so use reasonably.
+    - `debug!`: for messages that will aid debugging in case of a failure.
+    - `trace!`: very verbose, used to follow the exact execution trace via log
+                messages
+- When adding a log message, follow the format: `func_name(): message in lower-case`
 
 ### C++ Coding Guidelines
 

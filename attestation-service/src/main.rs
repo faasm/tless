@@ -14,6 +14,8 @@ use rustls::crypto::CryptoProvider;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::net::TcpListener;
 
+#[cfg(feature = "snp")]
+mod amd;
 #[cfg(feature = "azure-cvm")]
 mod azure_cvm;
 mod ecdhe;
@@ -59,7 +61,7 @@ async fn health() -> impl IntoResponse {
 async fn main() -> Result<()> {
     // Initialise logging and parse CLI arguments.
     let cli = Cli::parse();
-    attestation_service::init_logging(false);
+    attestation_service::init_logging();
 
     // Initialise crypto provider and TLS config, this also sets up the TLS
     // certificates if necessary.
