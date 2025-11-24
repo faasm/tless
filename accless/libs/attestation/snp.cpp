@@ -181,6 +181,7 @@ std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData) {
         return getSnpReportFromDev(reportData, std::nullopt);
     }
 
+    // FIXME: enable report data for AzCVM use-case.
     if (std::filesystem::exists("/dev/tpmrm0")) {
         return getSnpReportFromTPM();
     }
@@ -204,7 +205,9 @@ std::string getAttestationJwt(const std::string &gid,
     // Fetch HW attestation report and include the auxiliary report data in
     // the signature.
     std::vector<uint8_t> report;
+    // FIXME: consider making this check more reliable.
     if (gid == mock::MOCK_GID) {
+        std::cout << "accless(att): WARNING: mocking SNP quote" << std::endl;
         report = accless::attestation::mock::buildMockQuote(
             reportDataVec, mock::MOCK_QUOTE_MAGIC_SNP);
     } else {
