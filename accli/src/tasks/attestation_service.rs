@@ -7,6 +7,18 @@ use std::{
     process::{Command, Stdio},
 };
 
+const AS_URL_ENV_VAR: &str = "ACCLESS_AS_URL";
+const AS_CERT_PATH_ENV_VAR: &str = "ACCLESS_AS_CERT_PATH";
+
+/// Returns the required attestation-service env. vars given a URL and cert
+/// path.
+pub fn get_as_env_vars(as_url: &str, as_cert_path: &str) -> Vec<String> {
+    vec![
+        format!("{AS_URL_ENV_VAR}={as_url}"),
+        format!("{AS_CERT_PATH_ENV_VAR}={as_cert_path}"),
+    ]
+}
+
 pub struct AttestationService;
 
 impl AttestationService {
@@ -67,9 +79,9 @@ impl AttestationService {
     }
 
     pub async fn health(url: Option<String>, cert_path: Option<std::path::PathBuf>) -> Result<()> {
-        let url = url.or_else(|| std::env::var("ACCLESS_AS_URL").ok());
+        let url = url.or_else(|| std::env::var(AS_URL_ENV_VAR).ok());
         let cert_path = cert_path.or_else(|| {
-            std::env::var("ACCLESS_AS_CERT_PATH")
+            std::env::var(AS_CERT_PATH_ENV_VAR)
                 .ok()
                 .map(std::path::PathBuf::from)
         });
@@ -77,7 +89,7 @@ impl AttestationService {
         let url = match url {
             Some(url) => url,
             None => {
-                anyhow::bail!("Attestation service URL not provided. Set --url or ACCLESS_AS_URL")
+                anyhow::bail!("Attestation service URL not provided. Set --url or {AS_URL_ENV_VAR}")
             }
         };
 

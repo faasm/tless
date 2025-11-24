@@ -5,6 +5,7 @@ use crate::{
         applications::{self, Applications},
         attestation_service::AttestationService,
         azure::Azure,
+        cvm::{self, Component, parse_host_guest_path},
         dev::Dev,
         docker::{Docker, DockerContainer},
         experiments::{E2eSubScommand, Experiment, UbenchSubCommand},
@@ -12,6 +13,7 @@ use crate::{
     },
 };
 use clap::{Parser, Subcommand};
+use env_logger::Builder;
 use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
@@ -49,11 +51,6 @@ enum Command {
     Dev {
         #[command(subcommand)]
         dev_command: DevCommand,
-    },
-    /// Build and push different docker images
-    Docker {
-        #[command(subcommand)]
-        docker_command: DockerCommand,
     },
     /// Run evaluation experiments and plot results
     Experiment {
@@ -140,6 +137,40 @@ enum DevCommand {
         /// Force push the tag
         #[arg(long)]
         force: bool,
+    },
+    /// Build and push different docker images
+    Docker {
+        #[command(subcommand)]
+        docker_command: DockerCommand,
+    },
+    /// Build and run a cVM image
+    Cvm {
+        #[command(subcommand)]
+        cvm_command: CvmCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CvmCommand {
+    /// Run a command inside the cVM.
+    Run {
+        #[arg(last = true)]
+        cmd: Vec<String>,
+        /// Optional: SCP files into the cVM.
+        /// Specify as <HOST_PATH>:<GUEST_PATH>. Can be repeated.
+        #[arg(long, value_name = "HOST_PATH:GUEST_PATH", value_parser = parse_host_guest_path)]
+        scp_file: Vec<(PathBuf, PathBuf)>,
+        /// Set the working directory inside the container
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+    },
+    /// Configure the cVM image by building and installing the different
+    /// components.
+    Setup {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        component: Option<Component>,
     },
 }
 
@@ -343,33 +374,36 @@ enum ApplicationsCommand {
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
         cert_path: Option<String>,
+        /// Whether to build the application inside a cVM.
+        #[arg(long, default_value_t = false)]
+        in_cvm: bool,
     },
     /// Run one of the Accless applications
     Run {
         /// Type of the application to run
-        #[arg(long)]
         app_type: applications::ApplicationType,
         /// Name of the application to run
-        #[arg(long)]
         app_name: applications::Functions,
+        /// Whether to run the application inside a cVM.
+        #[arg(long, default_value_t = false)]
+        in_cvm: bool,
+        /// URL of the attestation service to contact.
+        #[arg(long)]
+        as_url: Option<String>,
+        /// Path to the attestation service's public certificate PEM file.
+        #[arg(long)]
+        as_cert_path: Option<PathBuf>,
     },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize the logger.
+    let env = env_logger::Env::default().filter_or("RUST_LOG", "info");
+    let mut builder = Builder::from_env(env);
+    builder.init();
+
     let cli = Cli::parse();
-
-    // Initialize the logger based on the debug flag
-    if cli.debug {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Debug)
-            .init();
-    } else {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .init();
-    }
-
     match &cli.task {
         Command::Accless { accless_command } => match accless_command {
             AcclessCommand::Build { clean, debug } => {
@@ -386,11 +420,24 @@ async fn main() -> anyhow::Result<()> {
                 clean,
                 debug,
                 cert_path,
+                in_cvm,
             } => {
-                Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
+                Applications::build(*clean, *debug, cert_path.as_deref(), false, *in_cvm)?;
             }
-            ApplicationsCommand::Run { app_type, app_name } => {
-                Applications::run(app_type.clone(), app_name.clone())?;
+            ApplicationsCommand::Run {
+                app_type,
+                app_name,
+                in_cvm,
+                as_url,
+                as_cert_path,
+            } => {
+                Applications::run(
+                    app_type.clone(),
+                    app_name.clone(),
+                    *in_cvm,
+                    as_url.clone(),
+                    as_cert_path.clone(),
+                )?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
@@ -412,36 +459,49 @@ async fn main() -> anyhow::Result<()> {
             DevCommand::Tag { force } => {
                 Dev::tag_code(*force)?;
             }
-        },
-        Command::Docker { docker_command } => match docker_command {
-            DockerCommand::Build { ctr, push, nocache } => {
-                for c in ctr {
-                    Docker::build(c, *push, *nocache);
-                }
-            }
-            DockerCommand::BuildAll { push, nocache } => {
-                for ctr in DockerContainer::iter_variants() {
-                    // Do not push the base build image
-                    if *ctr == DockerContainer::Experiments {
-                        Docker::build(ctr, false, *nocache);
-                    } else {
-                        Docker::build(ctr, *push, *nocache);
+            DevCommand::Docker { docker_command } => match docker_command {
+                DockerCommand::Build { ctr, push, nocache } => {
+                    for c in ctr {
+                        Docker::build(c, *push, *nocache);
                     }
                 }
-            }
-            DockerCommand::Cli { net } => {
-                Docker::cli(*net)?;
-            }
-            DockerCommand::Run {
-                cmd,
-                mount,
-                cwd,
-                env,
-                net,
-                capture_output,
-            } => {
-                Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
-            }
+                DockerCommand::BuildAll { push, nocache } => {
+                    for ctr in DockerContainer::iter_variants() {
+                        // Do not push the base build image
+                        if *ctr == DockerContainer::Experiments {
+                            Docker::build(ctr, false, *nocache);
+                        } else {
+                            Docker::build(ctr, *push, *nocache);
+                        }
+                    }
+                }
+                DockerCommand::Cli { net } => {
+                    Docker::cli(*net)?;
+                }
+                DockerCommand::Run {
+                    cmd,
+                    mount,
+                    cwd,
+                    env,
+                    net,
+                    capture_output,
+                } => {
+                    Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
+                }
+            },
+            DevCommand::Cvm { cvm_command } => match cvm_command {
+                CvmCommand::Run { cmd, scp_file, cwd } => {
+                    let scp_files_option = if scp_file.is_empty() {
+                        None
+                    } else {
+                        Some(scp_file.as_slice())
+                    };
+                    cvm::run(cmd, scp_files_option, cwd.as_ref())?;
+                }
+                CvmCommand::Setup { clean, component } => {
+                    cvm::build(*clean, *component)?;
+                }
+            },
         },
         Command::Experiment {
             experiments_command: exp,

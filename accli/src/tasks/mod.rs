@@ -2,6 +2,7 @@ pub mod accless;
 pub mod applications;
 pub mod attestation_service;
 pub mod azure;
+pub mod cvm;
 pub mod dev;
 pub mod docker;
 pub mod experiments;
