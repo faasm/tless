@@ -63,7 +63,10 @@ build_ovmf() {
     git submodule update --init --recursive > /dev/null 2>&1
     make -C BaseTools clean > /dev/null 2>&1
     make -C BaseTools -j $(nproc) > /dev/null 2>&1
-    . ./edksetup.sh --reconfig
+    # edksetup supports having unbound variables, so we must temporarily enable them.
+    set +u
+    . ./edksetup.sh --reconfig > /dev/null 2>&1
+    set -u
     build -a X64 -b RELEASE -t GCC5 -p OvmfPkg/OvmfPkgX64.dsc > /dev/null 2>&1
     touch  OvmfPkg/AmdSev/Grub/grub.efi > /dev/null 2>&1
     build -a X64 -b RELEASE -t GCC5 -p OvmfPkg/AmdSev/AmdSevX64.dsc > /dev/null 2>&1
