@@ -187,12 +187,13 @@ pub fn build(clean: bool, component: Option<Component>) -> Result<()> {
 ///
 /// # Example Usage
 ///
-/// ```
+/// ```rust,no_run
+/// use accli::tasks::cvm;
 /// use anyhow::Result;
 /// use std::path::PathBuf;
 ///
 /// // Example of running a command without SCPing files
-/// cvm::run(&["ls".to_string(), "-la".to_string()], None).unwrap();
+/// cvm::run(&["ls".to_string(), "-la".to_string()], None, None).unwrap();
 ///
 /// // Example of SCPing a file and then running a command
 /// let host_path = PathBuf::from("./my_local_file.txt");
@@ -200,6 +201,7 @@ pub fn build(clean: bool, component: Option<Component>) -> Result<()> {
 /// cvm::run(
 ///     &["cat".to_string(), "my_remote_file.txt".to_string()],
 ///     Some(&[(host_path, guest_path)]),
+///     None,
 /// )
 /// .unwrap();
 /// ```
