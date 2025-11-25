@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+      - name: "Install APT deps"
+        run: ./scripts/apt.sh
       - name: "Run Rust unit tests"
         run: |
           source ./scripts/workon.sh
@@ -52,9 +54,9 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+      - name: "Install APT deps"
+        run: ./scripts/apt.sh
       - name: "Build C++ code"
-        shell: bash
         run: ./scripts/accli_wrapper.sh accless build --clean
       - name: "Run C++ unit tests"
-        shell: bash
         run: ./scripts/accli_wrapper.sh accless test
