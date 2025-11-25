@@ -161,10 +161,6 @@ impl Applications {
         as_url: Option<String>,
         as_cert_path: Option<PathBuf>,
     ) -> anyhow::Result<Option<String>> {
-        let binary_name = match app_name {
-            Functions::EscrowXput => "escrow-xput",
-        };
-
         // If --in-cvm flag is passed, we literally re run the same `accli` command, but
         // inside the cVM.
         if in_cvm {
@@ -183,11 +179,14 @@ impl Applications {
 
             Ok(None)
         } else {
+            // Path matches CMake build directory:
+            // ./applications/build-natie/{functions,test,workflows}/{name}/{binary_name}
             let binary_path = match app_type {
                 ApplicationType::Function => Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR)
                     .join("applications/build-native")
-                    .join(binary_name)
-                    .join(binary_name),
+                    .join(format!("{app_type}"))
+                    .join(format!("{app_name}"))
+                    .join(format!("{app_name}"))
             };
 
             let binary_path_str = binary_path.to_str().ok_or_else(|| {

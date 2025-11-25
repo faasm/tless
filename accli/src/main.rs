@@ -138,12 +138,12 @@ enum DevCommand {
         #[arg(long)]
         force: bool,
     },
-    /// Build and push different docker images
+    /// Build and run commands in the work-on container image
     Docker {
         #[command(subcommand)]
         docker_command: DockerCommand,
     },
-    /// Build and run a cVM image
+    /// Build and run commands in an SNP-enabled cVM (requires SNP hardware)
     Cvm {
         #[command(subcommand)]
         cvm_command: CvmCommand,
