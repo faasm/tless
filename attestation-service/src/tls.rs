@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_get_certs_dir() {
         let certs_dir = get_default_certs_dir();
-        assert!(certs_dir.ends_with("config/certs"));
+        assert!(certs_dir.ends_with("config/attestation-service/certs"));
     }
 
     #[test]

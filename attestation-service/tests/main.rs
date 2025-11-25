@@ -128,7 +128,7 @@ async fn test_spawn_as_no_clean() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_att_clients() -> Result<()> {
-    attestation_service::init_logging(true);
+    attestation_service::init_logging();
 
     let certs_dir = Path::new(env!("ACCLESS_ROOT_DIR"))
         .join("config")
@@ -148,7 +148,7 @@ async fn test_att_clients() -> Result<()> {
     // container. We also _must_ set the `clean` flag to true, to force
     // recompilation.
     info!("re-building mock clients with new certificates, this will take a while...");
-    Applications::build(true, false, cert_path.to_str(), true)?;
+    Applications::build(true, false, cert_path.to_str(), true, false)?;
 
     // Health-check the attestation service.
     let client = reqwest::Client::builder()
