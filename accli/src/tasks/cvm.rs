@@ -303,3 +303,55 @@ pub fn run(
 
     Ok(())
 }
+
+pub fn cli(cwd: Option<&PathBuf>) -> Result<()> {
+    info!("cli(): starting cVM and opening interactive shell...");
+
+    let mut qemu_child = Command::new(format!("{}/run.sh", snp_root().display()))
+        .current_dir(Env::proj_root())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .context("cli(): failed to spawn QEMU")?;
+
+    let qemu_stdout = qemu_child
+        .stdout
+        .take()
+        .context("cli(): failed to capture QEMU stdout")?;
+
+    let _qemu_guard = QemuGuard { child: qemu_child };
+
+    info!("cli(): waiting for cVM to become ready");
+    wait_for_cvm_ready(qemu_stdout, CVM_BOOT_TIMEOUT)?;
+
+    // Construct the command to run in the cVM (cd into cwd if provided).
+    let mut interactive_cmd: Vec<String> = Vec::new();
+    if let Some(cwd_path) = cwd {
+        interactive_cmd.push("cd".to_string());
+        interactive_cmd.push(format!("{}/{}", CVM_ACCLESS_ROOT, cwd_path.display()));
+        interactive_cmd.push("&&".to_string());
+    }
+    interactive_cmd.push("bash".to_string()); // Start a bash shell
+
+    info!("cli(): opening interactive SSH session to cVM");
+    let status = Command::new("ssh")
+        .arg("-p")
+        .arg(SSH_PORT.to_string())
+        .arg("-i")
+        .arg(format!("{}/{EPH_PRIVKEY}", snp_output_dir().display()))
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null")
+        .arg("-t") // Allocate a pseudo-terminal
+        .arg(format!("{CVM_USER}@localhost"))
+        .args(interactive_cmd)
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("cli(): interactive SSH session failed");
+    }
+
+    Ok(())
+}

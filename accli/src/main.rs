@@ -172,6 +172,12 @@ enum CvmCommand {
         #[arg(long)]
         component: Option<Component>,
     },
+    /// Get an interactive shell inside the cVM.
+    Cli {
+        /// Set the working directory inside the container
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -500,6 +506,9 @@ async fn main() -> anyhow::Result<()> {
                 }
                 CvmCommand::Setup { clean, component } => {
                     cvm::build(*clean, *component)?;
+                }
+                CvmCommand::Cli { cwd } => {
+                    cvm::cli(cwd.as_ref())?;
                 }
             },
         },
