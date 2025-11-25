@@ -19,6 +19,7 @@
 # Configure user `ubuntu`.
 users:
   - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
     ssh-authorized-keys:
       - "${SSH_PUB_KEY}"
 

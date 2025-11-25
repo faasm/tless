@@ -13,9 +13,9 @@ source "${THIS_DIR}/versions.sh"
 # Helper method to get the C-bit position directly from hardware.
 #
 get_cbitpos() {
-	modprobe cpuid
-	local ebx=$(sudo dd if=/dev/cpu/0/cpuid ibs=16 count=32 skip=134217728 2> /dev/null | tail -c 16 | od -An -t u4 -j 4 -N 4 | sed -re 's|^ *||')
-	local cbitpos=$((ebx & 0x3f))
+    modprobe cpuid
+    local ebx=$(sudo dd if=/dev/cpu/0/cpuid ibs=16 count=32 skip=134217728 2> /dev/null | tail -c 16 | od -An -t u4 -j 4 -N 4 | sed -re 's|^ *||')
+    local cbitpos=$((ebx & 0x3f))
     echo $cbitpos
 }
 
@@ -36,6 +36,7 @@ run_qemu() {
 
     # Can SSH into the VM witih:
     # ssh -p 2222 -i ${OUTPUT_DIR}/snp-key ubuntu@localhost
+    # Login: ubuntu:ubuntu
     exec ${qemu} \
         -L "${qemu_bios_dir}" \
         -enable-kvm \

@@ -123,8 +123,8 @@ provision_disk_image() {
         local qemu_nbd=$2
         echo "[provision-disk] Cleaning up..."
         set +e
-        sudo umount -R "${root_mnt}" 2>/dev/null || true
-        sudo ${qemu_nbd} --disconnect /dev/nbd0 2>/dev/null || true
+        sudo umount -R "${root_mnt}" > /dev/null 2>&1 || true
+        sudo ${qemu_nbd} --disconnect /dev/nbd0 > /dev/null 2>&1 || true
         sudo rm -rf "${root_mnt}"
     }
     trap "disk_provision_cleanup '${root_mnt}' '${qemu_nbd}'" EXIT
@@ -150,7 +150,7 @@ provision_disk_image() {
     done
 
     print_info "[provision] Running provisioning commands inside chroot..."
-    sudo GUEST_KERNEL_VERSION=${GUEST_KERNEL_VERSION} chroot "${root_mnt}" /bin/bash <<'EOF'
+    sudo GUEST_KERNEL_VERSION=${GUEST_KERNEL_VERSION} LC_ALL=C LANG=C chroot "${root_mnt}" /bin/bash <<'EOF'
 set -euo pipefail
 
 echo "[provision/chroot] Starting..."
@@ -210,8 +210,8 @@ else
 fi
 
 echo "[provision/chroot] Ensuring groups docker, sevguest, sudo memberships..."
-groupadd -r docker    || true
-groupadd -r sevguest  || true
+groupadd -r docker > /dev/null 2>&1 || true
+groupadd -r sevguest >/dev/null 2>&1 || true
 usermod -aG sudo,docker,sevguest ubuntu || true
 
 # Allow ubuntu user to use sudo without a password.
