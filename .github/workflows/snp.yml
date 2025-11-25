@@ -39,7 +39,7 @@ jobs:
 
       # This step may take a while.
       - name: "Start attestation service in the background"
-        run: ./scripts/accli_wrapper.sh attestation-service run --background --certs-dir ./certs --force-clean-certs
+        run: ./scripts/accli_wrapper.sh attestation-service run --background --certs-dir ./certs --force-clean-certs --rebuild
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
