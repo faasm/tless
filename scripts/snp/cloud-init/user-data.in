@@ -1,69 +1,43 @@
 #cloud-config
+#
+# This cloud-init config is intentionally minimal.
+# Most provisioning (packages, users, rust, git clone, etc.)
+# is done offline via scripts/snp/setup.sh using qemu-nbd.
+#
+# We assume the 'ubuntu' user already exists in the image
+# with UID 2000 and appropriate groups (sudo, docker, sevguest).
+# Cloud-init just injects the SSH key.
+#
+# If you modify this file, you most likely will need to recreate the cVM's disk
+# image from scratch. To do this, you may run:
+#
+# accli dev cvm build --component disk
+# accli dev cvm build --component cloudinit
+#
+# The next time you run a cVM, it will re-run all the comands specified herein.
 
+# Configure user `ubuntu`.
 users:
   - name: ubuntu
-    gecos: Ubuntu
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: [sudo, docker]
-    shell: /bin/bash
-    ssh_authorized_keys:
+    ssh-authorized-keys:
       - "${SSH_PUB_KEY}"
 
-growpart:
-    mode: auto
-    devices: ['/']
-    ignore_growroot_disabled: false
-
-package_update: true
-packages:
-    - docker.io
-    - git
-    - linux-modules-extra-${GUEST_KERNEL_VERSION}
-    - python3-venv
-
+# Very light runtime tweaks only.
 runcmd:
-    # Make sure ubuntu is in docker group (in case group created after user).
-    - [ sh, -c, 'usermod -aG docker ubuntu || true' ]
-    # Enable and start docker.
-    - [ systemctl, enable, --now, docker ]
-    # Enable and start sshd.
-    - [ systemctl, enable, --now, ssh.service ]
-    # Load SEV guest driver so /dev/sev-guest exists.
-    - [ sh, -c, 'modprobe sev-guest || echo "modprobe sev-guest failed (maybe built-in?)"' ]
-    # Change password.
-    - [ sh, -c, 'echo "ubuntu:ubuntu" | chpasswd' ]
-    - [ bash, -c, '
-        if [ "$(id -u ubuntu)" -eq 1000 ]; then
-            echo "[cloud-init] Changing ubuntu UID/GID from 1000 to 2000";
-
-            # Change group first
-            groupmod -g 2000 ubuntu;
-
-            # Change user UID
-            usermod -u 2000 ubuntu;
-
-            # Fix ownership of files that still belong to uid/gid 1000
-            # Restrict to typical places to avoid scanning the whole fs if you prefer
-            for path in /home /var /etc; do
-                  find "$path" -xdev -uid 1000 -exec chown -h 2000:2000 {} \; || true
-                  find "$path" -xdev -gid 1000 -exec chgrp -h 2000 {} \; || true
-            done
-
-            echo "[cloud-init] ubuntu is now: $(id ubuntu)";
-          else
-            echo "[cloud-init] ubuntu UID is $(id -u ubuntu), not 1000; skipping UID change.";
-          fi
+    # Make sure /dev/sev-guest udev rule has taken effect and module is loaded.
+    - [ sh, -c, '
+        groupadd -r sevguest || true;
+        usermod -aG sevguest ubuntu || true;
+        modprobe sev-guest || true;
+        udevadm control --reload-rules;
+        udevadm trigger /dev/sev-guest || true;
     ' ]
-    # Make sure home is owned by ubuntu>
-    - [ chown, "-R", "ubuntu:ubuntu", "/home/ubuntu" ]
-    # Install rust.
-    - [ sudo, "-u", "ubuntu", "bash", "-lc", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y" ]
-    # Clone Accless repo.
-    # FIXME: remove branch name.
-    - [ sudo, "-u", "ubuntu", "bash", "-lc", "cd /home/ubuntu && git clone -b feature-escrow-func https://github.com/faasm/tless.git accless" ]
-    # Fetch Accless docker image.
-    - [ sudo, "-u", "ubuntu", "bash", "-lc", "docker pull ghcr.io/faasm/accless-experiments:${ACCLESS_VERSION}" ]
-    # Quick debug markers in console.
-    - [ sh, -c, 'echo "[cloud-init] Docker + chpasswd + sev-guest setup done"' ]
+    # Ensure docker + sshd are running (systemctl enable handled offline already).
+    - [ systemctl, enable, --now, docker ]
+    - [ systemctl, enable, --now, ssh.service ]
+    # Optional: pull docker image at runtime (idempotent).
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "docker pull ghcr.io/faasm/accless-experiments:${ACCLESS_VERSION} || true" ]
+    # Explicit readiness marker on the serial console (for your Rust QEMU wrapper).
+    - [ sh, -c, 'logger -t cloud-init "Accless SNP test instance v${ACCLESS_VERSION} is ready."' ]
 
-final_message: "Accless SNP test instance v2 is ready."
+final_message: "Accless SNP test instance v${ACCLESS_VERSION} is ready."

@@ -101,7 +101,159 @@ fetch_kernel() {
 }
 
 #
-# Fetch the linux kernel image.
+# Provision the disk image.
+#
+provision_disk_image() {
+    local disk_img="${OUTPUT_DIR}/disk.img"
+    print_info "Provisioning disk image (path=${disk_img})..."
+
+    local root_mnt="/mnt/cvm-root"
+    local qemu_nbd="${OUTPUT_DIR}/qemu/qemu-${QEMU_VERSION}/build/qemu-nbd"
+
+    # Attach to disk image.
+    sudo modprobe nbd max_part=8
+    sudo ${qemu_nbd} --connect=/dev/nbd0 "${disk_img}"
+    sudo partprobe /dev/nbd0 2>/dev/null || true
+
+    # Fix GPT metadata after qemu-img resize.
+    sudo sgdisk -e /dev/nbd0
+
+    disk_provision_cleanup() {
+        local root_mnt=$1
+        local qemu_nbd=$2
+        echo "[provision-disk] Cleaning up..."
+        set +e
+        sudo umount -R "${root_mnt}" 2>/dev/null || true
+        sudo ${qemu_nbd} --disconnect /dev/nbd0 2>/dev/null || true
+        sudo rm -rf "${root_mnt}"
+    }
+    trap "disk_provision_cleanup '${root_mnt}' '${qemu_nbd}'" EXIT
+
+    local root_dev="/dev/nbd0p1"
+
+    # Grow the ext4 filesystem to occupy all the disk space.
+    print_info "[provision-disk] Growing filesystem..."
+    sudo parted /dev/nbd0 --script resizepart 1 100%
+    sudo e2fsck -f ${root_dev} # > /dev/null 2>&1
+    sudo resize2fs ${root_dev} # > /dev/null 2>&1
+
+    print_info "[provision-disk] Mounting root filesystem ${root_dev} at ${root_mnt}..."
+    sudo mkdir -p "${root_mnt}"
+    sudo mount "${root_dev}" "${root_mnt}"
+
+    # Make sure DNS works inside chroot.
+    sudo install -m 644 /etc/resolv.conf "${root_mnt}/etc/resolv.conf"
+
+    print_info "[provision-disk] Bind-mounting /dev /proc /sys /run..."
+    for d in dev proc sys run; do
+        sudo mount --bind "/${d}" "${root_mnt}/${d}"
+    done
+
+    print_info "[provision] Running provisioning commands inside chroot..."
+    sudo GUEST_KERNEL_VERSION=${GUEST_KERNEL_VERSION} chroot "${root_mnt}" /bin/bash <<'EOF'
+set -euo pipefail
+
+echo "[provision/chroot] Starting..."
+
+# Force IPv4 in the chroot.
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+
+export DEBIAN_FRONTEND=noninteractive
+
+echo "[provision/chroot] apt-get update & base packages..."
+apt-get update > /dev/null 2>&1
+apt-get install -y \
+    build-essential \
+    ca-certificates \
+    curl \
+    docker.io \
+    git \
+    libfontconfig1-dev \
+    libssl-dev \
+    "linux-modules-extra-${GUEST_KERNEL_VERSION}" \
+    python3-venv \
+    pkg-config \
+    sudo > /dev/null 2>&1
+
+# Run depmod to re-configure kernel modules.
+depmod -a "${GUEST_KERNEL_VERSION}"
+
+# Ensure ubuntu user exists and adjust UID to 2000 if needed
+if id ubuntu >/dev/null 2>&1; then
+    U_OLD_UID="$(id -u ubuntu)"
+    if [ "${U_OLD_UID}" -eq 1000 ]; then
+        echo "[provision/chroot] Changing ubuntu UID/GID from 1000 to 2000..."
+        # Make sure 2000 is free
+        if getent passwd 2000 >/dev/null; then
+            echo "[provision/chroot] UID 2000 already in use, aborting UID change" >&2
+            exit 1
+        fi
+        if getent group 2000 >/dev/null; then
+            echo "[provision/chroot] GID 2000 already in use, aborting GID change" >&2
+            exit 1
+        fi
+        groupmod -g 2000 ubuntu
+        usermod  -u 2000 ubuntu
+
+        echo "[provision/chroot] Fixing ownership for UID/GID 1000..."
+        for path in /home /var /etc; do
+            find "$path" -xdev -uid 1000 -exec chown -h 2000 {} \; || true
+            find "$path" -xdev -gid 1000 -exec chgrp -h 2000 {} \; || true
+        done
+    else
+        echo "[provision/chroot] ubuntu UID is ${U_OLD_UID}, leaving as-is."
+    fi
+else
+    echo "[provision/chroot] ubuntu user not found, creating with UID 2000..."
+    groupadd -g 2000 ubuntu || true
+    useradd -m -u 2000 -g 2000 -s /bin/bash ubuntu
+fi
+
+echo "[provision/chroot] Ensuring groups docker, sevguest, sudo memberships..."
+groupadd -r docker    || true
+groupadd -r sevguest  || true
+usermod -aG sudo,docker,sevguest ubuntu || true
+
+# Allow ubuntu user to use sudo without a password.
+echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu-nopasswd
+chmod 440 /etc/sudoers.d/ubuntu-nopasswd
+
+echo "[provision/chroot] Writing /etc/udev/rules.d/90-sev-guest.rules..."
+cat >/etc/udev/rules.d/90-sev-guest.rules <<'RULE'
+KERNEL=="sev-guest", GROUP="sevguest", MODE="0660"
+RULE
+
+echo "[provision/chroot] Enabling docker & sshd..."
+# systemctl enable will just manipulate symlinks; OK even if systemd not running
+systemctl enable docker > /dev/null 2>&1 || true
+systemctl enable ssh > /dev/null 2>&1 || systemctl enable ssh.service > /dev/null 2>&1 || true
+
+echo "[provision/chroot] Installing rustup for ubuntu..."
+su -l ubuntu -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y > /dev/null 2>&1' || true
+
+# FIXME: remove branch name and build some deps.
+echo "[provision/chroot] Cloning Accless repo (idempotent)..."
+su -l ubuntu -c '
+    cd /home/ubuntu &&
+    if [ ! -d accless/.git ]; then
+        git clone -b feature-escrow-func https://github.com/faasm/tless.git accless > /dev/null 2>&1;
+    else
+        echo "accless repo already present, skipping clone";
+    fi
+' || true
+
+# (Optional) You *could* pull docker images here, but it's messy because dockerd
+# isn't running inside the chroot. Leaving that for runtime (cloud-init or first use).
+
+echo "[provision/chroot] Provisioning done."
+EOF
+
+    disk_provision_cleanup ${root_mnt} ${qemu_nbd}
+    print_success "Done provisioning disk image!"
+}
+
+#
+# Fetch the disk image.
 #
 fetch_disk_image() {
     print_info "Fetching cloud-init disk image..."
@@ -118,6 +270,8 @@ fetch_disk_image() {
     local qemu_img="${OUTPUT_DIR}/qemu/qemu-${QEMU_VERSION}/build/qemu-img"
     ${qemu_img} resize "${OUTPUT_DIR}/disk.img" +20G > /dev/null 2>&1
     print_success "cloud-init disk image resized successfully."
+
+    provision_disk_image
 }
 
 #
@@ -139,8 +293,7 @@ prepare_cloudinit_image() {
     local out_dir="${OUTPUT_DIR}/cloud-init"
 
     mkdir -p ${out_dir}
-    INSTANCE_ID="accless-snp-$(date +%s)" envsubst '${INSTANCE_ID}' \
-        < ${in_dir}/meta-data.in > ${out_dir}/meta-data
+    cp ${in_dir}/meta-data.in ${out_dir}/meta-data
     ACCLESS_VERSION=$(cat "${ROOT_DIR}/VERSION") \
     GUEST_KERNEL_VERSION=${GUEST_KERNEL_VERSION} \
     SSH_PUB_KEY=$(cat "${OUTPUT_DIR}/snp-key.pub") \

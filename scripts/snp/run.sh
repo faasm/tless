@@ -36,7 +36,7 @@ run_qemu() {
 
     # Can SSH into the VM witih:
     # ssh -p 2222 -i ${OUTPUT_DIR}/snp-key ubuntu@localhost
-    ${qemu} \
+    exec ${qemu} \
         -L "${qemu_bios_dir}" \
         -enable-kvm \
         -nographic \

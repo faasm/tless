@@ -1,2 +1,2 @@
-instance-id: ${INSTANCE_ID}
+instance-id: accless-snp-dev
 local-hostname: accless-snp
