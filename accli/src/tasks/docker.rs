@@ -3,6 +3,7 @@ use clap::ValueEnum;
 use log::error;
 use std::{
     fmt,
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -192,6 +193,18 @@ impl Docker {
         String::from_utf8_lossy(&gid.stdout).trim().to_string()
     }
 
+    /// Helper method to get the group ID of the /dev/sev-guest device.
+    ///
+    /// This method is only used when using `accli` inside a cVM. In our cVM set-up we configure
+    /// /dev/sev-guest to be in a shared group with our user, to avoid having to use `sudo` to run
+    /// our functions.
+    fn get_sevguest_group_id() -> Option<u32> {
+        match std::fs::metadata("/dev/sev-guest") {
+            Ok(metadata) => Some(metadata.gid()),
+            Err(_) => None,
+        }
+    }
+
     fn exec_cmd(
         cmd: &[String],
         cwd: Option<&str>,
@@ -259,6 +272,12 @@ impl Docker {
             .arg(format!("HOST_UID={}", Self::get_user_id()))
             .arg("-e")
             .arg(format!("HOST_GID={}", Self::get_group_id()));
+
+        if let Some(sevgest_gid) = Self::get_sevguest_group_id() {
+            run_cmd
+                .arg("-e")
+                .arg(format!("SEV_GID={}", sevgest_gid));
+        }
 
         for e in env {
             run_cmd.arg("-e").arg(e);
