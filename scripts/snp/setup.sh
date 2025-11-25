@@ -67,9 +67,9 @@ build_ovmf() {
     set +u
     . ./edksetup.sh --reconfig > /dev/null 2>&1
     set -u
-    build -a X64 -b RELEASE -t GCC5 -p OvmfPkg/OvmfPkgX64.dsc > /dev/null 2>&1
+    build -n $(nproc) -a X64 -b RELEASE -t GCC5 -p OvmfPkg/OvmfPkgX64.dsc > /dev/null 2>&1
     touch  OvmfPkg/AmdSev/Grub/grub.efi > /dev/null 2>&1
-    build -a X64 -b RELEASE -t GCC5 -p OvmfPkg/AmdSev/AmdSevX64.dsc > /dev/null 2>&1
+    build -n $(nproc) -a X64 -b RELEASE -t GCC5 -p OvmfPkg/AmdSev/AmdSevX64.dsc > /dev/null 2>&1
     popd >> /dev/null
 
     popd >> /dev/null
@@ -137,8 +137,8 @@ provision_disk_image() {
     # Grow the ext4 filesystem to occupy all the disk space.
     print_info "[provision-disk] Growing filesystem..."
     sudo parted /dev/nbd0 --script resizepart 1 100%
-    sudo e2fsck -f ${root_dev} # > /dev/null 2>&1
-    sudo resize2fs ${root_dev} # > /dev/null 2>&1
+    sudo e2fsck -fy ${root_dev}
+    sudo resize2fs ${root_dev}
 
     print_info "[provision-disk] Mounting root filesystem ${root_dev} at ${root_mnt}..."
     sudo mkdir -p "${root_mnt}"
