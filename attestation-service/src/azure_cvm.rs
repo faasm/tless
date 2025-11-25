@@ -9,25 +9,9 @@ struct VcekResponse {
 }
 
 /// This method can only be called from an Azure cVM
-/// FIXME: gate  be
 pub fn fetch_vcek_pem() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    match ureq::get("http://169.254.169.254/metadata/THIM/amd/certification")
-        .set("Metadata", "true")
-        .call()
-    {
-        Ok(resp) => match resp.into_json::<VcekResponse>() {
-            Ok(data) => {
-                let pem = format!("{}\n{}", data.vcek_cert, data.certificate_chain);
-                Ok(pem.into_bytes())
-            }
-            Err(e) => {
-                warn!("failed to parse VCECK response JSON: {e}");
-                Ok(vec![])
-            }
-        },
-        Err(e) => {
-            warn!("failed to fetch VCECK certificates: {e}");
-            Ok(vec![])
-        }
-    }
+    // FIXME(#55): re-introduce azure cvm quote validation. In the past we used this URL to fetch
+    // VCEK certificates:
+    // http://169.254.169.254/metadata/THIM/amd/certification
+    Ok(vec![])
 }

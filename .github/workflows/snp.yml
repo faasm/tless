@@ -42,7 +42,7 @@ jobs:
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
-        run: ./scrips/accli_wrapper.sh applications build --clean --as-cert-path ./certs/cert.pem --in-cvm
+        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-path ./certs/cert.pem --in-cvm
 
       - name: "Run supported SNP applications"
         run: |
