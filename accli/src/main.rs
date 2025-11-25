@@ -94,7 +94,12 @@ enum AttestationServiceCommand {
         /// Rebuild the attestation service before running.
         #[arg(long, default_value_t = false)]
         rebuild: bool,
+        /// Run the attestation service in the background, storing its PID.
+        #[arg(long, default_value_t = false)]
+        background: bool,
     },
+    /// Stop a running attestation service (started with --background).
+    Stop {},
     Health {
         /// URL of the attestation service
         #[arg(long)]
@@ -379,7 +384,7 @@ enum ApplicationsCommand {
         debug: bool,
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
-        cert_path: Option<String>,
+        as_cert_path: Option<String>,
         /// Whether to build the application inside a cVM.
         #[arg(long, default_value_t = false)]
         in_cvm: bool,
@@ -425,10 +430,10 @@ async fn main() -> anyhow::Result<()> {
             ApplicationsCommand::Build {
                 clean,
                 debug,
-                cert_path,
+                as_cert_path,
                 in_cvm,
             } => {
-                Applications::build(*clean, *debug, cert_path.as_deref(), false, *in_cvm)?;
+                Applications::build(*clean, *debug, as_cert_path.as_deref(), false, *in_cvm)?;
             }
             ApplicationsCommand::Run {
                 app_type,
@@ -896,6 +901,7 @@ async fn main() -> anyhow::Result<()> {
                 force_clean_certs,
                 mock,
                 rebuild,
+                background,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -904,7 +910,11 @@ async fn main() -> anyhow::Result<()> {
                     *force_clean_certs,
                     *mock,
                     *rebuild,
+                    *background,
                 )?;
+            }
+            AttestationServiceCommand::Stop {} => {
+                AttestationService::stop()?;
             }
             AttestationServiceCommand::Health { url, cert_path } => {
                 AttestationService::health(url.clone(), cert_path.clone()).await?;

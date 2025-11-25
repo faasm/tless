@@ -195,9 +195,9 @@ impl Docker {
 
     /// Helper method to get the group ID of the /dev/sev-guest device.
     ///
-    /// This method is only used when using `accli` inside a cVM. In our cVM set-up we configure
-    /// /dev/sev-guest to be in a shared group with our user, to avoid having to use `sudo` to run
-    /// our functions.
+    /// This method is only used when using `accli` inside a cVM. In our cVM
+    /// set-up we configure /dev/sev-guest to be in a shared group with our
+    /// user, to avoid having to use `sudo` to run our functions.
     fn get_sevguest_group_id() -> Option<u32> {
         match std::fs::metadata("/dev/sev-guest") {
             Ok(metadata) => Some(metadata.gid()),
@@ -274,9 +274,7 @@ impl Docker {
             .arg(format!("HOST_GID={}", Self::get_group_id()));
 
         if let Some(sevgest_gid) = Self::get_sevguest_group_id() {
-            run_cmd
-                .arg("-e")
-                .arg(format!("SEV_GID={}", sevgest_gid));
+            run_cmd.arg("-e").arg(format!("SEV_GID={}", sevgest_gid));
         }
 
         for e in env {

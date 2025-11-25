@@ -1,6 +1,10 @@
 use crate::env::Env;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::info;
+use nix::{
+    sys::signal::{Signal, kill},
+    unistd::Pid,
+};
 use reqwest;
 use std::{
     fs,
@@ -9,6 +13,7 @@ use std::{
 
 const AS_URL_ENV_VAR: &str = "ACCLESS_AS_URL";
 const AS_CERT_PATH_ENV_VAR: &str = "ACCLESS_AS_CERT_PATH";
+const PID_FILE_PATH: &str = "./config/attestation-service/PID";
 
 /// Returns the required attestation-service env. vars given a URL and cert
 /// path.
@@ -42,6 +47,7 @@ impl AttestationService {
         force_clean_certs: bool,
         mock: bool,
         rebuild: bool,
+        background: bool,
     ) -> Result<()> {
         if rebuild {
             Self::build()?;
@@ -68,13 +74,46 @@ impl AttestationService {
         if mock {
             cmd.arg("--mock");
         }
-        let status = cmd
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .status()?;
-        if !status.success() {
-            anyhow::bail!("Failed to run attestation service");
+
+        if background {
+            info!("run(): running attestation service in background...");
+            let child = cmd
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .context("Failed to spawn attestation service in background")?;
+            fs::write(PID_FILE_PATH, child.id().to_string()).context("Failed to write PID file")?;
+            info!("run(): attestation service spawned (PID={})", child.id());
+            Ok(())
+        } else {
+            let status = cmd
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("Failed to run attestation service");
+            }
+            Ok(())
         }
+    }
+
+    pub fn stop() -> Result<()> {
+        info!("stop(): stopping attestation service...");
+        let pid_str = fs::read_to_string(PID_FILE_PATH).context(format!(
+            "Failed to read PID file at {}. Is the service running in background?",
+            PID_FILE_PATH
+        ))?;
+        let pid: u32 = pid_str
+            .trim()
+            .parse()
+            .context(format!("Failed to parse PID from file {}", PID_FILE_PATH))?;
+
+        info!("stop(): killing process with PID: {}", pid);
+        kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
+            .context(format!("Failed to kill process with PID {}", pid))?;
+
+        fs::remove_file(PID_FILE_PATH).context("failed to remove PID file")?;
+        info!("stop(): ttestation service stopped (PID={})", pid);
         Ok(())
     }
 
@@ -105,8 +144,18 @@ impl AttestationService {
         }?;
 
         let response = client.get(format!("{}/health", url)).send().await?;
-        info!("Health check response: {}", response.text().await?);
-
-        Ok(())
+        if response.status().is_success() {
+            let body = response.text().await?;
+            info!(
+                "health(): attestation service is healthy and reachable on: {}",
+                body
+            );
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "health(): attestation service is not healthy (status={})",
+                response.status()
+            );
+        }
     }
 }

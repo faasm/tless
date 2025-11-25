@@ -66,7 +66,7 @@ impl Applications {
     pub fn build(
         clean: bool,
         debug: bool,
-        cert_path: Option<&str>,
+        as_cert_path: Option<&str>,
         capture_output: bool,
         in_cvm: bool,
     ) -> Result<Option<String>> {
@@ -92,8 +92,8 @@ impl Applications {
         if in_cvm {
             // Make sure the certificates are available in the cVM.
             let mut scp_files: Vec<(PathBuf, PathBuf)> = vec![];
-            if let Some(cert_path_str) = cert_path {
-                let host_cert_path = PathBuf::from(cert_path_str);
+            if let Some(as_cert_path_str) = as_cert_path {
+                let host_cert_path = PathBuf::from(as_cert_path_str);
                 if !host_cert_path.exists() {
                     anyhow::bail!(
                         "Certificate path does not exist: {}",
@@ -113,7 +113,7 @@ impl Applications {
                 );
                 scp_files.push((host_cert_path, guest_cert_path.clone()));
 
-                cmd.push("--cert-path".to_string());
+                cmd.push("--as-cert-path".to_string());
                 cmd.push(guest_cert_path.display().to_string());
             }
 
@@ -128,8 +128,8 @@ impl Applications {
             )?;
             Ok(None)
         } else {
-            if let Some(cert_path_str) = cert_path {
-                let cert_path = Path::new(cert_path_str);
+            if let Some(as_cert_path_str) = as_cert_path {
+                let cert_path = Path::new(as_cert_path_str);
                 if !cert_path.exists() {
                     anyhow::bail!("Certificate path does not exist: {}", cert_path.display());
                 }
@@ -137,7 +137,7 @@ impl Applications {
                     anyhow::bail!("Certificate path is not a file: {}", cert_path.display());
                 }
                 let docker_cert_path = Docker::get_docker_path(cert_path)?;
-                cmd.push("--cert-path".to_string());
+                cmd.push("--as-cert-path".to_string());
                 let docker_cert_path_str = docker_cert_path.to_str().ok_or_else(|| {
                     anyhow::anyhow!(
                         "Docker path for certificate is not valid UTF-8: {}",
@@ -164,13 +164,23 @@ impl Applications {
         // If --in-cvm flag is passed, we literally re run the same `accli` command, but
         // inside the cVM.
         if in_cvm {
-            let cmd = vec![
+            let mut cmd = vec![
                 "./scripts/accli_wrapper.sh".to_string(),
                 "applications".to_string(),
                 "run".to_string(),
                 format!("{app_type}"),
                 format!("{app_name}"),
             ];
+
+            if let Some(as_url) = as_url {
+                cmd.push("--as-url".to_string());
+                cmd.push(as_url.to_string());
+            }
+
+            if let Some(as_cert_path) = as_cert_path {
+                cmd.push("--as-cert-path".to_string());
+                cmd.push(format!("{}", as_cert_path.display()));
+            }
 
             // We don't need to SCP any files here, because we assume that the certificates
             // have been copied during the build stage, and persisted in the
@@ -187,7 +197,7 @@ impl Applications {
                     // Note that we need to make the plural.
                     .join(format!("{app_type}s"))
                     .join(format!("{app_name}"))
-                    .join(format!("{app_name}"))
+                    .join(format!("{app_name}")),
             };
 
             let binary_path_str = binary_path.to_str().ok_or_else(|| {
