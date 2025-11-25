@@ -231,7 +231,7 @@ systemctl enable ssh > /dev/null 2>&1 || systemctl enable ssh.service > /dev/nul
 echo "[provision/chroot] Installing rustup for ubuntu..."
 su -l ubuntu -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y > /dev/null 2>&1' || true
 
-# FIXME: remove branch name and build some deps.
+# FIXME: remove branch name.
 echo "[provision/chroot] Cloning Accless repo (idempotent)..."
 su -l ubuntu -c '
     cd /home/ubuntu &&
@@ -240,6 +240,7 @@ su -l ubuntu -c '
     else
         echo "accless repo already present, skipping clone";
     fi
+    cd /home/ubuntu/accless && cargo build -p accli --release
 ' || true
 
 # (Optional) You *could* pull docker images here, but it's messy because dockerd
