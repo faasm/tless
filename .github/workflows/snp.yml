@@ -1,0 +1,52 @@
+name: "SNP End-to-End Tests"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+
+defaults:
+  run:
+    shell: bash
+
+# Cancel previous running actions for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  run-functions:
+    runs-on: [self-hosted, snp]
+    steps:
+      - name: "Check out the code"
+        uses: actions/checkout@v4
+
+      - name: "Cache SNP artefacts"
+        id: cache-snp
+        uses: actions/cache@v4
+        with:
+          path: scripts/snp/output
+          key: snp-setup-${{ runner.os }}-${{ hashFiles('scripts/snp/**') }}
+
+      # Only re-run on a cache miss (setup may take a while)
+      - name: "Run SNP setup"
+        if: steps.cache-snp.outputs.cache-hit != 'true'
+        run: ./scripts/accli_wrapper.sh dev cvm setup --clean
+
+      # This step may take a while.
+      - name: "Start attestation service in the background"
+        run: ./scripts/accli_wrapper.sh attestation-service run --background --certs-dir ./certs --force-clean-certs
+
+      # Build SNP applications and embed the attestation service's certificate.
+      - name: "Build SNP applications"
+        run: ./scrips/accli_wrapper.sh applications build --clean --as-cert-path ./certs/cert.pem --in-cvm
+
+      - name: "Run supported SNP applications"
+        run: |
+          # First get the external IP so that we can reach the attestation-service from the cVM.
+          AS_URL=$(accli attestation-service health --url "https://0.0.0.0:8443" --cert-path ./certs/cert.pem \
+            | grep "attestation service is healthy and reachable on:" | awk '{print $NF}')
+          ./scripts/accli_wrapper.sh applications run function escrow-xput --as-url ${AS_URL} --as-cert-path ./certs/cert.pem
