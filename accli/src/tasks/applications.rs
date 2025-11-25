@@ -184,7 +184,8 @@ impl Applications {
             let binary_path = match app_type {
                 ApplicationType::Function => Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR)
                     .join("applications/build-native")
-                    .join(format!("{app_type}"))
+                    // Note that we need to make the plural.
+                    .join(format!("{app_type}s"))
                     .join(format!("{app_name}"))
                     .join(format!("{app_name}"))
             };
