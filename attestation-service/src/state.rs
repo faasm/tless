@@ -65,6 +65,8 @@ pub struct AttestationServiceState {
 
     #[cfg(feature = "azure-cvm")]
     pub vcek_pem: Vec<u8>,
+    /// Port the server is listening on.
+    pub port: u16,
 }
 
 impl AttestationServiceState {
@@ -75,6 +77,7 @@ impl AttestationServiceState {
         certs_dir: Option<PathBuf>,
         sgx_pccs_url: Option<PathBuf>,
         mock_attestation: bool,
+        port: u16,
     ) -> Result<Self> {
         let certs_dir = certs_dir.unwrap_or_else(get_default_certs_dir);
 
@@ -101,6 +104,7 @@ impl AttestationServiceState {
             amd_signing_keys: RwLock::new(BTreeMap::new()),
             #[cfg(feature = "snp")]
             snp_vcek_cache: RwLock::new(BTreeMap::new()),
+            port,
         })
     }
 }

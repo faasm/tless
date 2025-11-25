@@ -20,6 +20,7 @@ use tokio_rustls::TlsAcceptor;
 pub fn get_default_certs_dir() -> PathBuf {
     PathBuf::from(env!("ACCLESS_ROOT_DIR"))
         .join("config")
+        .join("attestation-service")
         .join("certs")
 }
 

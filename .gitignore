@@ -16,5 +16,8 @@ datasets*
 agent-plans
 
 # Default path for auto-generated TLS certificates.
-config/certs
-config/test-certs
+config/attestation-service/certs
+config/attestation-service/test-certs
+
+# Path for attestation service PID.
+config/attestation-service/PID
