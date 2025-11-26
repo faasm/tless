@@ -77,14 +77,9 @@ struct QemuGuard {
     child: Child,
 }
 
-impl Drop for QemuGuard {
-    fn drop(&mut self) {
-        info!("Killing QEMU process with PID: {}", self.child.id());
-        if let Err(e) = self.child.kill() {
-            error!("Failed to kill QEMU process: {}", e);
-        }
-    }
-}
+// ===============================================================================================
+// Helper Functions
+// ===============================================================================================
 
 fn snp_root() -> PathBuf {
     let mut path = Env::proj_root();
@@ -97,42 +92,6 @@ fn snp_output_dir() -> PathBuf {
     let mut path = snp_root();
     path.push("output");
     path
-}
-
-/// Remap a host path to a path in the cVM.
-///
-/// This function takes a host path that must be within Accless' root, and
-/// generates the same path inside the cVM's root filesystem.
-pub fn remap_to_cvm_path(host_path: &Path) -> Result<PathBuf> {
-    let absolute_host_path = if host_path.is_absolute() {
-        host_path.to_path_buf()
-    } else {
-        std::env::current_dir()?.join(host_path)
-    };
-    let absolute_host_path = absolute_host_path.canonicalize().map_err(|e| {
-        let reason = format!(
-            "error canonicalizing path (path={}, error={})",
-            host_path.display(),
-            e
-        );
-        error!("remap_to_cvm_path(): {reason}");
-        anyhow::anyhow!(reason)
-    })?;
-
-    let proj_root = Env::proj_root();
-    if absolute_host_path.starts_with(&proj_root) {
-        let relative_path = absolute_host_path.strip_prefix(&proj_root).unwrap();
-        let cvm_path = Path::new(CVM_ACCLESS_ROOT).join(relative_path);
-        Ok(cvm_path)
-    } else {
-        let reason = format!(
-            "path is outside the project root directory (path={}, root={})",
-            absolute_host_path.display(),
-            proj_root.display()
-        );
-        error!("remap_to_cvm_path(): {reason}");
-        anyhow::bail!(reason);
-    }
 }
 
 /// Helper method to read the logs from the cVM's stdout until it is ready.
@@ -180,6 +139,84 @@ fn wait_for_cvm_ready<R: Read + Send + Sync + 'static>(reader: R, timeout: Durat
     }
 }
 
+fn set_ssh_options(cmd: &mut Command) {
+    cmd.stderr(Stdio::null())
+        .arg("-p")
+        .arg(SSH_PORT.to_string())
+        .arg("-i")
+        .arg(format!("{}/{EPH_PRIVKEY}", snp_output_dir().display()))
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null")
+        .arg(format!("{CVM_USER}@localhost"));
+}
+
+fn poweroff_vm() -> Result<()> {
+    let mut cmd = Command::new("ssh");
+    set_ssh_options(&mut cmd);
+    let status = cmd.args(["sudo", "shutdown", "now"]).status()?;
+    if !status.success() {
+        anyhow::bail!("poweroff_vm(): shutting down failed");
+    }
+
+    Ok(())
+}
+
+impl Drop for QemuGuard {
+    fn drop(&mut self) {
+        if let Err(e) = poweroff_vm() {
+            warn!("drop(): shutting down VM cleanly failed (error={e:?})");
+            if let Err(e) = self.child.kill() {
+                error!("Failed to kill QEMU process (error={e:?})");
+            }
+        } else if let Err(e) = self.child.wait() {
+            error!("drop(): error waiting for child process to finish (error={e:?})");
+        }
+    }
+}
+
+// ===============================================================================================
+// Public API
+// ===============================================================================================
+
+/// Remap a host path to a path in the cVM.
+///
+/// This function takes a host path that must be within Accless' root, and
+/// generates the same path inside the cVM's root filesystem.
+pub fn remap_to_cvm_path(host_path: &Path) -> Result<PathBuf> {
+    let absolute_host_path = if host_path.is_absolute() {
+        host_path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(host_path)
+    };
+    let absolute_host_path = absolute_host_path.canonicalize().map_err(|e| {
+        let reason = format!(
+            "error canonicalizing path (path={}, error={})",
+            host_path.display(),
+            e
+        );
+        error!("remap_to_cvm_path(): {reason}");
+        anyhow::anyhow!(reason)
+    })?;
+
+    let proj_root = Env::proj_root();
+    if absolute_host_path.starts_with(&proj_root) {
+        let relative_path = absolute_host_path.strip_prefix(&proj_root).unwrap();
+        let cvm_path = Path::new(CVM_ACCLESS_ROOT).join(relative_path);
+        Ok(cvm_path)
+    } else {
+        let reason = format!(
+            "path is outside the project root directory (path={}, root={})",
+            absolute_host_path.display(),
+            proj_root.display()
+        );
+        error!("remap_to_cvm_path(): {reason}");
+        anyhow::bail!(reason);
+    }
+}
+
+/// Build the cVM Image.
 pub fn build(clean: bool, component: Option<Component>) -> Result<()> {
     info!("build(): building cVM image...");
     let mut cmd = Command::new(format!("{}/setup.sh", snp_root().display()));
@@ -216,6 +253,9 @@ pub fn build(clean: bool, component: Option<Component>) -> Result<()> {
 ///   `HostPath` is the path to the file on the host machine, and `GuestPath` is
 ///   the relative path inside the cVM. The `GuestPath` will automatically be
 ///   prefixed with `/home/ubuntu/accless`.
+/// - `cwd`: An optional `PathBuf` representing the working directory inside the
+///   cVM, relative to `/home/ubuntu/accless`. If provided, the command will be
+///   executed in this directory.
 ///
 /// # Returns
 ///
@@ -241,9 +281,6 @@ pub fn build(clean: bool, component: Option<Component>) -> Result<()> {
 /// )
 /// .unwrap();
 /// ```
-/// - `cwd`: An optional `PathBuf` representing the working directory inside the
-///   cVM, relative to `/home/ubuntu/accless`. If provided, the command will be
-///   executed in this directory.
 pub fn run(
     cmd: &[String],
     scp_files: Option<&[(PathBuf, PathBuf)]>,
@@ -274,12 +311,30 @@ pub fn run(
     if let Some(files) = scp_files {
         info!("run(): copying files into cVM...");
         for (host_path, guest_path) in files {
-            let full_guest_path = format!("{}/{}", CVM_ACCLESS_ROOT, guest_path.display());
+            let full_guest_path = if !guest_path.starts_with(CVM_ACCLESS_ROOT) {
+                format!("{}/{}", CVM_ACCLESS_ROOT, guest_path.display())
+            } else {
+                guest_path.display().to_string()
+            };
             info!(
                 "run(): copying {} to {CVM_USER}@localhost:{}",
                 host_path.display(),
                 full_guest_path
             );
+
+            // Make sure the directory we are copying to exists.
+            let mut ssh_mkdir_cmd = Command::new("ssh");
+            set_ssh_options(&mut ssh_mkdir_cmd);
+            ssh_mkdir_cmd.args([
+                "mkdir".to_string(),
+                "-p".to_string(),
+                guest_path.parent().unwrap().display().to_string(),
+            ]);
+
+            let status = ssh_mkdir_cmd.status()?;
+            if !status.success() {
+                anyhow::bail!("run(): failed to mkdir inside cVM");
+            }
 
             let mut scp_cmd = Command::new("scp");
             scp_cmd
@@ -322,17 +377,8 @@ pub fn run(
         final_cmd.join(" ")
     );
     let mut ssh_cmd = Command::new("ssh");
-    ssh_cmd
-        .arg("-p")
-        .arg(SSH_PORT.to_string())
-        .arg("-i")
-        .arg(format!("{}/{EPH_PRIVKEY}", snp_output_dir().display()))
-        .arg("-o")
-        .arg("StrictHostKeyChecking=no")
-        .arg("-o")
-        .arg("UserKnownHostsFile=/dev/null")
-        .arg(format!("{CVM_USER}@localhost"))
-        .args(final_cmd);
+    set_ssh_options(&mut ssh_cmd);
+    ssh_cmd.args(final_cmd);
 
     let status = ssh_cmd.status()?;
     if !status.success() {
@@ -373,19 +419,10 @@ pub fn cli(cwd: Option<&PathBuf>) -> Result<()> {
     interactive_cmd.push("bash".to_string()); // Start a bash shell
 
     info!("cli(): opening interactive SSH session to cVM");
-    let status = Command::new("ssh")
-        .arg("-p")
-        .arg(SSH_PORT.to_string())
-        .arg("-i")
-        .arg(format!("{}/{EPH_PRIVKEY}", snp_output_dir().display()))
-        .arg("-o")
-        .arg("StrictHostKeyChecking=no")
-        .arg("-o")
-        .arg("UserKnownHostsFile=/dev/null")
-        .arg("-t") // Allocate a pseudo-terminal
-        .arg(format!("{CVM_USER}@localhost"))
-        .args(interactive_cmd)
-        .status()?;
+    let mut cmd = Command::new("ssh");
+    cmd.arg("-t");
+    set_ssh_options(&mut cmd);
+    let status = cmd.args(interactive_cmd).status()?;
 
     if !status.success() {
         anyhow::bail!("cli(): interactive SSH session failed");

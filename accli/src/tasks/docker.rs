@@ -52,6 +52,7 @@ pub const DOCKER_ACCLESS_CODE_MOUNT_DIR: &str = "/code/accless";
 
 impl Docker {
     const ACCLESS_DEV_CONTAINER_NAME: &'static str = "accless-dev";
+    const ACCLESS_DEV_CONTAINER_HOSTNAME: &'static str = "accless-ctr";
 
     /// # Description
     ///
@@ -263,7 +264,9 @@ impl Docker {
             .arg("run")
             .arg("--rm")
             .arg("--name")
-            .arg(Self::ACCLESS_DEV_CONTAINER_NAME);
+            .arg(Self::ACCLESS_DEV_CONTAINER_NAME)
+            .arg("--hostname")
+            .arg(Self::ACCLESS_DEV_CONTAINER_HOSTNAME);
         if interactive {
             run_cmd.arg("-it");
         }
