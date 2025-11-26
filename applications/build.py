@@ -71,7 +71,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug", action="store_true", help="Build in debug mode."
     )
-    parser.add_argument("--cert-path", type=str, help="Path to certificate PEM file.")
+    parser.add_argument("--as-cert-path", type=str, help="Path to certificate PEM file.")
     args = parser.parse_args()
 
     if args.clean:

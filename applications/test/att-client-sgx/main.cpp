@@ -1,8 +1,11 @@
 #include "accless/abe4/abe4.h"
 #include "accless/attestation/attestation.h"
+#include "accless/attestation/mock.h"
 #include "accless/jwt/jwt.h"
 
 #include <iostream>
+
+using namespace accless::attestation::mock;
 
 int main() {
     std::cout << "att-client-sgx: running test..." << std::endl;
@@ -15,14 +18,9 @@ int main() {
     std::cout << "att-client-sgx: packed partial MPK into full MPK"
               << std::endl;
 
-    // These values are hard-coded in the mock SGX library in:
-    // `accless/libs/attestation/mock_sgx.cpp`.
-    std::string gid = "baz";
-    std::string wfId = "foo";
-    std::string nodeId = "bar";
-
     // The labels `wf` and `node` are hard-coded in the attestation-service.
-    std::string policy = id + ".wf:" + wfId + " & " + id + ".node:" + nodeId;
+    std::string policy =
+        id + ".wf:" + MOCK_WORKFLOW_ID + " & " + id + ".node:" + MOCK_NODE_ID;
 
     // Generate a test ciphertext that only us, after a succesful attestation,
     // should be able to decrypt.
@@ -67,7 +65,7 @@ int main() {
         std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
 
         std::optional<std::string> decrypted_gt =
-            accless::abe4::decrypt(uskB64, gid, policy, ct);
+            accless::abe4::decrypt(uskB64, MOCK_GID, policy, ct);
 
         if (!decrypted_gt.has_value()) {
             std::cerr << "att-client-sgx: CP-ABE decryption failed"
