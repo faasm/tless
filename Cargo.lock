@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "abe4"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "accless-finra-cloudevent-handler"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -38,7 +38,7 @@ dependencies = [
 
 [[package]]
 name = "accless-ml-inference-cloudevent-handler"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "accless-ml-training-cloudevent-handler"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "accless-word-count-cloudevent-handler"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cloudevents-sdk",
  "futures-util",
@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "accli"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -448,7 +448,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "attestation-service"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "abe4",
  "accli",
@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "jwt"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "base64 0.22.1",
  "rsa",
@@ -4269,7 +4269,7 @@ dependencies = [
 
 [[package]]
 name = "template-graph"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "abe4",
  "anyhow",
