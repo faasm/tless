@@ -1,8 +1,10 @@
 FROM ghcr.io/faasm/cpp-sysroot:0.8.0
 
 # Install rust
-RUN rm -rf /root/.rustup \
-    && apt update && apt install -y --no-install-recommends \
+ENV RUSTUP_HOME=/opt/rust/rustup
+ENV CARGO_HOME=/opt/rust/cargo
+ENV PATH=/opt/rust/cargo/bin:$PATH
+RUN apt update && apt install -y --no-install-recommends \
         build-essential \
         curl \
         gosu \
@@ -11,7 +13,13 @@ RUN rm -rf /root/.rustup \
         wget \
         zlib1g-dev \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
-    && . "$HOME/.cargo/env"
+    # Create a group that owns the rust toolchain so that we can share it with
+    # our user at run time.
+    && groupadd -r rusttool \
+    && mkdir -p /opt/rust/rustup /opt/rust/cargo \
+    && chown -R root:rusttool /opt/rust \
+    && chmod -R g+rwX /opt/rust \
+    && find /opt/rust -type d -exec chmod g+s {} +
 
 # Deps for Azure's cVM guest library: OpenSSL + libcurl + TPM2-TSS.
 # The versions are taken from the pre-requisite script in the repo, and the
