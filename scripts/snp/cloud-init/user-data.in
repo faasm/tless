@@ -20,7 +20,7 @@
 users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
-    ssh-authorized-keys:
+    ssh_authorized_keys:
       - "${SSH_PUB_KEY}"
 
 # Very light runtime tweaks only.
@@ -38,7 +38,5 @@ runcmd:
     - [ systemctl, enable, --now, ssh.service ]
     # Optional: pull docker image at runtime (idempotent).
     - [ sudo, "-u", "ubuntu", "bash", "-lc", "docker pull ghcr.io/faasm/accless-experiments:${ACCLESS_VERSION} || true" ]
-    # Explicit readiness marker on the serial console (for your Rust QEMU wrapper).
-    - [ sh, -c, 'logger -t cloud-init "Accless SNP test instance v${ACCLESS_VERSION} is ready."' ]
 
 final_message: "Accless SNP test instance v${ACCLESS_VERSION} is ready."

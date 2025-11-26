@@ -29,6 +29,11 @@ if getent group rusttool >/dev/null 2>&1; then
     usermod -aG rusttool "$USER_NAME"
 fi
 
+# Add user to group that owns the faasm toolchain.
+if getent group faasm >/dev/null 2>&1; then
+    usermod -aG faasm "$USER_NAME"
+fi
+
 [ ! -e "$HOME/.cargo" ]  && ln -s /opt/rust/cargo   "$HOME/.cargo"
 [ ! -e "$HOME/.rustup" ] && ln -s /opt/rust/rustup "$HOME/.rustup"
 
@@ -47,6 +52,7 @@ if [ -e /dev/sev-guest ]; then
     fi
 fi
 
-exec /usr/sbin/gosu ${USER_NAME} bash -c \
-  'source /code/accless/scripts/workon.sh; source "$HOME/.cargo/env"; exec "$@"' \
-  bash "$@"
+echo ". /code/accless/scripts/workon.sh" >> ${HOME}/.bashrc
+echo ". ${HOME}/.cargo/env" >> ${HOME}/.bashrc
+
+exec /usr/sbin/gosu ${USER_NAME} "$@"
