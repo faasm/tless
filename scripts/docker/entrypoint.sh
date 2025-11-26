@@ -55,4 +55,8 @@ fi
 echo ". /code/accless/scripts/workon.sh" >> ${HOME}/.bashrc
 echo ". ${HOME}/.cargo/env" >> ${HOME}/.bashrc
 
-exec /usr/sbin/gosu ${USER_NAME} "$@"
+exec /usr/sbin/gosu "$USER_NAME" bash -c \
+  'source /code/accless/scripts/workon.sh 2>/dev/null || true; \
+   source "$HOME/.cargo/env" 2>/dev/null || true; \
+   exec "$@"' \
+  bash "$@"
