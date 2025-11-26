@@ -37,9 +37,20 @@ jobs:
         if: steps.cache-snp.outputs.cache-hit != 'true'
         run: ./scripts/accli_wrapper.sh dev cvm setup --clean
 
-      # This step may take a while.
       - name: "Start attestation service in the background"
         run: ./scripts/accli_wrapper.sh attestation-service run --background --certs-dir ./certs --force-clean-certs --rebuild
+
+      # Fetch latest version of the code in the cVM.
+      - name: "Fetch code in the cVM"
+        run: |
+          # Work-out current branch name.
+          if [ -n "${{ github.head_ref }}" ]; then
+            BRANCH=${{ github.head_ref }}
+          else
+            BRANCH=${GITHUB_REF_NAME}
+          fi
+          ./scripts/accli_wrapper.sh dev cvm run \
+            "git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH"
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
