@@ -82,7 +82,9 @@ impl AttestationService {
                 .stderr(Stdio::null())
                 .spawn()
                 .context("Failed to spawn attestation service in background")?;
-            fs::write(PID_FILE_PATH, child.id().to_string()).context("Failed to write PID file")?;
+            fs::create_dir_all(PID_FILE_PATH).context("run(): failed to create PID file dirs")?;
+            fs::write(PID_FILE_PATH, child.id().to_string())
+                .context("run(): failed to write PID file")?;
             info!("run(): attestation service spawned (PID={})", child.id());
             Ok(())
         } else {
