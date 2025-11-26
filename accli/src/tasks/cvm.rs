@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     str::FromStr,
     sync::mpsc,
@@ -97,6 +97,42 @@ fn snp_output_dir() -> PathBuf {
     let mut path = snp_root();
     path.push("output");
     path
+}
+
+/// Remap a host path to a path in the cVM.
+///
+/// This function takes a host path that must be within Accless' root, and
+/// generates the same path inside the cVM's root filesystem.
+pub fn remap_to_cvm_path(host_path: &Path) -> Result<PathBuf> {
+    let absolute_host_path = if host_path.is_absolute() {
+        host_path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(host_path)
+    };
+    let absolute_host_path = absolute_host_path.canonicalize().map_err(|e| {
+        let reason = format!(
+            "error canonicalizing path (path={}, error={})",
+            host_path.display(),
+            e
+        );
+        error!("remap_to_cvm_path(): {reason}");
+        anyhow::anyhow!(reason)
+    })?;
+
+    let proj_root = Env::proj_root();
+    if absolute_host_path.starts_with(&proj_root) {
+        let relative_path = absolute_host_path.strip_prefix(&proj_root).unwrap();
+        let cvm_path = Path::new(CVM_ACCLESS_ROOT).join(relative_path);
+        Ok(cvm_path)
+    } else {
+        let reason = format!(
+            "path is outside the project root directory (path={}, root={})",
+            absolute_host_path.display(),
+            proj_root.display()
+        );
+        error!("remap_to_cvm_path(): {reason}");
+        anyhow::bail!(reason);
+    }
 }
 
 /// Helper method to read the logs from the cVM's stdout until it is ready.

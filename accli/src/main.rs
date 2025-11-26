@@ -190,7 +190,7 @@ enum DockerCommand {
     /// Build one of Accless' docker containers. Run build --help to see the
     /// possibe options
     Build {
-        #[arg(short, long, num_args = 1.., value_name = "CTR_NAME")]
+        /// Container image to build.
         ctr: Vec<DockerContainer>,
         #[arg(long)]
         push: bool,
@@ -384,7 +384,7 @@ enum ApplicationsCommand {
         debug: bool,
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
-        as_cert_path: Option<String>,
+        as_cert_path: Option<PathBuf>,
         /// Whether to build the application inside a cVM.
         #[arg(long, default_value_t = false)]
         in_cvm: bool,
@@ -394,7 +394,7 @@ enum ApplicationsCommand {
         /// Type of the application to run
         app_type: applications::ApplicationType,
         /// Name of the application to run
-        app_name: applications::Functions,
+        app_name: applications::ApplicationName,
         /// Whether to run the application inside a cVM.
         #[arg(long, default_value_t = false)]
         in_cvm: bool,
@@ -433,7 +433,7 @@ async fn main() -> anyhow::Result<()> {
                 as_cert_path,
                 in_cvm,
             } => {
-                Applications::build(*clean, *debug, as_cert_path.as_deref(), false, *in_cvm)?;
+                Applications::build(*clean, *debug, as_cert_path.clone(), false, *in_cvm)?;
             }
             ApplicationsCommand::Run {
                 app_type,

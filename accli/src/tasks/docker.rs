@@ -1,4 +1,5 @@
 use crate::env::Env;
+use anyhow::Result;
 use clap::ValueEnum;
 use log::error;
 use std::{
@@ -75,7 +76,7 @@ impl Docker {
     /// - `Err(anyhow::Error)`: An error if:
     ///   - The path does not exist or cannot be canonicalized.
     ///   - The path is outside the project's root directory.
-    pub fn get_docker_path(host_path: &Path) -> anyhow::Result<PathBuf> {
+    pub fn remap_to_docker_path(host_path: &Path) -> Result<PathBuf> {
         let absolute_host_path = if host_path.is_absolute() {
             host_path.to_path_buf()
         } else {
