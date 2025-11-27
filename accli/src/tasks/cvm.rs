@@ -33,6 +33,7 @@ pub fn parse_host_guest_path(s: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Component {
+    Check,
     Apt,
     Qemu,
     Ovmf,
@@ -47,6 +48,7 @@ impl FromStr for Component {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "check" => Ok(Component::Check),
             "apt" => Ok(Component::Apt),
             "qemu" => Ok(Component::Qemu),
             "ovmf" => Ok(Component::Ovmf),
@@ -62,6 +64,7 @@ impl FromStr for Component {
 impl std::fmt::Display for Component {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Component::Check => write!(f, "check"),
             Component::Apt => write!(f, "apt"),
             Component::Qemu => write!(f, "qemu"),
             Component::Ovmf => write!(f, "ovmf"),

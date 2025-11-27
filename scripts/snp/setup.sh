@@ -16,7 +16,36 @@ clean() {
     mkdir -p ${OUTPUT_DIR}
 }
 
-# TODO: check host kernel
+#
+# Check the host system is configured properly.
+check_host_reqs() {
+    local device="/dev/sev"
+    local required_group="kvm"
+    local user="$(id -un)"
+
+    print_info "Checking host system requirements..."
+
+    # Check `/dev/sev` exists.
+    if [[ ! -e "$device" ]]; then
+        print_error "check_host_reqs(): $device does not exist"
+        exit 1
+    fi
+
+    # Check `/dev/sev` is owned by the `kvm` group.
+    device_group="$(stat -c "%G" "$device")"
+    if [[ "$device_group" != "$required_group" ]]; then
+        pritn_error "check_host_reqs(): $device is owned by group '$device_group', expected '$required_group'."
+        exit 1
+    fi
+
+    # Check calling user is in the `kvm` group.
+    if ! id -nG "$user" | grep -qw "$required_group"; then
+        print_error "check_host_reqs(): user '$user' is not in group '$required_group'."
+        exit 1
+    fi
+
+    print_success "check_host_reqs(): $device is owned by group '$required_group' and user '$user' is in that group."
+}
 
 #
 # Fetch the linux kernel image.
@@ -339,6 +368,9 @@ main() {
 
     if [[ -n "$component" ]]; then
         case "$component" in
+            check)
+                check_host_reqs
+                ;;
             apt)
                 install_apt_deps
                 ;;
@@ -366,6 +398,7 @@ main() {
                 ;;
         esac
     else
+        check_host_reqs
         install_apt_deps
         build_qemu
         build_ovmf
