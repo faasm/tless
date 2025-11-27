@@ -49,8 +49,8 @@ jobs:
           else
             BRANCH=${GITHUB_REF_NAME}
           fi
-          ./scripts/accli_wrapper.sh dev cvm run \
-            "git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH"
+          ./scripts/accli_wrapper.sh dev cvm run -- \
+            git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
