@@ -7,10 +7,13 @@ use serial_test::serial;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tempfile::tempdir;
-use tokio::process::{Child, Command};
+use tokio::{
+    process::{Child, Command},
+    time::sleep,
+};
 
 struct ChildGuard(Child);
 
@@ -126,6 +129,25 @@ async fn test_att_clients() -> Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let cert_path = get_public_certificate_path(&certs_dir);
+
+    // Wait until cert path to be ready.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let poll_interval = Duration::from_millis(100);
+    loop {
+        if cert_path.exists() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let reason = format!(
+                "timed-out waiting for certs to become available (path={})",
+                cert_path.display()
+            );
+            error!("test_att_clients(): {reason}");
+            anyhow::bail!(reason);
+        }
+
+        sleep(poll_interval).await;
+    }
 
     // While it is starting, rebuild the test application so that we can inject the
     // new certificates. Note that we need to pass the certificate's path
