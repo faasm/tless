@@ -58,6 +58,19 @@ class Logger : public attest::AttestationLogger {
 };
 
 /**
+ * @brief Fetches attestation report from SNP hardware.
+ *
+ * This function can be used to fetch the hardware attestation report. It
+ * automatically detects if it is run in a bare-metal SNP setting, in which
+ * case the guest has access to `/dev/sev-guest` or in a para-virtualized
+ * environment in Azure, in which case it reads the report from a TPM.
+ *
+ * @param reportData Additional data to include in the report, signed by the HW.
+ * @return The SNP report as a byte array.
+ */
+std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData);
+
+/**
  * @brief Gets an attestation JWT for an SNP cVM.
  *
  * This function is the main entrypoint to run the attribute-minting protocol
