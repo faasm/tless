@@ -1,8 +1,14 @@
 #include "accless/abe4/abe4.h"
 #include "accless/attestation/attestation.h"
+#include "accless/attestation/ec_keypair.h"
+#include "accless/base64/base64.h"
 #include "accless/jwt/jwt.h"
 
+#include <chrono>
+#include <fstream>
 #include <iostream>
+#include <semaphore>
+#include <thread>
 
 /*
 #include "AttestationClient.h"
@@ -29,12 +35,6 @@ std::vector<std::string> split(const std::string &str, char delim) {
     }
 
     return result;
-}
-
-// Get the URL of our own attestation service (**not** MAA)
-std::string getAttestationServiceUrl() {
-    const char *val = std::getenv("AS_URL");
-    return val ? std::string(val) : "https://127.0.0.1:8443";
 }
 
 void tpmRenewAkCert() {
@@ -94,116 +94,11 @@ AttestationResult parseClientPayload(
     return result;
 }
 
-AttestationParameters
-getAzureAttestationParameters(AttestationClient *attestationClient) {
-    std::string attestationUrl = "https://accless.eus.attest.azure.net";
-
-    // Client parameters
-    attest::ClientParameters clientParams = {};
-    clientParams.attestation_endpoint_url =
-        (unsigned char *)attestationUrl.c_str();
-    // TODO: can we add a public key here?
-    std::string nonce = "foo";
-    std::string clientPayload = "{\"nonce\":\"" + nonce + "\"}";
-    clientParams.client_payload = (unsigned char *)clientPayload.c_str();
-    clientParams.version = CLIENT_PARAMS_VERSION;
-
-    AttestationParameters params = {};
-    std::unordered_map<std::string, std::string> clientPayloadMap;
-    if (clientParams.client_payload != nullptr) {
-        auto result =
-            parseClientPayload(clientParams.client_payload, clientPayloadMap);
-        if (result.code_ != AttestationResult::ErrorCode::SUCCESS) {
-            std::cout << "accless: error parsing client payload" << std::endl;
-            throw std::runtime_error("error parsing client payload");
-        }
-    }
-
-    auto result = ((AttestationClientImpl *)attestationClient)
-                      ->getAttestationParameters(clientPayloadMap, params);
-    if (result.code_ != AttestationResult::ErrorCode::SUCCESS) {
-        std::cout << "accless: failed to get attestation parameters"
-                  << std::endl;
-        throw std::runtime_error("failed to get attestation parameters");
-    }
-
-    return params;
-}
-
-std::string maaGetJwtFromParams(AttestationClient *attestationClient,
-                                const AttestationParameters &params,
-                                const std::string &attestationUri) {
-    bool is_cvm = false;
-    bool attestation_success = true;
-    std::string jwt_str;
-
-    unsigned char *jwt = nullptr;
-    auto attResult = ((AttestationClientImpl *)attestationClient)
-                         ->Attest(params, attestationUri, &jwt);
-    if (attResult.code_ != attest::AttestationResult::ErrorCode::SUCCESS) {
-        std::cerr
-            << "accless: error getting attestation from attestation client"
-            << std::endl;
-        Uninitialize();
-        throw std::runtime_error(
-            "failed to get attestation from attestation client");
-    }
-
-    std::string jwtStr = reinterpret_cast<char *>(jwt);
-    attestationClient->Free(jwt);
-
-    return jwtStr;
-}
-
 size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
     size_t totalSize = size * nmemb;
     auto *response = static_cast<std::string *>(userdata);
     response->append(ptr, totalSize);
     return totalSize;
-}
-
-std::string asGetJwtFromReport(const std::string &asUrl,
-                               const std::vector<uint8_t> &snpReport) {
-    std::string jwt;
-
-    CURL *curl = curl_easy_init();
-    if (!curl) {
-        std::cerr << "accless: failed to initialize CURL" << std::endl;
-        throw std::runtime_error("curl error");
-    }
-
-    curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(
-        curl, CURLOPT_CAINFO,
-        "/home/tless/git/faasm/tless/attestation-service/certs/cert.pem");
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, snpReport.data());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, snpReport.size());
-
-    struct curl_slist *headers = nullptr;
-    headers =
-        curl_slist_append(headers, "Content-Type: application/octet-stream");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-    // Set write function and data
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &jwt);
-
-    // Perform the request
-    CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-        std::cerr << "accless: CURL error: " << curl_easy_strerror(res)
-                  << std::endl;
-        curl_easy_cleanup(curl);
-        curl_slist_free_all(headers);
-        throw std::runtime_error("curl error");
-    }
-
-    curl_easy_cleanup(curl);
-    curl_slist_free_all(headers);
-
-    return jwt;
 }
 
 void validateJwtClaims(const std::string &jwtStr, bool verbose = false) {
@@ -261,9 +156,7 @@ std::vector<uint8_t> getSnpReportFromTPM() {
     return snpReport;
 }
 
-void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx,
-             std::vector<uint8_t> &cipherText, bool compare = false) {
-    // TODO: in theory, the attributes should be extracted frm the JWT
+void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx, std::vector<uint8_t> &cipherText, bool compare = false) { // TODO: in theory, the attributes should be extracted frm the JWT
     std::vector<std::string> attributes = {"foo", "bar"};
 
     auto actualPlainText = ctx.cpAbeDecrypt(attributes, cipherText);
@@ -496,21 +389,53 @@ void runOnce(bool maa = false) {
 }
 */
 
+std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
+                                     const std::vector<uint8_t>& reportData,
+                                     const std::string& gid,
+                                     const std::string& workflowId,
+                                     const std::string& nodeId)
+{
+    std::string reportB64 = accless::base64::encodeUrlSafe(report);
+    std::string runtimeDataB64 = accless::base64::encodeUrlSafe(reportData);
+    std::string body = accless::attestation::utils::buildRequestBody(
+        reportB64, runtimeDataB64, gid, workflowId, nodeId);
+
+    // Send the request to Accless' attestation service, and get the response back.
+    return accless::attestation::getJwtFromReport("/verify-snp-report", body);
+}
+
 /**
- * @brief Performs a single secret-key-release operation using Accless.
+ * @brief Measures time to run N secret-release operations.
  *
- * This function is the main body of Accless secret-key-release operation. It
- * relies on an instance of the attestation-service running, and on being
- * deployed in a genuine SNP cVM. Either in a para-virtualized environment on
- * Azure, or on bare-metal.
+ * This function measures the time it takes to perform N secret-release
+ * operations in Accless. To emulate having N independent clients, without
+ * spawning N isolated VMs, we do the operations each client would do in
+ * isolation in serial, and then the ones that stress the scalability of the
+ * attestation service, in parallel.
+ *
+ * This means that the time to run N requests is measured as the sum of:
+ * - Time to fetch HW attestation report once.
+ * - Time to send N requests in parallel to the AS.
+ * - Time to perform the CP-ABE decryption once.
+ *
+ * We follow the same strategy for the other baselines. Otherwise, for example,
+ * we would not be able to retrieve the SNP report from a TPM in parallel N
+ * times due to a race condition in the TPM code (or would be serialized by the
+ * PSP).
+ *
+ * @param numRequests The number of requests to run.
+ * @param maxParallelism The number of parallel threads to use.
+ * @return The time elapsed to run the number of requests.
  */
-int doAcclessSkr() {
+ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism, bool maa) {
+    // =======================================================================
+    // CP-ABE Preparation
+    // =======================================================================
+
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
     auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
-    std::cout << "escrow-xput: got attesation service's state" << std::endl;
     std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
-    std::cout << "escrow-xput: packed partial MPK into full MPK" << std::endl;
 
     std::string gid = "baz";
     std::string wfId = "foo";
@@ -523,82 +448,155 @@ int doAcclessSkr() {
 
     // Generate a test ciphertext that only us, after a succesful attestation,
     // should be able to decrypt.
-    std::cout << "escrow-xput: encrypting cp-abe with policy: " << policy
-              << std::endl;
     auto [gt, ct] = accless::abe4::encrypt(mpk, policy);
     if (gt.empty() || ct.empty()) {
-        std::cerr << "escrow-xput: error running cp-abe encryption"
+        std::cerr << "run_requests(): error running cp-abe encryption"
                   << std::endl;
-        return 1;
+        throw std::runtime_error("run_requests(): error running cp-abe encryption");
     }
-    std::cout << "escrow-xput: ran CP-ABE encryption" << std::endl;
 
-    // TODO: Should start measuring now!
-    std::cout << "escrow-xput: running remote attestation..." << std::endl;
+    // =======================================================================
+    // Run benchmark
+    // =======================================================================
+
+    std::cout << "escrow-xput: beginning benchmark. num reqs: " << numRequests << std::endl;
+
+    std::counting_semaphore semaphore(maxParallelism);
+    std::vector<std::thread> threads;
+
+    auto start = std::chrono::steady_clock::now();
+
+    // Generate ephemeral EC keypair.
+    accless::attestation::ec::EcKeyPair keyPair;
+    std::array<uint8_t, 64> reportData = keyPair.getReportData();
+    std::vector<uint8_t> reportDataVec(reportData.begin(), reportData.end());
+
+    // Fetching the vTPM measurements is not thread-safe, but would happen
+    // in each client anyway, so we execute it only once, but still measure
+    // the time it takes.
+    auto report = accless::attestation::snp::getReport(reportData);
+
+    for (int i = 1; i < numRequests; ++i) {
+        // Limit how many threads we spawn in parallel by acquiring a semaphore.
+        semaphore.acquire();
+
+        threads.emplace_back([&semaphore, &report, &reportDataVec, &gid, &wfId, &nodeId]() {
+            auto response = sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
+            // And releasing when the thread is done.
+            semaphore.release();
+        });
+    }
+
+    // Send one request out of the loop, to easily process the result.
+    auto response = sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
+
+    // Wait for all requests to finish. We do this now, and not at the end
+    // to emulate the situation where we would have N independent clients.
+    for (auto &t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    // Accless' authorization is equivalent to checking if we can decrypt
+    // the originaly ciphertext from the AS' response.
+    std::string encryptedB64 =
+        accless::attestation::utils::extractJsonStringField(response,
+                                                            "encrypted_token");
+    std::string serverKeyB64 =
+        accless::attestation::utils::extractJsonStringField(response,
+                                                            "server_pubkey");
+    std::vector<uint8_t> encrypted =
+        accless::base64::decodeUrlSafe(encryptedB64);
+    std::vector<uint8_t> serverPubKey =
+        accless::base64::decodeUrlSafe(serverKeyB64);
+
+    // Derive shared secret necessary to decrypt JWT.
+    std::vector<uint8_t> sharedSecret =
+        keyPair.deriveSharedSecret(serverPubKey);
+    if (sharedSecret.size() < accless::attestation::AES_128_KEY_SIZE) {
+        throw std::runtime_error("accless(att): derived secret too small");
+    }
+    std::vector<uint8_t> aesKey(sharedSecret.begin(),
+                                sharedSecret.begin() + accless::attestation::AES_128_KEY_SIZE);
+
+    // Decrypt JWT.
+    auto jwt = accless::attestation::decryptJwt(encrypted, aesKey);
+    if (jwt.empty()) {
+        std::cerr << "escrow-xput: empty JWT returned" << std::endl;
+        throw std::runtime_error("escrow-xput: empty JWT returned");
+    }
+
+    // Verify JWT.
+    if (!accless::jwt::verify(jwt)) {
+        std::cerr << "escrow-xput: JWT signature verification failed"
+                  << std::endl;
+        throw std::runtime_error("escrow-xput: JWT signature verification failed");
+    }
+
+    // Get the partial USK from the JWT, and wrap it in a full key for
+    // CP-ABE decryption.
+    std::string partialUskB64 =
+        accless::jwt::getProperty(jwt, "partial_usk_b64");
+    if (partialUskB64.empty()) {
+        std::cerr
+            << "att-client-snp: JWT is missing 'partial_usk_b64' field"
+            << std::endl;
+        throw std::runtime_error("escrow-xput: bad JWT");
+    }
+    std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
+
+    // Run decryption.
+    std::optional<std::string> decrypted_gt =
+        accless::abe4::decrypt(uskB64, gid, policy, ct);
+    if (!decrypted_gt.has_value()) {
+        std::cerr << "att-client-snp: CP-ABE decryption failed"
+                  << std::endl;
+        throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
+    } else if (decrypted_gt.value() != gt) {
+        std::cerr << "att-client-snp: CP-ABE decrypted ciphertexts do not"
+                  << " match!" << std::endl;
+        std::cerr << "att-client-snp: Original GT: " << gt << std::endl;
+        std::cerr << "att-client-snp: Decrypted GT: "
+                  << decrypted_gt.value() << std::endl;
+        throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsedSecs = end - start;
+    std::cout << "Elapsed time (" << numRequests << "): " << elapsedSecs.count()
+              << " seconds\n";
+
+    return elapsedSecs;
+}
+
+void doBenchmark(const std::vector<int>& numRequests, bool maa) {
+    // Write elapsed time to CSV
+    std::string fileName = maa ? "accless-maa.csv" : "accless.csv";
+    std::ofstream csvFile(fileName, std::ios::out);
+    csvFile << "NumRequests,TimeElapsed\n";
+
+    // WARNING: this is copied from invrs/src/tasks/ubench.rs and must be
+    // kept in sync!
+    int numRepeats = maa ? 1 : 3;
+    int maxParallelism = 100;
     try {
-        const std::string jwt =
-            accless::attestation::snp::getAttestationJwt(gid, wfId, nodeId);
-        if (jwt.empty()) {
-            std::cerr << "escrow-xput: empty JWT returned" << std::endl;
-            return 1;
+        for (const auto &i : numRequests) {
+            for (int j = 0; j < numRepeats; j++) {
+                auto elapsedTimeSecs = runRequests(i, maxParallelism, maa);
+                csvFile << i << "," << elapsedTimeSecs.count() << '\n';
+            }
         }
-
-        if (!accless::jwt::verify(jwt)) {
-            std::cerr << "escrow-xput: JWT signature verification failed"
-                      << std::endl;
-            return 1;
-        }
-
-        // Get the partial USK from the JWT, and wrap it in a full key for
-        // CP-ABE decryption.
-        std::string partialUskB64 =
-            accless::jwt::getProperty(jwt, "partial_usk_b64");
-        if (partialUskB64.empty()) {
-            std::cerr
-                << "att-client-snp: JWT is missing 'partial_usk_b64' field"
-                << std::endl;
-            return 1;
-        }
-        std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
-
-        // Run decryption.
-        std::optional<std::string> decrypted_gt =
-            accless::abe4::decrypt(uskB64, gid, policy, ct);
-        if (!decrypted_gt.has_value()) {
-            std::cerr << "att-client-snp: CP-ABE decryption failed"
-                      << std::endl;
-            return 1;
-        } else if (decrypted_gt.value() != gt) {
-            std::cerr << "att-client-snp: CP-ABE decrypted ciphertexts do not"
-                      << " match!" << std::endl;
-            std::cerr << "att-client-snp: Original GT: " << gt << std::endl;
-            std::cerr << "att-client-snp: Decrypted GT: "
-                      << decrypted_gt.value() << std::endl;
-            return 1;
-        }
-
-        // End of experiment.
-    } catch (const std::exception &ex) {
-        std::cerr << "escrow-xput: error: " << ex.what() << std::endl;
     } catch (...) {
-        std::cerr << "escrow-xput: unexpected error" << std::endl;
+        std::cout << "accless: error running benchmark" << std::endl;
     }
 
-    std::cout << "escrow-xput: experiment succesful" << std::endl;
-    return 0;
+    csvFile.close();
 }
 
 int main(int argc, char **argv) {
-    bool maa = ((argc == 2) && (std::string(argv[1]) == "--maa"));
-    bool once = ((argc == 2) && (std::string(argv[1]) == "--once"));
+    bool maa = false;
+    std::vector<int> numRequests = {1, 10, 50, 100, 200, 400, 600, 800, 1000};
 
-    doAcclessSkr();
-
-    /*
-    if (once) {
-        runOnce();
-    } else {
-        doBenchmark(maa);
-    }
-    */
+    doBenchmark(numRequests, maa);
 }
