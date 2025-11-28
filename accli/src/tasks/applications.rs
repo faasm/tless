@@ -45,6 +45,8 @@ pub enum ApplicationName {
     AttClientSnp,
     #[value(name = "escrow-xput")]
     EscrowXput,
+    #[value(name = "hello-snp")]
+    HelloSnp,
 }
 
 impl Display for ApplicationName {
@@ -53,6 +55,7 @@ impl Display for ApplicationName {
             ApplicationName::AttClientSgx => write!(f, "att-client-sgx"),
             ApplicationName::AttClientSnp => write!(f, "att-client-snp"),
             ApplicationName::EscrowXput => write!(f, "escrow-xput"),
+            ApplicationName::HelloSnp => write!(f, "hello-snp"),
         }
     }
 }
@@ -65,6 +68,7 @@ impl FromStr for ApplicationName {
             "att-client-sgx" => Ok(ApplicationName::AttClientSgx),
             "att-client-snp" => Ok(ApplicationName::AttClientSnp),
             "escrow-xput" => Ok(ApplicationName::EscrowXput),
+            "hello-snp" => Ok(ApplicationName::HelloSnp),
             _ => anyhow::bail!("Invalid Function: {}", s),
         }
     }
