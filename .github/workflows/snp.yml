@@ -1,0 +1,59 @@
+name: "SNP End-to-End Tests"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+
+defaults:
+  run:
+    shell: bash
+
+# Cancel previous running actions for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  run-functions:
+    if: github.event.pull_request.draft == false
+    runs-on: [self-hosted, snp]
+    steps:
+      - name: "Check out the code"
+        uses: actions/checkout@v4
+
+      - name: "Run SNP setup"
+        run: ./scripts/accli_wrapper.sh dev cvm setup --clean
+
+      - name: "Start attestation service in the background"
+        run: ./scripts/accli_wrapper.sh attestation-service run --background --certs-dir ./certs --force-clean-certs --rebuild
+
+      # Fetch latest version of the code in the cVM.
+      - name: "Fetch code in the cVM"
+        run: |
+          # Work-out current branch name.
+          if [ -n "${{ github.head_ref }}" ]; then
+            BRANCH=${{ github.head_ref }}
+          else
+            BRANCH=${GITHUB_REF_NAME}
+          fi
+          ./scripts/accli_wrapper.sh dev cvm run -- \
+            "git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH"
+
+      # Build SNP applications and embed the attestation service's certificate.
+      - name: "Build SNP applications"
+        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-path ./certs/cert.pem --in-cvm
+
+      - name: "Run supported SNP applications"
+        run: |
+          # First get the external IP so that we can reach the attestation-service from the cVM.
+          AS_URL=$(./scripts/accli_wrapper.sh attestation-service health --url "https://0.0.0.0:8443" --cert-path ./certs/cert.pem 2>&1 \
+            | grep "attestation service is healthy and reachable on:" | awk '{print $NF}')
+          echo "Got AS URL: ${AS_URL}"
+          ./scripts/accli_wrapper.sh applications run function escrow-xput --as-url ${AS_URL} --as-cert-path ./certs/cert.pem --in-cvm
+
+      - name: "Stop attestation service in the background"
+        run: ./scripts/accli_wrapper.sh attestation-service stop

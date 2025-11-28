@@ -1,8 +1,11 @@
 FROM ghcr.io/faasm/cpp-sysroot:0.8.0
 
 # Install rust
-RUN rm -rf /root/.rustup \
-    && apt update && apt install -y --no-install-recommends \
+ENV RUSTUP_HOME=/opt/rust/rustup
+ENV CARGO_HOME=/opt/rust/cargo
+ENV PATH=/opt/rust/cargo/bin:$PATH
+RUN apt update && apt install -y --no-install-recommends \
+        acl \
         build-essential \
         curl \
         gosu \
@@ -11,7 +14,13 @@ RUN rm -rf /root/.rustup \
         wget \
         zlib1g-dev \
     && curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
-    && . "$HOME/.cargo/env"
+    # Create a group that owns the rust toolchain so that we can share it with
+    # our user at run time.
+    && groupadd -r rusttool \
+    && mkdir -p /opt/rust/rustup /opt/rust/cargo \
+    && chown -R root:rusttool /opt/rust \
+    && chmod -R g+rwX /opt/rust \
+    && find /opt/rust -type d -exec chmod g+s {} +
 
 # Deps for Azure's cVM guest library: OpenSSL + libcurl + TPM2-TSS.
 # The versions are taken from the pre-requisite script in the repo, and the
@@ -59,23 +68,34 @@ RUN wget https://www.openssl.org/source/openssl-3.3.2.tar.gz \
     && rm -rf /opt/tpm2-tss
 
 # Build specific libraries we need
+ARG EXAMPLES_DIR=/code/faasm-examples
 RUN rm -rf /code \
     && mkdir -p /code \
     && cd /code \
     # Checkout to examples repo to a specific commit
-    && git clone https://github.com/faasm/examples /code/faasm-examples \
-    && cd /code/faasm-examples \
+    && git clone https://github.com/faasm/examples ${EXAMPLES_DIR} \
+    && cd ${EXAMPLES_DIR} \
     && git checkout 3cd09e9cf41979fe73c8a9417b661ba08b5b3a75 \
     && git submodule update --init -f cpp \
     # Build specific CPP libs
-    && cd /code/faasm-examples/cpp \
+    && cd ${EXAMPLES_DIR}/cpp \
     && ./bin/inv_wrapper.sh libfaasm --clean \
     && git submodule update --init ./third-party/zlib \
     && ./bin/inv_wrapper.sh zlib \
-    && cd /code/faasm-examples \
+    && cd ${EXAMPLES_DIR} \
     && git submodule update --init ./examples/opencv \
     && ./bin/inv_wrapper.sh \
-        opencv opencv --native
+        opencv opencv --native \
+    # Add shared group ownership to faasm code.
+    && groupadd -r faasm \
+    && mkdir -p ${EXAMPLES_DIR} \
+    # maybe /code needs it too TODO delete me
+    && chown -R root:faasm ${EXAMPLES_DIR} \
+    && chmod -R g+rwX ${EXAMPLES_DIR} \
+    # make directories setgid so new stuff inherits the group TODO delete me
+    && find /code -type d -exec chmod g+s {} + \
+    && setfacl -R -m g:faasm:rwX ${EXAMPLES_DIR} \
+    && setfacl -R -d -m g:faasm:rwX ${EXAMPLES_DIR}
 
 # Prepare repository structure
 ARG ACCLESS_VERSION
@@ -94,8 +114,8 @@ ENV ACCLESS_DOCKER=on
     #     && python3 ./workflows/build.py
 
 WORKDIR /code/accless
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+COPY scripts/docker/entrypoint.sh /usr/local/bin/docker_entrypoint.sh
+RUN chmod +x /usr/local/bin/docker_entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
 
 CMD ["/bin/bash", "-l"]

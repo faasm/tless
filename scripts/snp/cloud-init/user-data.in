@@ -1,0 +1,42 @@
+#cloud-config
+#
+# This cloud-init config is intentionally minimal.
+# Most provisioning (packages, users, rust, git clone, etc.)
+# is done offline via scripts/snp/setup.sh using qemu-nbd.
+#
+# We assume the 'ubuntu' user already exists in the image
+# with UID 2000 and appropriate groups (sudo, docker, sevguest).
+# Cloud-init just injects the SSH key.
+#
+# If you modify this file, you most likely will need to recreate the cVM's disk
+# image from scratch. To do this, you may run:
+#
+# accli dev cvm build --component disk
+# accli dev cvm build --component cloudinit
+#
+# The next time you run a cVM, it will re-run all the comands specified herein.
+
+# Configure user `ubuntu`.
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - "${SSH_PUB_KEY}"
+
+# Very light runtime tweaks only.
+runcmd:
+    # Make sure /dev/sev-guest udev rule has taken effect and module is loaded.
+    - [ sh, -c, '
+        groupadd -r sevguest || true;
+        usermod -aG sevguest ubuntu || true;
+        modprobe sev-guest || true;
+        udevadm control --reload-rules;
+        udevadm trigger /dev/sev-guest || true;
+    ' ]
+    # Ensure docker + sshd are running (systemctl enable handled offline already).
+    - [ systemctl, enable, --now, docker ]
+    - [ systemctl, enable, --now, ssh.service ]
+    # Optional: pull docker image at runtime (idempotent).
+    - [ sudo, "-u", "ubuntu", "bash", "-lc", "docker pull ghcr.io/faasm/accless-experiments:${ACCLESS_VERSION} || true" ]
+
+final_message: "Accless SNP test instance v${ACCLESS_VERSION} is ready."

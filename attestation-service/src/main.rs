@@ -14,6 +14,8 @@ use rustls::crypto::CryptoProvider;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::net::TcpListener;
 
+#[cfg(feature = "snp")]
+mod amd;
 #[cfg(feature = "azure-cvm")]
 mod azure_cvm;
 mod ecdhe;
@@ -51,15 +53,21 @@ struct Cli {
     mock: bool,
 }
 
-async fn health() -> impl IntoResponse {
-    (StatusCode::OK, "OK")
+async fn health(Extension(state): Extension<Arc<AttestationServiceState>>) -> impl IntoResponse {
+    match tls::get_node_url() {
+        Ok(url) => (StatusCode::OK, format!("https://{}:{}", url, state.port)),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error getting node URL: {}", err),
+        ),
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialise logging and parse CLI arguments.
     let cli = Cli::parse();
-    attestation_service::init_logging(false);
+    attestation_service::init_logging();
 
     // Initialise crypto provider and TLS config, this also sets up the TLS
     // certificates if necessary.
@@ -69,9 +77,10 @@ async fn main() -> Result<()> {
 
     // Set-up per request state.
     let state = Arc::new(AttestationServiceState::new(
-        cli.certs_dir,
+        cli.certs_dir.clone(),
         cli.sgx_pccs_url.clone(),
         cli.mock,
+        cli.port,
     )?);
 
     // Start HTTPS server.
@@ -84,7 +93,19 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
     let listener = TcpListener::bind(addr).await;
 
-    info!("Accless attestation server running on https://{}", addr);
+    info!("main(): accless attestation server running!");
+    info!(
+        "main(): external IP: https://{}:{}",
+        tls::get_node_url()?,
+        cli.port
+    );
+    info!(
+        "main(): cert path: {}/cert.pem",
+        cli.certs_dir
+            .unwrap_or(tls::get_default_certs_dir())
+            .display()
+    );
+
     loop {
         let (stream, _) = listener.as_ref().expect("error listening").accept().await?;
         let service = TowerToHyperService::new(app.clone());

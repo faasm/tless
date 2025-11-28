@@ -44,12 +44,6 @@ export FAASM_INI_FILE=/home/tless/git/faasm/faasm/faasm.ini
 export FAASM_VERSION=0.33.0
 
 # ----------------------------
-# APT deps
-# ----------------------------
-
-source ${THIS_DIR}/apt.sh
-
-# ----------------------------
 # Python deps
 # ----------------------------
 

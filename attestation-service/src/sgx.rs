@@ -227,6 +227,7 @@ pub async fn verify_sgx_report(
                 );
             }
         };
+        // FIXME(#55): also check the MRENCLAVE measurement against a reference value.
         let verified_report = match dcap_qvl::verify::verify(&quote_bytes, &collateral, now) {
             Ok(tcb) => tcb,
             Err(e) => {
@@ -237,7 +238,6 @@ pub async fn verify_sgx_report(
                 );
             }
         };
-
         info!("verififed sgx report (status={})", verified_report.status);
 
         match verified_report.report {

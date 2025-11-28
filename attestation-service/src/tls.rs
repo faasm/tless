@@ -20,6 +20,7 @@ use tokio_rustls::TlsAcceptor;
 pub fn get_default_certs_dir() -> PathBuf {
     PathBuf::from(env!("ACCLESS_ROOT_DIR"))
         .join("config")
+        .join("attestation-service")
         .join("certs")
 }
 
@@ -59,7 +60,7 @@ pub fn get_public_certificate_path(certs_dir: &Path) -> PathBuf {
 /// # Returns
 ///
 /// The external node IP as a string.
-fn get_node_url() -> Result<String> {
+pub fn get_node_url() -> Result<String> {
     let output = Command::new("ip")
         .args(["-o", "route", "get", "to", "8.8.8.8"])
         .output()?;
@@ -220,7 +221,7 @@ mod tests {
     #[test]
     fn test_get_certs_dir() {
         let certs_dir = get_default_certs_dir();
-        assert!(certs_dir.ends_with("config/certs"));
+        assert!(certs_dir.ends_with("config/attestation-service/certs"));
     }
 
     #[test]

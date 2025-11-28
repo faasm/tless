@@ -10,7 +10,7 @@ APPS_ROOT = dirname(realpath(__file__))
 PROJ_ROOT = dirname(APPS_ROOT)
 
 
-def compile(wasm=False, native=False, debug=False, clean=False, cert_path=None):
+def compile(wasm=False, native=False, debug=False, clean=False, as_cert_path=None):
     """
     Compile the different applications supported in Accless.
     """
@@ -24,11 +24,11 @@ def compile(wasm=False, native=False, debug=False, clean=False, cert_path=None):
     if not exists(build_dir):
         makedirs(build_dir)
 
-    if cert_path is not None:
-        if not exists(cert_path):
+    if as_cert_path is not None:
+        if not exists(as_cert_path):
             print(f"ERROR: passed --cert-path variable but path does not exist")
             exit(1)
-        cert_path = abspath(cert_path)
+        as_cert_path = abspath(as_cert_path)
 
     # if wasm:
     #     wasm_cmake(
@@ -47,7 +47,7 @@ def compile(wasm=False, native=False, debug=False, clean=False, cert_path=None):
             "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
             "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
             "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
-            f"-DACCLESS_AS_CERT_PEM={cert_path}" if cert_path is not None else "",
+            f"-DACCLESS_AS_CERT_PEM={as_cert_path}" if as_cert_path is not None else "",
             APPS_ROOT,
         ]
         cmake_cmd = " ".join(cmake_cmd)
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug", action="store_true", help="Build in debug mode."
     )
-    parser.add_argument("--cert-path", type=str, help="Path to certificate PEM file.")
+    parser.add_argument("--as-cert-path", type=str, help="Path to certificate PEM file.")
     args = parser.parse_args()
 
     if args.clean:
@@ -84,11 +84,11 @@ if __name__ == "__main__":
         wasm=True,
         debug=args.debug,
         clean=args.clean,
-        cert_path=args.cert_path,
+        as_cert_path=args.as_cert_path,
     )
     compile(
         native=True,
         debug=args.debug,
         clean=args.clean,
-        cert_path=args.cert_path,
+        as_cert_path=args.as_cert_path,
     )

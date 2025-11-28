@@ -1,0 +1,166 @@
+use crate::env::Env;
+use anyhow::{Context, Result};
+use log::info;
+use nix::{
+    sys::signal::{Signal, kill},
+    unistd::Pid,
+};
+use reqwest;
+use std::{
+    fs,
+    path::Path,
+    process::{Command, Stdio},
+};
+
+const AS_URL_ENV_VAR: &str = "ACCLESS_AS_URL";
+const AS_CERT_PATH_ENV_VAR: &str = "ACCLESS_AS_CERT_PATH";
+const PID_FILE_PATH: &str = "./config/attestation-service/PID";
+
+/// Returns the required attestation-service env. vars given a URL and cert
+/// path.
+pub fn get_as_env_vars(as_url: &str, as_cert_path: &str) -> Vec<String> {
+    vec![
+        format!("{AS_URL_ENV_VAR}={as_url}"),
+        format!("{AS_CERT_PATH_ENV_VAR}={as_cert_path}"),
+    ]
+}
+
+pub struct AttestationService;
+
+impl AttestationService {
+    pub fn build() -> Result<()> {
+        let mut cmd = Command::new("cargo");
+        cmd.arg("build")
+            .arg("-p")
+            .arg("attestation-service")
+            .arg("--release");
+        let status = cmd.status()?;
+        if !status.success() {
+            anyhow::bail!("Failed to build attestation service");
+        }
+        Ok(())
+    }
+
+    pub fn run(
+        certs_dir: Option<&std::path::Path>,
+        port: Option<u16>,
+        sgx_pccs_url: Option<&std::path::Path>,
+        force_clean_certs: bool,
+        mock: bool,
+        rebuild: bool,
+        background: bool,
+    ) -> Result<()> {
+        if rebuild {
+            Self::build()?;
+        }
+
+        let mut cmd = Command::new(
+            Env::proj_root()
+                .join("target")
+                .join("release")
+                .join("attestation-service"),
+        );
+        if let Some(certs_dir) = certs_dir {
+            cmd.arg("--certs-dir").arg(certs_dir);
+        }
+        if let Some(port) = port {
+            cmd.arg("--port").arg(port.to_string());
+        }
+        if let Some(sgx_pccs_url) = sgx_pccs_url {
+            cmd.arg("--sgx-pccs-url").arg(sgx_pccs_url);
+        }
+        if force_clean_certs {
+            cmd.arg("--force-clean-certs");
+        }
+        if mock {
+            cmd.arg("--mock");
+        }
+
+        if background {
+            info!("run(): running attestation service in background...");
+            let child = cmd
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .context("run(): failed to spawn attestation service in background")?;
+            let pid_file_path = Path::new(PID_FILE_PATH);
+            fs::create_dir_all(pid_file_path.parent().unwrap())
+                .context("run(): failed to create PID file dirs")?;
+            fs::write(PID_FILE_PATH, child.id().to_string())
+                .context("run(): failed to write PID file")?;
+            info!("run(): attestation service spawned (PID={})", child.id());
+            Ok(())
+        } else {
+            let status = cmd
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("Failed to run attestation service");
+            }
+            Ok(())
+        }
+    }
+
+    pub fn stop() -> Result<()> {
+        info!("stop(): stopping attestation service...");
+        let pid_str = fs::read_to_string(PID_FILE_PATH).context(format!(
+            "Failed to read PID file at {}. Is the service running in background?",
+            PID_FILE_PATH
+        ))?;
+        let pid: u32 = pid_str
+            .trim()
+            .parse()
+            .context(format!("Failed to parse PID from file {}", PID_FILE_PATH))?;
+
+        info!("stop(): killing process with PID: {}", pid);
+        kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
+            .context(format!("Failed to kill process with PID {}", pid))?;
+
+        fs::remove_file(PID_FILE_PATH).context("failed to remove PID file")?;
+        info!("stop(): ttestation service stopped (PID={})", pid);
+        Ok(())
+    }
+
+    pub async fn health(url: Option<String>, cert_path: Option<std::path::PathBuf>) -> Result<()> {
+        let url = url.or_else(|| std::env::var(AS_URL_ENV_VAR).ok());
+        let cert_path = cert_path.or_else(|| {
+            std::env::var(AS_CERT_PATH_ENV_VAR)
+                .ok()
+                .map(std::path::PathBuf::from)
+        });
+
+        let url = match url {
+            Some(url) => url,
+            None => {
+                anyhow::bail!("Attestation service URL not provided. Set --url or {AS_URL_ENV_VAR}")
+            }
+        };
+
+        let client = match cert_path {
+            Some(cert_path) => {
+                let cert = fs::read(cert_path)?;
+                let cert = reqwest::Certificate::from_pem(&cert)?;
+                reqwest::Client::builder()
+                    .add_root_certificate(cert)
+                    .build()
+            }
+            None => reqwest::Client::builder().build(),
+        }?;
+
+        let response = client.get(format!("{}/health", url)).send().await?;
+        if response.status().is_success() {
+            let body = response.text().await?;
+            info!(
+                "health(): attestation service is healthy and reachable on: {}",
+                body
+            );
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "health(): attestation service is not healthy (status={})",
+                response.status()
+            );
+        }
+    }
+}

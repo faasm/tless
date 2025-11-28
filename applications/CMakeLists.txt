@@ -22,31 +22,18 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../accless ${ACCLESS_BUILD_DIRECTORY}
 # Prepare variables for workflow compilation
 if (CMAKE_SYSTEM_NAME STREQUAL "WASI")
     set(ACCLESS_LIBRARIES faasm accless::accless)
-    set(ACCLESS_HEADERS
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/include
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/jwt/cpp-bindings
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/abe4/cpp-bindings
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/base64
-    )
 else ()
     set(ACCLESS_LIBRARIES accless::accless)
-    set(ACCLESS_HEADERS
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/include
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/jwt/cpp-bindings
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/abe4/cpp-bindings
-        ${CMAKE_CURRENT_LIST_DIR}/../accless/libs/base64
-    )
 endif()
+set(ACCLESS_HEADERS ${ACCLESS_INCLUDE_PREFIX_DIR})
 
 # =============================================================================
 # Application subdirectories
 # =============================================================================
 
-# Test applications.
 if (NOT CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    add_subdirectory(./functions)
     add_subdirectory(./test)
 endif ()
 
 # To-Do: add workflows
-
-# To-Do: add functions

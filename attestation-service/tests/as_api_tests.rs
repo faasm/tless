@@ -1,7 +1,4 @@
-use accli::tasks::{
-    applications::Applications,
-    docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker},
-};
+use accli::tasks::applications::{ApplicationName, ApplicationType, Applications};
 use anyhow::Result;
 use log::{error, info};
 use reqwest::Client;
@@ -9,14 +6,20 @@ use serde_json::Value;
 use serial_test::serial;
 use std::{
     path::{Path, PathBuf},
-    time::Duration,
+    process::Stdio,
+    time::{Duration, Instant},
 };
 use tempfile::tempdir;
-use tokio::process::Child;
-
-mod common;
+use tokio::{
+    process::{Child, Command},
+    time::sleep,
+};
 
 struct ChildGuard(Child);
+
+// ===============================================================================================
+// Helper Functions
+// ===============================================================================================
 
 impl Drop for ChildGuard {
     fn drop(&mut self) {
@@ -24,7 +27,28 @@ impl Drop for ChildGuard {
     }
 }
 
-// FIXME: I doubt this is working
+fn spawn_as(certs_dir: &str, clean_certs: bool, mock: bool) -> Result<Child> {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_attestation-service"));
+    cmd.arg("--certs-dir")
+        .arg(certs_dir)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    if clean_certs {
+        cmd.arg("--force-clean-certs");
+    }
+
+    if mock {
+        cmd.arg("--mock");
+    }
+
+    Ok(cmd.spawn()?)
+}
+
+pub fn get_public_certificate_path(certs_dir: &Path) -> PathBuf {
+    certs_dir.join("cert.pem")
+}
+
 async fn health_check(client: &Client) -> Result<()> {
     let mut attempts = 0;
     let max_attempts = 5;
@@ -48,49 +72,16 @@ async fn health_check(client: &Client) -> Result<()> {
     }
 }
 
-/// # Description
-///
-/// Get the path of SGX's attestation client from _inside_ the docker container.
-fn get_att_client_sgx_path_in_ctr() -> Result<PathBuf> {
-    let path = PathBuf::from(DOCKER_ACCLESS_CODE_MOUNT_DIR)
-        .join("applications")
-        .join("build-native")
-        .join("test")
-        .join("att-client-sgx")
-        .join("att-client-sgx");
-
-    Ok(path)
-}
-
-/// # Description
-///
-/// Get the path of SNP's attestation client from _inside_ the docker container.
-fn get_att_client_snp_path_in_ctr() -> Result<PathBuf> {
-    let path = PathBuf::from(DOCKER_ACCLESS_CODE_MOUNT_DIR)
-        .join("applications")
-        .join("build-native")
-        .join("test")
-        .join("att-client-snp")
-        .join("att-client-snp");
-
-    Ok(path)
-}
-
-/// # Description
-///
-/// Remap an absolute path the host to the mounted container.
-pub fn remap_host_path_to_container(host_path: &Path) -> Result<PathBuf> {
-    let prefix = Path::new(env!("ACCLESS_ROOT_DIR"));
-    let rel = host_path.strip_prefix(prefix)?;
-    Ok(Path::new("/code/accless").join(rel))
-}
+// ===============================================================================================
+// Tests
+// ===============================================================================================
 
 #[tokio::test]
 #[serial]
 async fn test_spawn_as() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, false)?;
+    let child = spawn_as(certs_dir.to_str().unwrap(), true, false)?;
     let _child_guard = ChildGuard(child);
 
     // Give the service time to start.
@@ -109,7 +100,7 @@ async fn test_spawn_as() -> Result<()> {
 async fn test_spawn_as_no_clean() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), false, false)?;
+    let child = spawn_as(certs_dir.to_str().unwrap(), false, false)?;
     let _child_guard = ChildGuard(child);
     // Give the service time to start.
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -122,25 +113,41 @@ async fn test_spawn_as_no_clean() -> Result<()> {
     Ok(())
 }
 
-/// WARNING: this test relies on `accli` and on the test applications being
-/// compiled. The former can be (re-)compiled with `cargo build -p accli` and
-/// the latter with `accli applications build test`
 #[tokio::test]
 #[serial]
 async fn test_att_clients() -> Result<()> {
-    attestation_service::init_logging(true);
+    attestation_service::init_logging();
 
     let certs_dir = Path::new(env!("ACCLESS_ROOT_DIR"))
         .join("config")
+        .join("attestation-service")
         .join("test-certs");
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, true)?;
+    let child = spawn_as(certs_dir.to_str().unwrap(), true, true)?;
     let _child_guard = ChildGuard(child);
 
     // Give the service time to start.
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let cert_path =
-        remap_host_path_to_container(&crate::common::get_public_certificate_path(&certs_dir))?;
+    let cert_path = get_public_certificate_path(&certs_dir);
+
+    // Wait until cert path to be ready.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let poll_interval = Duration::from_millis(100);
+    loop {
+        if cert_path.exists() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let reason = format!(
+                "timed-out waiting for certs to become available (path={})",
+                cert_path.display()
+            );
+            error!("test_att_clients(): {reason}");
+            anyhow::bail!(reason);
+        }
+
+        sleep(poll_interval).await;
+    }
 
     // While it is starting, rebuild the test application so that we can inject the
     // new certificates. Note that we need to pass the certificate's path
@@ -148,7 +155,7 @@ async fn test_att_clients() -> Result<()> {
     // container. We also _must_ set the `clean` flag to true, to force
     // recompilation.
     info!("re-building mock clients with new certificates, this will take a while...");
-    Applications::build(true, false, cert_path.to_str(), true)?;
+    Applications::build(true, false, Some(cert_path.clone()), true, false)?;
 
     // Health-check the attestation service.
     let client = reqwest::Client::builder()
@@ -157,31 +164,24 @@ async fn test_att_clients() -> Result<()> {
     health_check(&client).await?;
 
     // Run the client applications inside the container.
-    let att_client_sgx_path = get_att_client_sgx_path_in_ctr()?;
-    let att_client_snp_path = get_att_client_snp_path_in_ctr()?;
-    let env_vars = [
-        "ACCLESS_AS_URL=https://127.0.0.1:8443".to_string(),
-        format!("ACCLESS_AS_CERT_PATH={}", cert_path.display()),
-    ];
+    let as_url = "https://127.0.0.1:8443".to_string();
 
     info!("running mock sgx client...");
-    Docker::run(
-        &[att_client_sgx_path.display().to_string()],
-        true,
-        None,
-        &env_vars,
-        true,
+    Applications::run(
+        ApplicationType::Test,
+        ApplicationName::AttClientSgx,
         false,
+        Some(as_url.clone()),
+        Some(cert_path.clone()),
     )?;
 
     info!("running mock snp client...");
-    Docker::run(
-        &[att_client_snp_path.display().to_string()],
-        true,
-        None,
-        &env_vars,
-        true,
+    Applications::run(
+        ApplicationType::Test,
+        ApplicationName::AttClientSnp,
         false,
+        Some(as_url),
+        Some(cert_path),
     )?;
 
     match std::fs::remove_dir_all(&certs_dir) {
@@ -200,7 +200,7 @@ async fn test_att_clients() -> Result<()> {
 async fn test_get_state() -> Result<()> {
     let temp_dir = tempdir()?;
     let certs_dir = temp_dir.path();
-    let child = common::spawn_as(certs_dir.to_str().unwrap(), true, false)?;
+    let child = spawn_as(certs_dir.to_str().unwrap(), true, false)?;
     let _child_guard = ChildGuard(child);
 
     let client = reqwest::Client::builder()

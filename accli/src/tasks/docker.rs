@@ -1,8 +1,11 @@
 use crate::env::Env;
+use anyhow::Result;
 use clap::ValueEnum;
 use log::error;
 use std::{
     fmt,
+    os::unix::fs::MetadataExt,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
@@ -49,6 +52,54 @@ pub const DOCKER_ACCLESS_CODE_MOUNT_DIR: &str = "/code/accless";
 
 impl Docker {
     const ACCLESS_DEV_CONTAINER_NAME: &'static str = "accless-dev";
+    const ACCLESS_DEV_CONTAINER_HOSTNAME: &'static str = "accless-ctr";
+
+    /// # Description
+    ///
+    /// This function takes a path from the host filesystem and maps it to the
+    /// corresponding path inside the Docker container.
+    /// It first converts the `host_path` to an absolute path and canonicalizes
+    /// it. This process also verifies that the path exists.
+    /// Then, it checks if the path is within the project's root directory.
+    /// If it is, it strips the project root prefix and prepends the Docker
+    /// mount directory path (`/code/accless`).
+    ///
+    /// # Arguments
+    ///
+    /// * `host_path` - A reference to a `Path` on the host filesystem. It can
+    ///   be either an absolute path or a path relative to the current working
+    ///   directory.
+    ///
+    /// # Returns
+    ///
+    /// A `anyhow::Result<PathBuf>` which is:
+    /// - `Ok(PathBuf)`: The mapped path inside the Docker container.
+    /// - `Err(anyhow::Error)`: An error if:
+    ///   - The path does not exist or cannot be canonicalized.
+    ///   - The path is outside the project's root directory.
+    pub fn remap_to_docker_path(host_path: &Path) -> Result<PathBuf> {
+        let absolute_host_path = if host_path.is_absolute() {
+            host_path.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(host_path)
+        };
+        let absolute_host_path = absolute_host_path.canonicalize().map_err(|e| {
+            anyhow::anyhow!("Error canonicalizing path {}: {}", host_path.display(), e)
+        })?;
+
+        let proj_root = Env::proj_root();
+        if absolute_host_path.starts_with(&proj_root) {
+            let relative_path = absolute_host_path.strip_prefix(&proj_root).unwrap();
+            let docker_path = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join(relative_path);
+            Ok(docker_path)
+        } else {
+            anyhow::bail!(
+                "Path {} is outside the project root directory {}",
+                absolute_host_path.display(),
+                proj_root.display()
+            );
+        }
+    }
 
     pub fn get_docker_tag(ctr: &DockerContainer) -> String {
         // Prepare image tag
@@ -144,6 +195,18 @@ impl Docker {
         String::from_utf8_lossy(&gid.stdout).trim().to_string()
     }
 
+    /// Helper method to get the group ID of the /dev/sev-guest device.
+    ///
+    /// This method is only used when using `accli` inside a cVM. In our cVM
+    /// set-up we configure /dev/sev-guest to be in a shared group with our
+    /// user, to avoid having to use `sudo` to run our functions.
+    fn get_sevguest_group_id() -> Option<u32> {
+        match std::fs::metadata("/dev/sev-guest") {
+            Ok(metadata) => Some(metadata.gid()),
+            Err(_) => None,
+        }
+    }
+
     fn exec_cmd(
         cmd: &[String],
         cwd: Option<&str>,
@@ -201,7 +264,9 @@ impl Docker {
             .arg("run")
             .arg("--rm")
             .arg("--name")
-            .arg(Self::ACCLESS_DEV_CONTAINER_NAME);
+            .arg(Self::ACCLESS_DEV_CONTAINER_NAME)
+            .arg("--hostname")
+            .arg(Self::ACCLESS_DEV_CONTAINER_HOSTNAME);
         if interactive {
             run_cmd.arg("-it");
         }
@@ -212,12 +277,20 @@ impl Docker {
             .arg("-e")
             .arg(format!("HOST_GID={}", Self::get_group_id()));
 
+        if let Some(sevgest_gid) = Self::get_sevguest_group_id() {
+            run_cmd.arg("-e").arg(format!("SEV_GID={}", sevgest_gid));
+        }
+
         for e in env {
             run_cmd.arg("-e").arg(e);
         }
 
         if net {
             run_cmd.arg("--network").arg("host");
+        }
+
+        if Path::new("/dev/sev-guest").exists() {
+            run_cmd.arg("--device=/dev/sev-guest");
         }
 
         if mount {

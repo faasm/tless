@@ -28,6 +28,7 @@ futures-util.workspace = true
 hex.workspace = true
 indicatif.workspace = true
 log.workspace = true
+nix = { workspace = true, features = ["signal", "process"] }
 minio.workspace = true
 plotters.workspace = true
 rand.workspace = true

@@ -2,8 +2,10 @@ use crate::{
     env::Env,
     tasks::{
         accless::Accless,
-        applications::Applications,
+        applications::{self, Applications},
+        attestation_service::AttestationService,
         azure::Azure,
+        cvm::{self, Component, parse_host_guest_path},
         dev::Dev,
         docker::{Docker, DockerContainer},
         experiments::{E2eSubScommand, Experiment, UbenchSubCommand},
@@ -11,7 +13,8 @@ use crate::{
     },
 };
 use clap::{Parser, Subcommand};
-use std::{collections::HashMap, process};
+use env_logger::Builder;
+use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
 pub mod env;
@@ -49,11 +52,6 @@ enum Command {
         #[command(subcommand)]
         dev_command: DevCommand,
     },
-    /// Build and push different docker images
-    Docker {
-        #[command(subcommand)]
-        docker_command: DockerCommand,
-    },
     /// Run evaluation experiments and plot results
     Experiment {
         #[command(subcommand)]
@@ -63,6 +61,52 @@ enum Command {
     S3 {
         #[command(subcommand)]
         s3_command: S3Command,
+    },
+    /// Build and run the attestation service
+    AttestationService {
+        #[command(subcommand)]
+        attestation_service_command: AttestationServiceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AttestationServiceCommand {
+    /// Build the attestation service
+    Build {},
+    /// Run the attestation service
+    Run {
+        /// Directory where to look-for and store TLS certificates.
+        #[arg(long)]
+        certs_dir: Option<PathBuf>,
+        /// Port to bind the server to.
+        #[arg(long)]
+        port: Option<u16>,
+        /// URL to fetch SGX platform collateral information.
+        #[arg(long)]
+        sgx_pccs_url: Option<PathBuf>,
+        /// Whether to overwrite the existing TLS certificates (if any).
+        #[arg(long)]
+        force_clean_certs: bool,
+        /// Run the attestation service in mock mode, skipping quote
+        /// verification.
+        #[arg(long, default_value_t = false)]
+        mock: bool,
+        /// Rebuild the attestation service before running.
+        #[arg(long, default_value_t = false)]
+        rebuild: bool,
+        /// Run the attestation service in the background, storing its PID.
+        #[arg(long, default_value_t = false)]
+        background: bool,
+    },
+    /// Stop a running attestation service (started with --background).
+    Stop {},
+    Health {
+        /// URL of the attestation service
+        #[arg(long)]
+        url: Option<String>,
+        /// Path to the attestation service's public certificate PEM file
+        #[arg(long)]
+        cert_path: Option<PathBuf>,
     },
 }
 
@@ -99,6 +143,46 @@ enum DevCommand {
         #[arg(long)]
         force: bool,
     },
+    /// Build and run commands in the work-on container image
+    Docker {
+        #[command(subcommand)]
+        docker_command: DockerCommand,
+    },
+    /// Build and run commands in an SNP-enabled cVM (requires SNP hardware)
+    Cvm {
+        #[command(subcommand)]
+        cvm_command: CvmCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CvmCommand {
+    /// Run a command inside the cVM.
+    Run {
+        #[arg(last = true)]
+        cmd: Vec<String>,
+        /// Optional: SCP files into the cVM.
+        /// Specify as <HOST_PATH>:<GUEST_PATH>. Can be repeated.
+        #[arg(long, value_name = "HOST_PATH:GUEST_PATH", value_parser = parse_host_guest_path)]
+        scp_file: Vec<(PathBuf, PathBuf)>,
+        /// Set the working directory inside the container
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+    },
+    /// Configure the cVM image by building and installing the different
+    /// components.
+    Setup {
+        #[arg(long)]
+        clean: bool,
+        #[arg(long)]
+        component: Option<Component>,
+    },
+    /// Get an interactive shell inside the cVM.
+    Cli {
+        /// Set the working directory inside the container
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -106,7 +190,7 @@ enum DockerCommand {
     /// Build one of Accless' docker containers. Run build --help to see the
     /// possibe options
     Build {
-        #[arg(short, long, num_args = 1.., value_name = "CTR_NAME")]
+        /// Container image to build.
         ctr: Vec<DockerContainer>,
         #[arg(long)]
         push: bool,
@@ -292,30 +376,45 @@ enum AcclessCommand {
 enum ApplicationsCommand {
     /// Build the Accless applications
     Build {
+        /// Force a clean build.
         #[arg(long)]
         clean: bool,
+        /// Force a debug build.
         #[arg(long)]
         debug: bool,
+        /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
-        cert_path: Option<String>,
+        as_cert_path: Option<PathBuf>,
+        /// Whether to build the application inside a cVM.
+        #[arg(long, default_value_t = false)]
+        in_cvm: bool,
+    },
+    /// Run one of the Accless applications
+    Run {
+        /// Type of the application to run
+        app_type: applications::ApplicationType,
+        /// Name of the application to run
+        app_name: applications::ApplicationName,
+        /// Whether to run the application inside a cVM.
+        #[arg(long, default_value_t = false)]
+        in_cvm: bool,
+        /// URL of the attestation service to contact.
+        #[arg(long)]
+        as_url: Option<String>,
+        /// Path to the attestation service's public certificate PEM file.
+        #[arg(long)]
+        as_cert_path: Option<PathBuf>,
     },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize the logger.
+    let env = env_logger::Env::default().filter_or("RUST_LOG", "info");
+    let mut builder = Builder::from_env(env);
+    builder.init();
+
     let cli = Cli::parse();
-
-    // Initialize the logger based on the debug flag
-    if cli.debug {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Debug)
-            .init();
-    } else {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .init();
-    }
-
     match &cli.task {
         Command::Accless { accless_command } => match accless_command {
             AcclessCommand::Build { clean, debug } => {
@@ -331,9 +430,25 @@ async fn main() -> anyhow::Result<()> {
             ApplicationsCommand::Build {
                 clean,
                 debug,
-                cert_path,
+                as_cert_path,
+                in_cvm,
             } => {
-                Applications::build(*clean, *debug, cert_path.as_deref(), false)?;
+                Applications::build(*clean, *debug, as_cert_path.clone(), false, *in_cvm)?;
+            }
+            ApplicationsCommand::Run {
+                app_type,
+                app_name,
+                in_cvm,
+                as_url,
+                as_cert_path,
+            } => {
+                Applications::run(
+                    app_type.clone(),
+                    app_name.clone(),
+                    *in_cvm,
+                    as_url.clone(),
+                    as_cert_path.clone(),
+                )?;
             }
         },
         Command::Dev { dev_command } => match dev_command {
@@ -355,36 +470,52 @@ async fn main() -> anyhow::Result<()> {
             DevCommand::Tag { force } => {
                 Dev::tag_code(*force)?;
             }
-        },
-        Command::Docker { docker_command } => match docker_command {
-            DockerCommand::Build { ctr, push, nocache } => {
-                for c in ctr {
-                    Docker::build(c, *push, *nocache);
-                }
-            }
-            DockerCommand::BuildAll { push, nocache } => {
-                for ctr in DockerContainer::iter_variants() {
-                    // Do not push the base build image
-                    if *ctr == DockerContainer::Experiments {
-                        Docker::build(ctr, false, *nocache);
-                    } else {
-                        Docker::build(ctr, *push, *nocache);
+            DevCommand::Docker { docker_command } => match docker_command {
+                DockerCommand::Build { ctr, push, nocache } => {
+                    for c in ctr {
+                        Docker::build(c, *push, *nocache);
                     }
                 }
-            }
-            DockerCommand::Cli { net } => {
-                Docker::cli(*net)?;
-            }
-            DockerCommand::Run {
-                cmd,
-                mount,
-                cwd,
-                env,
-                net,
-                capture_output,
-            } => {
-                Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
-            }
+                DockerCommand::BuildAll { push, nocache } => {
+                    for ctr in DockerContainer::iter_variants() {
+                        // Do not push the base build image
+                        if *ctr == DockerContainer::Experiments {
+                            Docker::build(ctr, false, *nocache);
+                        } else {
+                            Docker::build(ctr, *push, *nocache);
+                        }
+                    }
+                }
+                DockerCommand::Cli { net } => {
+                    Docker::cli(*net)?;
+                }
+                DockerCommand::Run {
+                    cmd,
+                    mount,
+                    cwd,
+                    env,
+                    net,
+                    capture_output,
+                } => {
+                    Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
+                }
+            },
+            DevCommand::Cvm { cvm_command } => match cvm_command {
+                CvmCommand::Run { cmd, scp_file, cwd } => {
+                    let scp_files_option = if scp_file.is_empty() {
+                        None
+                    } else {
+                        Some(scp_file.as_slice())
+                    };
+                    cvm::run(cmd, scp_files_option, cwd.as_ref())?;
+                }
+                CvmCommand::Setup { clean, component } => {
+                    cvm::build(*clean, *component)?;
+                }
+                CvmCommand::Cli { cwd } => {
+                    cvm::cli(cwd.as_ref())?;
+                }
+            },
         },
         Command::Experiment {
             experiments_command: exp,
@@ -756,6 +887,38 @@ async fn main() -> anyhow::Result<()> {
                     Azure::delete_snp_guest("tless-trustee-server");
                 }
             },
+        },
+        Command::AttestationService {
+            attestation_service_command,
+        } => match attestation_service_command {
+            AttestationServiceCommand::Build {} => {
+                AttestationService::build()?;
+            }
+            AttestationServiceCommand::Run {
+                certs_dir,
+                port,
+                sgx_pccs_url,
+                force_clean_certs,
+                mock,
+                rebuild,
+                background,
+            } => {
+                AttestationService::run(
+                    certs_dir.as_deref(),
+                    *port,
+                    sgx_pccs_url.as_deref(),
+                    *force_clean_certs,
+                    *mock,
+                    *rebuild,
+                    *background,
+                )?;
+            }
+            AttestationServiceCommand::Stop {} => {
+                AttestationService::stop()?;
+            }
+            AttestationServiceCommand::Health { url, cert_path } => {
+                AttestationService::health(url.clone(), cert_path.clone()).await?;
+            }
         },
     }
 
