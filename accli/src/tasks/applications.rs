@@ -43,6 +43,8 @@ pub enum ApplicationName {
     AttClientSgx,
     #[value(name = "att-client-snp")]
     AttClientSnp,
+    #[value(name = "breakdown-snp")]
+    BreakdownSnp,
     #[value(name = "escrow-xput")]
     EscrowXput,
     #[value(name = "hello-snp")]
@@ -54,6 +56,7 @@ impl Display for ApplicationName {
         match self {
             ApplicationName::AttClientSgx => write!(f, "att-client-sgx"),
             ApplicationName::AttClientSnp => write!(f, "att-client-snp"),
+            ApplicationName::BreakdownSnp => write!(f, "breakdown-snp"),
             ApplicationName::EscrowXput => write!(f, "escrow-xput"),
             ApplicationName::HelloSnp => write!(f, "hello-snp"),
         }
@@ -67,6 +70,7 @@ impl FromStr for ApplicationName {
         match s {
             "att-client-sgx" => Ok(ApplicationName::AttClientSgx),
             "att-client-snp" => Ok(ApplicationName::AttClientSnp),
+            "breakdown-snp" => Ok(ApplicationName::BreakdownSnp),
             "escrow-xput" => Ok(ApplicationName::EscrowXput),
             "hello-snp" => Ok(ApplicationName::HelloSnp),
             _ => anyhow::bail!("Invalid Function: {}", s),
