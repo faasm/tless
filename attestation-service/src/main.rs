@@ -51,16 +51,13 @@ struct Cli {
     /// Run the attestation service in mock mode, skipping quote verification.
     #[arg(long, default_value_t = false)]
     mock: bool,
+    /// Overwrite the public IP of the attestation service.
+    #[arg(long)]
+    overwrite_external_ip: Option<String>,
 }
 
 async fn health(Extension(state): Extension<Arc<AttestationServiceState>>) -> impl IntoResponse {
-    match tls::get_node_url() {
-        Ok(url) => (StatusCode::OK, format!("https://{}:{}", url, state.port)),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error getting node URL: {}", err),
-        ),
-    }
+    (StatusCode::OK, state.external_url.clone())
 }
 
 #[tokio::main]
@@ -73,14 +70,20 @@ async fn main() -> Result<()> {
     // certificates if necessary.
     CryptoProvider::install_default(rustls::crypto::ring::default_provider())
         .map_err(|e| anyhow::anyhow!("error initializing rustls provider (error={e:?})"))?;
-    let tls_acceptor = tls::load_config(cli.certs_dir.clone(), cli.force_clean_certs).await?;
+    let external_ip = match cli.overwrite_external_ip {
+        Some(ip) => ip,
+        None => tls::get_node_url()?,
+    };
+    let tls_acceptor =
+        tls::load_config(cli.certs_dir.clone(), cli.force_clean_certs, &external_ip).await?;
+    let external_url = format!("https://{}:{}", external_ip, cli.port);
 
     // Set-up per request state.
     let state = Arc::new(AttestationServiceState::new(
         cli.certs_dir.clone(),
         cli.sgx_pccs_url.clone(),
         cli.mock,
-        cli.port,
+        external_url.clone(),
     )?);
 
     // Start HTTPS server.
@@ -94,11 +97,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await;
 
     info!("main(): accless attestation server running!");
-    info!(
-        "main(): external IP: https://{}:{}",
-        tls::get_node_url()?,
-        cli.port
-    );
+    info!("main(): external IP: {}", external_url);
     info!(
         "main(): cert path: {}/cert.pem",
         cli.certs_dir
