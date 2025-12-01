@@ -404,6 +404,9 @@ enum ApplicationsCommand {
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
         as_cert_path: Option<PathBuf>,
+        /// Arbitrary arguments to pass to the function.
+        #[arg(last = true)]
+        args: Vec<String>,
     },
 }
 
@@ -441,6 +444,7 @@ async fn main() -> anyhow::Result<()> {
                 in_cvm,
                 as_url,
                 as_cert_path,
+                args,
             } => {
                 Applications::run(
                     app_type.clone(),
@@ -448,6 +452,7 @@ async fn main() -> anyhow::Result<()> {
                     *in_cvm,
                     as_url.clone(),
                     as_cert_path.clone(),
+                    args.clone(),
                 )?;
             }
         },

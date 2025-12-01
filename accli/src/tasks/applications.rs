@@ -189,6 +189,7 @@ impl Applications {
         in_cvm: bool,
         as_url: Option<String>,
         as_cert_path: Option<PathBuf>,
+        args: Vec<String>,
     ) -> anyhow::Result<Option<String>> {
         // If --in-cvm flag is passed, we literally re run the same `accli` command, but
         // inside the cVM.
@@ -215,6 +216,11 @@ impl Applications {
                 );
             }
 
+            if !args.is_empty() {
+                cmd.push("--".to_string());
+                cmd.extend(args);
+            }
+
             // We don't need to SCP any files here, because we assume that the certificates
             // have been copied during the build stage, and persisted in the
             // disk image.
@@ -237,7 +243,8 @@ impl Applications {
             let binary_path_str = binary_path.to_str().ok_or_else(|| {
                 anyhow::anyhow!("Binary path is not valid UTF-8: {}", binary_path.display())
             })?;
-            let cmd = vec![binary_path_str.to_string()];
+            let mut cmd = vec![binary_path_str.to_string()];
+            cmd.extend(args);
 
             let as_env_vars: Vec<String> = match (as_url, as_cert_path) {
                 (Some(as_url), Some(host_cert_path)) => {

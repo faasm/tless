@@ -594,9 +594,46 @@ void doBenchmark(const std::vector<int>& numRequests, bool maa) {
     csvFile.close();
 }
 
+std::vector<int> parseIntList(const std::string& s) {
+    std::vector<int> result;
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        try {
+            result.push_back(std::stoi(item));
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "Invalid integer in list: " << item << std::endl;
+        } catch (const std::out_of_range& e) {
+            std::cerr << "Integer out of range in list: " << item << std::endl;
+        }
+    }
+    return result;
+}
+
 int main(int argc, char **argv) {
     bool maa = false;
-    std::vector<int> numRequests = {1, 10, 50, 100, 200, 400, 600, 800, 1000};
+    std::vector<int> numRequests;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--maa") {
+            maa = true;
+        } else if (arg == "--num-requests") {
+            if (i + 1 < argc) {
+                numRequests = parseIntList(argv[++i]);
+            } else {
+                std::cerr << "--num-requests option requires one argument." << std::endl;
+                return 1;
+            }
+        }
+    }
+
+    if (numRequests.empty()) {
+        std::cerr << "Missing mandatory argument --num-requests" << std::endl;
+        return 1;
+    }
 
     doBenchmark(numRequests, maa);
+
+    return 0;
 }
