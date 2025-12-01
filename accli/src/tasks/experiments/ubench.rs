@@ -1,12 +1,18 @@
 use crate::{
     env::Env,
-    tasks::experiments::{Experiment, baselines::EscrowBaseline},
+    tasks::{
+        applications::{ApplicationName, ApplicationType, Applications},
+        azure::Azure,
+        cvm,
+        experiments::{self, Experiment, baselines::EscrowBaseline},
+    },
 };
 use anyhow::Result;
 use clap::Args;
 use futures::stream::{self, StreamExt};
+use log::error;
 use std::{
-    env, fs,
+    fs,
     fs::File,
     io::{BufWriter, Write},
     process::Command,
@@ -16,17 +22,24 @@ use std::{
 
 pub const REQUEST_COUNTS_MHSM: &[usize] = &[1, 5, 10, 15, 20, 40, 60, 80, 100];
 pub const REQUEST_COUNTS_TRUSTEE: &[usize] = &[1, 20, 60, 80, 100, 120, 160, 180, 200];
+pub const REQUEST_COUNTS_ACCLESS: &[usize] = REQUEST_COUNTS_TRUSTEE;
 const REQUEST_PARALLELISM: usize = 10;
 
 #[derive(Debug, Args)]
 pub struct UbenchRunArgs {
     #[arg(short, long, value_name = "BASELINE")]
     baseline: EscrowBaseline,
+    #[arg(long)]
+    escrow_url: Option<String>,
     #[arg(long, default_value = "3")]
     num_repeats: u32,
-    #[arg(long, default_value = "0")]
+    #[arg(long, default_value = "1")]
     num_warmup_repeats: u32,
 }
+
+// -------------------------------------------------------------------------
+// Accless helper methods
+// -------------------------------------------------------------------------
 
 // -------------------------------------------------------------------------
 // Trustee methods and constants
@@ -65,11 +78,7 @@ fn get_kbs_client_path() -> String {
     )
 }
 
-fn get_kbs_url() -> String {
-    env::var("TLESS_KBS_URL").unwrap()
-}
-
-async fn set_resource_policy() -> Result<()> {
+async fn set_resource_policy(escrow_url: &str) -> Result<()> {
     let tee_policy_rego = format!(
         r#"
 package policy
@@ -89,7 +98,7 @@ input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
             "-E",
             &get_kbs_client_path(),
             "--url",
-            &get_kbs_url(),
+            escrow_url,
             "--cert-file",
             &get_https_cert(),
             "config",
@@ -104,13 +113,13 @@ input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
     Ok(())
 }
 
-async fn generate_attestation_token() -> Result<()> {
+async fn generate_attestation_token(escrow_url: &str) -> Result<()> {
     let output = Command::new("sudo")
         .args([
             "-E",
             &get_kbs_client_path(),
             "--url",
-            &get_kbs_url(),
+            escrow_url,
             "--cert-file",
             &get_https_cert(),
             "attest",
@@ -124,13 +133,13 @@ async fn generate_attestation_token() -> Result<()> {
     Ok(())
 }
 
-pub async fn get_trustee_resource() -> Result<()> {
+pub async fn get_trustee_resource(escrow_url: String) -> Result<()> {
     Command::new("sudo")
         .args([
             "-E",
             &get_kbs_client_path(),
             "--url",
-            &get_kbs_url(),
+            &escrow_url,
             "--cert-file",
             &get_https_cert(),
             "get-resource",
@@ -184,7 +193,11 @@ pub async fn wrap_key_in_mhsm() -> Result<()> {
     Ok(())
 }
 
-async fn measure_requests_latency(baseline: &EscrowBaseline, num_requests: usize) -> Result<f64> {
+async fn measure_requests_latency(
+    baseline: &EscrowBaseline,
+    escrow_url: &str,
+    num_requests: usize,
+) -> Result<f64> {
     // TODO: get rid of me
     println!(
         "Processing {} requests for baseline {baseline} with parallelism={}...",
@@ -195,7 +208,10 @@ async fn measure_requests_latency(baseline: &EscrowBaseline, num_requests: usize
 
     stream::iter(0..num_requests)
         .map(|_| match &baseline {
-            EscrowBaseline::Trustee => tokio::spawn(get_trustee_resource()),
+            EscrowBaseline::Trustee => {
+                let owned_escrow_url = escrow_url.to_string();
+                tokio::spawn(get_trustee_resource(owned_escrow_url))
+            }
             EscrowBaseline::ManagedHSM => tokio::spawn(wrap_key_in_mhsm()),
             EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
                 panic!("accless-based baselines must be run from different script")
@@ -217,46 +233,142 @@ async fn measure_requests_latency(baseline: &EscrowBaseline, num_requests: usize
     Ok(time_elapsed)
 }
 
-async fn run_escrow_ubench(run_args: &UbenchRunArgs) -> Result<()> {
+async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result<()> {
     let results_file = Env::experiments_root()
         .join(Experiment::ESCROW_XPUT_NAME)
         .join("data")
         .join(format!("{}.csv", run_args.baseline));
+    if let Some(results_dir) = results_file.parent() {
+        fs::create_dir_all(results_dir)?;
+    }
 
-    let mut csv_file = BufWriter::new(File::create(results_file).unwrap());
+    let mut csv_file = BufWriter::new(File::create(&results_file).unwrap());
     writeln!(csv_file, "NumRequests,TimeElapsed").unwrap();
 
     if run_args.baseline == EscrowBaseline::Trustee {
-        set_resource_policy().await?;
+        set_resource_policy(escrow_url).await?;
         // TODO: ideally we would generate the attestation token with
         // each new request but, unfortunately, there seems to be some
         // race condition in the vTPM source code that prevents getting
         // many HW attesation reports concurrently.
-        generate_attestation_token().await?;
+        generate_attestation_token(escrow_url).await?;
     }
 
     let request_counts = match run_args.baseline {
         EscrowBaseline::Trustee => REQUEST_COUNTS_TRUSTEE,
         EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
-        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
-            panic!("accless baselines must be run from different script")
-        }
+        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => REQUEST_COUNTS_ACCLESS,
     };
-    for &num_req in request_counts {
-        for _ in 0..run_args.num_repeats {
-            let elapsed_time = measure_requests_latency(&run_args.baseline, num_req).await?;
-            println!("elapsed time: {elapsed_time}");
-            writeln!(csv_file, "{},{:?}", num_req, elapsed_time)?;
+
+    match run_args.baseline {
+        // The Trustee and managed HSM baselines run the logic embedded in this file.
+        EscrowBaseline::Trustee | EscrowBaseline::ManagedHSM => {
+            for &num_req in request_counts {
+                for _ in 0..run_args.num_repeats {
+                    let elapsed_time =
+                        measure_requests_latency(&run_args.baseline, escrow_url, num_req).await?;
+                    println!("elapsed time: {elapsed_time}");
+                    writeln!(csv_file, "{},{:?}", num_req, elapsed_time)?;
+                }
+            }
+        }
+        // The Accless baselines run a function that performs SKR and CP-ABE keygen.
+        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+            // This path is hard-coded during the Ansible provisioning of the
+            // attestation-service.
+            let cert_path = Env::proj_root()
+                .join("config")
+                .join("attestation-service")
+                .join("certs")
+                .join("az_cert.pem");
+            let num_reqs = request_counts
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            Applications::run(
+                ApplicationType::Function,
+                ApplicationName::EscrowXput,
+                // FIXME(#56): for the time being, we pass --in-cvm. Once we support validating az
+                // cVM quotes we can get rid of this.
+                true,
+                Some(format!("https://{escrow_url}:8443")),
+                Some(cert_path),
+                vec![
+                    "--num-warmup-repeats".to_string(),
+                    run_args.num_warmup_repeats.to_string(),
+                    "--num-repeats".to_string(),
+                    run_args.num_repeats.to_string(),
+                    "--num-requests".to_string(),
+                    num_reqs,
+                ],
+            )?;
+
+            // SCP results from the cVM to local filesystem.
+            cvm::scp("cvm:accless.csv", &results_file.display().to_string())?;
         }
     }
 
     Ok(())
 }
 
+/// Entrypoint function to run the micro-benchmark experiments.
+///
+/// These micro-benchmarks must be ran on remote machines, but we orchestrate
+/// their execution from our local CLI, so we differentiate between invocation
+/// inside an Azure VM or not.
 pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
+    let in_azure = Azure::is_azure_vm().await;
+
+    if !in_azure {
+        match run_args.baseline {
+            EscrowBaseline::Trustee => {
+                let cmd_in_vm = vec![
+                    "./scripts/accli_wrapper.sh".to_string(),
+                    "experiments".to_string(),
+                    "escrow-xput".to_string(),
+                    "run".to_string(),
+                    "--baseline".to_string(),
+                    "trustee".to_string(),
+                    "--escrow-url".to_string(),
+                    Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?,
+                    "--num-repeats".to_string(),
+                    run_args.num_repeats.to_string(),
+                    "--num-warmup-repeats".to_string(),
+                    run_args.num_warmup_repeats.to_string(),
+                ];
+                Azure::run_cmd_in_vm(experiments::TRUSTEE_CLIENT_VM_NAME, &cmd_in_vm)?;
+
+                // TODO: scp results
+
+                return Ok(());
+            }
+            // FIXME(#55): for the time being, we run Accless baselines locally, not in an
+            // azure cVM.
+            EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {}
+            _ => todo!(),
+        }
+    }
+
+    // Get the escrow URL from the ansible deployment.
+    let escrow_url = match run_args.baseline {
+        EscrowBaseline::Trustee | EscrowBaseline::ManagedHSM => {
+            if run_args.escrow_url.is_none() {
+                let reason = "running baseline in azure VM but no escrow URL provided";
+                error!("run(): {reason}");
+                anyhow::bail!(reason);
+            }
+            run_args.escrow_url.clone().unwrap()
+        }
+        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+            Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?
+        }
+    };
+
     match ubench {
         Experiment::EscrowCost { .. } => anyhow::bail!("escrow-cost is not meant to be ran"),
-        Experiment::EscrowXput { .. } => run_escrow_ubench(run_args).await,
+        Experiment::EscrowXput { .. } => run_escrow_ubench(&escrow_url, run_args).await,
         _ => anyhow::bail!("experiment not a micro-benchmark (experiment={ubench:?})"),
     }
 }
