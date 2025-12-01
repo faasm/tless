@@ -14,6 +14,7 @@ use crate::{
 };
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
+use log::error;
 use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
@@ -97,6 +98,9 @@ enum AttestationServiceCommand {
         /// Run the attestation service in the background, storing its PID.
         #[arg(long, default_value_t = false)]
         background: bool,
+        /// Overwrite the public IP of the attestation service.
+        #[arg(long)]
+        overwrite_external_ip: Option<String>,
     },
     /// Stop a running attestation service (started with --background).
     Stop {},
@@ -604,19 +608,19 @@ async fn main() -> anyhow::Result<()> {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
-                    Azure::create_snp_guest("accless-as", "Standard_DC2as_v5");
-                    Azure::create_aa("accless");
+                    Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5")?;
+                    Azure::create_snp_guest("accless-as", "Standard_DC2as_v5")?;
+                    Azure::create_aa("accless")?;
 
-                    Azure::open_vm_ports("accless-cvm", &[22]);
-                    Azure::open_vm_ports("accless-as", &[22, 8443]);
+                    Azure::open_vm_ports("accless-cvm", &[22])?;
+                    Azure::open_vm_ports("accless-as", &[22, 8443])?;
                 }
                 AzureSubCommand::Provision {} => {
                     let client_ip = Azure::get_vm_ip("accless-cvm");
                     let server_ip = Azure::get_vm_ip("accless-as");
 
                     let vars: HashMap<&str, &str> = HashMap::from([("as_ip", server_ip.as_str())]);
-                    Azure::provision_with_ansible("accless", "accless", Some(vars));
+                    Azure::provision_with_ansible("accless", "accless", Some(vars))?;
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
@@ -672,15 +676,15 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("accless-as");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("accless-cvm");
-                    Azure::delete_snp_guest("accless-as");
-                    Azure::delete_aa("accless");
+                    Azure::delete_snp_guest("accless-cvm")?;
+                    Azure::delete_snp_guest("accless-as")?;
+                    Azure::delete_aa("accless")?;
                 }
             },
             AzureCommand::AttestationService { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("attestation-service", "Standard_DC8as_v5");
-                    Azure::open_vm_ports("attestation-service", &[22, 8443]);
+                    Azure::create_snp_guest("attestation-service", "Standard_DC8as_v5")?;
+                    Azure::open_vm_ports("attestation-service", &[22, 8443])?;
                 }
                 AzureSubCommand::Provision {} => {
                     let service_ip = Azure::get_vm_ip("attestation-service");
@@ -690,32 +694,32 @@ async fn main() -> anyhow::Result<()> {
                         "attestation-service",
                         "attestationservice",
                         Some(vars),
-                    );
+                    )?;
                 }
                 AzureSubCommand::ScpResults {} => {
-                    println!("scp-results does not apply");
+                    error!("scp-results does not apply");
                 }
                 AzureSubCommand::Ssh {} => {
                     Azure::build_ssh_command("attestation-service");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("attestation-service");
+                    Azure::delete_snp_guest("attestation-service")?;
                 }
             },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5");
-                    Azure::create_aa("tlessmhsm");
+                    Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5")?;
+                    Azure::create_aa("tlessmhsm")?;
                     // WARNING: the key release policy in the mHSM depends
                     // on the name of the attestaion provider even though it
                     // is not passed as an argument (it is used in the ARM
                     // template file: ./azure/mhsm_skr_policy.json)
-                    Azure::create_mhsm("tless-mhsm-kv", "tless-mhsm-cvm", "tless-mhsm-key");
+                    Azure::create_mhsm("tless-mhsm-kv", "tless-mhsm-cvm", "tless-mhsm-key")?;
 
-                    Azure::open_vm_ports("tless-mhsm-cvm", &[22]);
+                    Azure::open_vm_ports("tless-mhsm-cvm", &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("tless-mhsm", "mhsm", None);
+                    Azure::provision_with_ansible("tless-mhsm", "mhsm", None)?;
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless";
@@ -737,14 +741,14 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("tless-mhsm-cvm");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-mhsm-cvm");
-                    Azure::delete_aa("tlessmhsm");
-                    Azure::delete_mhsm("tless-mhsm-kv");
+                    Azure::delete_snp_guest("tless-mhsm-cvm")?;
+                    Azure::delete_aa("tlessmhsm")?;
+                    Azure::delete_mhsm("tless-mhsm-kv")?;
                 }
             },
             AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3");
+                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3")?;
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
@@ -753,7 +757,7 @@ async fn main() -> anyhow::Result<()> {
                         ("accless_version", version.as_str()),
                         ("faasm_version", faasm_version.as_str()),
                     ]);
-                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars));
+                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars))?;
                 }
                 AzureSubCommand::ScpResults {} => {
                     // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
@@ -780,18 +784,18 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("sgx-faasm-vm");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_sgx_vm("sgx-faasm-vm");
+                    Azure::delete_sgx_vm("sgx-faasm-vm")?;
                 }
             },
             AzureCommand::SnpKnative { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5");
+                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5")?;
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
                     let vars: HashMap<&str, &str> =
                         HashMap::from([("accless_version", version.as_str())]);
-                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars));
+                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars))?;
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
@@ -817,7 +821,7 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("snp-knative-vm");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_sgx_vm("snp-knative-vm");
+                    Azure::delete_sgx_vm("snp-knative-vm")?;
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
@@ -825,19 +829,19 @@ async fn main() -> anyhow::Result<()> {
                     // DC2 is 62.78$/month -> original experiments w/ this
                     // DC4 is DC2 * 2
                     // DC8 is DC2 * 4
-                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");
-                    Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5");
+                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5")?;
+                    Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5")?;
 
                     // Open port 8080 on the server VM
-                    Azure::open_vm_ports("tless-trustee-client", &[22]);
-                    Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
+                    Azure::open_vm_ports("tless-trustee-client", &[22])?;
+                    Azure::open_vm_ports("tless-trustee-server", &[22, 8080])?;
                 }
                 AzureSubCommand::Provision {} => {
                     let client_ip = Azure::get_vm_ip("tless-trustee-client");
                     let server_ip = Azure::get_vm_ip("tless-trustee-server");
 
                     let vars: HashMap<&str, &str> = HashMap::from([("kbs_ip", server_ip.as_str())]);
-                    Azure::provision_with_ansible("tless-trustee", "trustee", Some(vars));
+                    Azure::provision_with_ansible("tless-trustee", "trustee", Some(vars))?;
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
@@ -888,8 +892,8 @@ async fn main() -> anyhow::Result<()> {
                     Azure::build_ssh_command("tless-trustee-server");
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-trustee-client");
-                    Azure::delete_snp_guest("tless-trustee-server");
+                    Azure::delete_snp_guest("tless-trustee-client")?;
+                    Azure::delete_snp_guest("tless-trustee-server")?;
                 }
             },
         },
@@ -907,6 +911,7 @@ async fn main() -> anyhow::Result<()> {
                 mock,
                 rebuild,
                 background,
+                overwrite_external_ip,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -916,6 +921,7 @@ async fn main() -> anyhow::Result<()> {
                     *mock,
                     *rebuild,
                     *background,
+                    overwrite_external_ip.clone(),
                 )?;
             }
             AttestationServiceCommand::Stop {} => {
