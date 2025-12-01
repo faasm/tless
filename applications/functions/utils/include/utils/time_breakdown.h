@@ -14,26 +14,25 @@ class TimeBreakdown {
     using time_point = clock::time_point;
     using duration = clock::duration;
 
-    explicit TimeBreakdown(std::string name,
-                           std::ostream& os = std::cerr)
-        : name_(std::move(name)), os_(os)
-    {
+    explicit TimeBreakdown(std::string name, std::ostream &os = std::cerr)
+        : name_(std::move(name)), os_(os) {
         checkpoints_.push_back({"<start>", clock::now()});
     }
 
     // Mark a checkpoint with a label.
-    void checkpoint(const std::string& label) {
+    void checkpoint(const std::string &label) {
         checkpoints_.push_back({label, clock::now()});
     }
 
     ~TimeBreakdown() {
-        if (checkpoints_.empty()) return;
+        if (checkpoints_.empty())
+            return;
 
         const time_point end = clock::now();
 
         // Compute label width for pretty alignment
         size_t max_label = 0;
-        for (const auto& cp : checkpoints_) {
+        for (const auto &cp : checkpoints_) {
             max_label = std::max(max_label, cp.label.size());
         }
 
@@ -44,15 +43,13 @@ class TimeBreakdown {
         double total_ms = 0.0;
 
         for (size_t i = 1; i < checkpoints_.size(); ++i) {
-            const auto& cp = checkpoints_[i];
+            const auto &cp = checkpoints_[i];
             double ms = to_ms(cp.tp - prev);
             total_ms += ms;
 
-            os_ << "  • "
-                << std::setw(max_label) << cp.label
-                << " : "
-                << std::setw(10) << std::fixed << std::setprecision(3)
-                << ms << " ms\n";
+            os_ << "  • " << std::setw(max_label) << cp.label << " : "
+                << std::setw(10) << std::fixed << std::setprecision(3) << ms
+                << " ms\n";
 
             prev = cp.tp;
         }
@@ -61,21 +58,18 @@ class TimeBreakdown {
         double tail_ms = to_ms(end - prev);
         total_ms += tail_ms;
 
-        os_ << "  • "
-            << std::setw(max_label) << "<tail>"
-            << " : "
-            << std::setw(10) << std::fixed << std::setprecision(3)
-            << tail_ms << " ms\n";
+        os_ << "  • " << std::setw(max_label) << "<tail>" << " : "
+            << std::setw(10) << std::fixed << std::setprecision(3) << tail_ms
+            << " ms\n";
 
         // Summary
         os_ << "-----------------------------------------\n";
-        os_ << "  Total time: "
-            << std::fixed << std::setprecision(3)
+        os_ << "  Total time: " << std::fixed << std::setprecision(3)
             << total_ms << " ms\n";
         os_ << "=========================================\n\n";
     }
 
-private:
+  private:
     struct Checkpoint {
         std::string label;
         time_point tp;
@@ -86,7 +80,7 @@ private:
     }
 
     std::string name_;
-    std::ostream& os_;
+    std::ostream &os_;
     std::vector<Checkpoint> checkpoints_;
 };
-} // namespace accless::utils
+} // namespace utils

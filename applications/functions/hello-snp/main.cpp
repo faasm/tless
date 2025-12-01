@@ -98,6 +98,4 @@ int doAcclessSkr() {
     return 0;
 }
 
-int main(int argc, char **argv) {
-    doAcclessSkr();
-}
+int main(int argc, char **argv) { doAcclessSkr(); }

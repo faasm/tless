@@ -34,7 +34,8 @@ int main(int argc, char **argv) {
     if (gt.empty() || ct.empty()) {
         std::cerr << "run_requests(): error running cp-abe encryption"
                   << std::endl;
-        throw std::runtime_error("run_requests(): error running cp-abe encryption");
+        throw std::runtime_error(
+            "run_requests(): error running cp-abe encryption");
     }
 
     // =======================================================================
@@ -59,8 +60,10 @@ int main(int argc, char **argv) {
     std::string body = accless::attestation::utils::buildRequestBody(
         reportB64, runtimeDataB64, gid, wfId, nodeId);
 
-    // Send the request to Accless' attestation service, and get the response back.
-    auto response = accless::attestation::getJwtFromReport("/verify-snp-report", body);
+    // Send the request to Accless' attestation service, and get the response
+    // back.
+    auto response =
+        accless::attestation::getJwtFromReport("/verify-snp-report", body);
     tb.checkpoint("send report to AS");
 
     // Accless' authorization is equivalent to checking if we can decrypt
@@ -83,7 +86,8 @@ int main(int argc, char **argv) {
         throw std::runtime_error("accless(att): derived secret too small");
     }
     std::vector<uint8_t> aesKey(sharedSecret.begin(),
-                                sharedSecret.begin() + accless::attestation::AES_128_KEY_SIZE);
+                                sharedSecret.begin() +
+                                    accless::attestation::AES_128_KEY_SIZE);
     tb.checkpoint("derive shared secret");
 
     // Decrypt JWT.
@@ -98,7 +102,8 @@ int main(int argc, char **argv) {
     if (!accless::jwt::verify(jwt)) {
         std::cerr << "escrow-xput: JWT signature verification failed"
                   << std::endl;
-        throw std::runtime_error("escrow-xput: JWT signature verification failed");
+        throw std::runtime_error(
+            "escrow-xput: JWT signature verification failed");
     }
     tb.checkpoint("verify JWT");
 
@@ -107,9 +112,8 @@ int main(int argc, char **argv) {
     std::string partialUskB64 =
         accless::jwt::getProperty(jwt, "partial_usk_b64");
     if (partialUskB64.empty()) {
-        std::cerr
-            << "att-client-snp: JWT is missing 'partial_usk_b64' field"
-            << std::endl;
+        std::cerr << "att-client-snp: JWT is missing 'partial_usk_b64' field"
+                  << std::endl;
         throw std::runtime_error("escrow-xput: bad JWT");
     }
     std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
@@ -118,15 +122,14 @@ int main(int argc, char **argv) {
     std::optional<std::string> decrypted_gt =
         accless::abe4::decrypt(uskB64, gid, policy, ct);
     if (!decrypted_gt.has_value()) {
-        std::cerr << "att-client-snp: CP-ABE decryption failed"
-                  << std::endl;
+        std::cerr << "att-client-snp: CP-ABE decryption failed" << std::endl;
         throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
     } else if (decrypted_gt.value() != gt) {
         std::cerr << "att-client-snp: CP-ABE decrypted ciphertexts do not"
                   << " match!" << std::endl;
         std::cerr << "att-client-snp: Original GT: " << gt << std::endl;
-        std::cerr << "att-client-snp: Decrypted GT: "
-                  << decrypted_gt.value() << std::endl;
+        std::cerr << "att-client-snp: Decrypted GT: " << decrypted_gt.value()
+                  << std::endl;
         throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
     }
     tb.checkpoint("cp-abe decrypt");

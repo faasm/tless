@@ -156,8 +156,10 @@ std::vector<uint8_t> getSnpReportFromTPM() {
     return snpReport;
 }
 
-void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx, std::vector<uint8_t> &cipherText, bool compare = false) { // TODO: in theory, the attributes should be extracted frm the JWT
-    std::vector<std::string> attributes = {"foo", "bar"};
+void decrypt(const std::string &jwtStr, tless::abe::CpAbeContextWrapper &ctx,
+std::vector<uint8_t> &cipherText, bool compare = false) { // TODO: in theory,
+the attributes should be extracted frm the JWT std::vector<std::string>
+attributes = {"foo", "bar"};
 
     auto actualPlainText = ctx.cpAbeDecrypt(attributes, cipherText);
     if (actualPlainText.empty()) {
@@ -389,18 +391,18 @@ void runOnce(bool maa = false) {
 }
 */
 
-std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
-                                     const std::vector<uint8_t>& reportData,
-                                     const std::string& gid,
-                                     const std::string& workflowId,
-                                     const std::string& nodeId)
-{
+std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
+                                     const std::vector<uint8_t> &reportData,
+                                     const std::string &gid,
+                                     const std::string &workflowId,
+                                     const std::string &nodeId) {
     std::string reportB64 = accless::base64::encodeUrlSafe(report);
     std::string runtimeDataB64 = accless::base64::encodeUrlSafe(reportData);
     std::string body = accless::attestation::utils::buildRequestBody(
         reportB64, runtimeDataB64, gid, workflowId, nodeId);
 
-    // Send the request to Accless' attestation service, and get the response back.
+    // Send the request to Accless' attestation service, and get the response
+    // back.
     return accless::attestation::getJwtFromReport("/verify-snp-report", body);
 }
 
@@ -427,7 +429,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
  * @param maxParallelism The number of parallel threads to use.
  * @return The time elapsed to run the number of requests.
  */
- std::chrono::duration<double> runRequests(int numRequests, int maxParallelism, bool maa) {
+std::chrono::duration<double> runRequests(int numRequests, int maxParallelism,
+                                          bool maa) {
     // =======================================================================
     // CP-ABE Preparation
     // =======================================================================
@@ -452,14 +455,16 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
     if (gt.empty() || ct.empty()) {
         std::cerr << "run_requests(): error running cp-abe encryption"
                   << std::endl;
-        throw std::runtime_error("run_requests(): error running cp-abe encryption");
+        throw std::runtime_error(
+            "run_requests(): error running cp-abe encryption");
     }
 
     // =======================================================================
     // Run benchmark
     // =======================================================================
 
-    std::cout << "escrow-xput: beginning benchmark. num reqs: " << numRequests << std::endl;
+    std::cout << "escrow-xput: beginning benchmark. num reqs: " << numRequests
+              << std::endl;
 
     std::counting_semaphore semaphore(maxParallelism);
     std::vector<std::thread> threads;
@@ -480,15 +485,18 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
         // Limit how many threads we spawn in parallel by acquiring a semaphore.
         semaphore.acquire();
 
-        threads.emplace_back([&semaphore, &report, &reportDataVec, &gid, &wfId, &nodeId]() {
-            auto response = sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
-            // And releasing when the thread is done.
-            semaphore.release();
-        });
+        threads.emplace_back(
+            [&semaphore, &report, &reportDataVec, &gid, &wfId, &nodeId]() {
+                auto response = sendSingleAcclessRequest(report, reportDataVec,
+                                                         gid, wfId, nodeId);
+                // And releasing when the thread is done.
+                semaphore.release();
+            });
     }
 
     // Send one request out of the loop, to easily process the result.
-    auto response = sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
+    auto response =
+        sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
 
     // Wait for all requests to finish. We do this now, and not at the end
     // to emulate the situation where we would have N independent clients.
@@ -518,7 +526,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
         throw std::runtime_error("accless(att): derived secret too small");
     }
     std::vector<uint8_t> aesKey(sharedSecret.begin(),
-                                sharedSecret.begin() + accless::attestation::AES_128_KEY_SIZE);
+                                sharedSecret.begin() +
+                                    accless::attestation::AES_128_KEY_SIZE);
 
     // Decrypt JWT.
     auto jwt = accless::attestation::decryptJwt(encrypted, aesKey);
@@ -531,7 +540,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
     if (!accless::jwt::verify(jwt)) {
         std::cerr << "escrow-xput: JWT signature verification failed"
                   << std::endl;
-        throw std::runtime_error("escrow-xput: JWT signature verification failed");
+        throw std::runtime_error(
+            "escrow-xput: JWT signature verification failed");
     }
 
     // Get the partial USK from the JWT, and wrap it in a full key for
@@ -539,9 +549,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
     std::string partialUskB64 =
         accless::jwt::getProperty(jwt, "partial_usk_b64");
     if (partialUskB64.empty()) {
-        std::cerr
-            << "att-client-snp: JWT is missing 'partial_usk_b64' field"
-            << std::endl;
+        std::cerr << "att-client-snp: JWT is missing 'partial_usk_b64' field"
+                  << std::endl;
         throw std::runtime_error("escrow-xput: bad JWT");
     }
     std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
@@ -550,15 +559,14 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
     std::optional<std::string> decrypted_gt =
         accless::abe4::decrypt(uskB64, gid, policy, ct);
     if (!decrypted_gt.has_value()) {
-        std::cerr << "att-client-snp: CP-ABE decryption failed"
-                  << std::endl;
+        std::cerr << "att-client-snp: CP-ABE decryption failed" << std::endl;
         throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
     } else if (decrypted_gt.value() != gt) {
         std::cerr << "att-client-snp: CP-ABE decrypted ciphertexts do not"
                   << " match!" << std::endl;
         std::cerr << "att-client-snp: Original GT: " << gt << std::endl;
-        std::cerr << "att-client-snp: Decrypted GT: "
-                  << decrypted_gt.value() << std::endl;
+        std::cerr << "att-client-snp: Decrypted GT: " << decrypted_gt.value()
+                  << std::endl;
         throw std::runtime_error("escrow-xput: CP-ABE decryption failed");
     }
 
@@ -570,7 +578,7 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t>& report,
     return elapsedSecs;
 }
 
-void doBenchmark(const std::vector<int>& numRequests, bool maa) {
+void doBenchmark(const std::vector<int> &numRequests, bool maa) {
     // Write elapsed time to CSV
     std::string fileName = maa ? "accless-maa.csv" : "accless.csv";
     std::ofstream csvFile(fileName, std::ios::out);
@@ -594,16 +602,16 @@ void doBenchmark(const std::vector<int>& numRequests, bool maa) {
     csvFile.close();
 }
 
-std::vector<int> parseIntList(const std::string& s) {
+std::vector<int> parseIntList(const std::string &s) {
     std::vector<int> result;
     std::stringstream ss(s);
     std::string item;
     while (std::getline(ss, item, ',')) {
         try {
             result.push_back(std::stoi(item));
-        } catch (const std::invalid_argument& e) {
+        } catch (const std::invalid_argument &e) {
             std::cerr << "Invalid integer in list: " << item << std::endl;
-        } catch (const std::out_of_range& e) {
+        } catch (const std::out_of_range &e) {
             std::cerr << "Integer out of range in list: " << item << std::endl;
         }
     }
@@ -622,7 +630,8 @@ int main(int argc, char **argv) {
             if (i + 1 < argc) {
                 numRequests = parseIntList(argv[++i]);
             } else {
-                std::cerr << "--num-requests option requires one argument." << std::endl;
+                std::cerr << "--num-requests option requires one argument."
+                          << std::endl;
                 return 1;
             }
         }
