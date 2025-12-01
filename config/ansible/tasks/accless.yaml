@@ -1,21 +1,25 @@
-- name: "Build demo"
-  shell: rm -rf build && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja
-  args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/ubench/escrow-xput"
-    executable: /bin/bash
-
-- name: "Generate keys"
-  shell: ./bin/gen_keys.sh --force
-  args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
-    executable: /bin/bash
-  environment:
-    AS_URL: "{{ as_ip }}"
-
+# In the attestation service node, we only rebuild the AS.
 - name: "Build Attestation Service"
-  shell: cargo build --release
+  when: inventory_hostname == "accless-as"
+  # FIXME: remove branch name.
+  shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh attestation-service run --rebuild --background --overwrite-external-ip {{ as_ip }}
   args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
+    chdir: "/home/{{ ansible_user }}/git/faasm/accless"
     executable: /bin/bash
   environment:
     PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# In the client node we just run a smoke-test that forces the rebuild of `accli`
+# and we pull the relevant container image.
+- name: "Build accli"
+  when: inventory_hostname == "accless-cvm"
+  shell: ./scripts/accli_wrapper.sh --help
+  args:
+    chdir: "/home/{{ ansible_user }}/git/faasm/accless"
+    executable: /bin/bash
+  environment:
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: "Pull work-on container image"
+  when: inventory_hostname == "accless-cvm"
+  shell: docker pull ghcr.io/faasm/accless-experiments:{{ accless_version }}

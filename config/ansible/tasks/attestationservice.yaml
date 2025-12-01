@@ -1,6 +1,5 @@
 - name: "Build Attestation Service"
-  # shell: ./scripts/accli_wrapper.sh attestation-service run --rebuild --background --overwrite-external-ip {{ as_ip }}
-  shell: ./scripts/accli_wrapper.sh attestation-service build
+  shell: ./scripts/accli_wrapper.sh attestation-service run --rebuild --background --overwrite-external-ip {{ as_ip }}
   args:
     chdir: "/home/{{ ansible_user }}/git/faasm/accless"
     executable: /bin/bash

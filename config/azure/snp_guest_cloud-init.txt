@@ -1,10 +1,10 @@
 users:
-  - name: tless
+  - name: accless
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     shell: /bin/bash
 
 write_files:
-  - path: /home/tless/.vimrc
+  - path: /home/accless/.vimrc
     permissions: '0644'
     owner: tless:tless
     content: |
