@@ -578,7 +578,8 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism,
     return elapsedSecs;
 }
 
-void doBenchmark(const std::vector<int> &numRequests, bool maa) {
+void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
+                 int numRepeats, bool maa) {
     // Write elapsed time to CSV
     std::string fileName = maa ? "accless-maa.csv" : "accless.csv";
     std::ofstream csvFile(fileName, std::ios::out);
@@ -586,10 +587,13 @@ void doBenchmark(const std::vector<int> &numRequests, bool maa) {
 
     // WARNING: this is copied from invrs/src/tasks/ubench.rs and must be
     // kept in sync!
-    int numRepeats = maa ? 1 : 3;
     int maxParallelism = 100;
     try {
         for (const auto &i : numRequests) {
+            for (int j = 0; j < numWarmupRepeats; j++) {
+                runRequests(i, maxParallelism, maa);
+            }
+
             for (int j = 0; j < numRepeats; j++) {
                 auto elapsedTimeSecs = runRequests(i, maxParallelism, maa);
                 csvFile << i << "," << elapsedTimeSecs.count() << '\n';
@@ -621,6 +625,8 @@ std::vector<int> parseIntList(const std::string &s) {
 int main(int argc, char **argv) {
     bool maa = false;
     std::vector<int> numRequests;
+    int numWarmupRepeats = 1;
+    int numRepeats = 3;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -634,6 +640,23 @@ int main(int argc, char **argv) {
                           << std::endl;
                 return 1;
             }
+        } else if (arg == "--num-warmup-repeats") {
+            if (i + 1 < argc) {
+                numWarmupRepeats = std::stoi(argv[++i]);
+            } else {
+                std::cerr
+                    << "--num-warmup-repeats option requires one argument."
+                    << std::endl;
+                return 1;
+            }
+        } else if (arg == "--num-repeats") {
+            if (i + 1 < argc) {
+                numRepeats = std::stoi(argv[++i]);
+            } else {
+                std::cerr << "--num-repeats option requires one argument."
+                          << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -642,7 +665,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    doBenchmark(numRequests, maa);
+    doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa);
 
     return 0;
 }
