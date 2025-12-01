@@ -9,7 +9,7 @@ venv-bm
 build-native
 build-wasm
 
-ansible/inventory/vms.ini
+config/ansible/inventory/vms.ini
 
 datasets*
 
