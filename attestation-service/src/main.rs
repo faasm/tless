@@ -30,6 +30,7 @@ mod sgx;
 mod snp;
 mod state;
 mod tls;
+mod types;
 
 const DEFAULT_PORT: u16 = 8443;
 
@@ -92,6 +93,10 @@ async fn main() -> Result<()> {
         .route("/state", get(request::get_state))
         .route("/verify-sgx-report", post(sgx::verify_sgx_report))
         .route("/verify-snp-report", post(snp::verify_snp_report))
+        .route(
+            "/verify-snp-vtpm-report",
+            post(azure_cvm::verify_snp_vtpm_report),
+        )
         .layer(Extension(state.clone()));
     let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
     let listener = TcpListener::bind(addr).await;

@@ -1,12 +1,17 @@
-use anyhow::Result;
+use crate::{
+    jwt::{self, JwtClaims},
+    request::{NodeData, Tee},
+    state::AttestationServiceState,
+};
+use anyhow::{Context, Result};
+use base64::{Engine as _, engine::general_purpose};
+use log::{debug, error};
 use p256::PublicKey;
 use ring::{
     agreement::{self, ECDH_P256, UnparsedPublicKey},
     rand::SystemRandom,
 };
 
-/// # Description
-///
 /// Checks if a given byte array represents a valid P-256 elliptic curve point.
 ///
 /// # Arguments
@@ -16,15 +21,13 @@ use ring::{
 /// # Returns
 ///
 /// `true` if the bytes represent a valid P-256 point, `false` otherwise.
-pub fn is_valid_p256_point(bytes: &[u8]) -> bool {
+fn is_valid_p256_point(bytes: &[u8]) -> bool {
     if bytes.len() != 65 || bytes[0] != 0x04 {
         return false;
     }
     PublicKey::from_sec1_bytes(bytes).is_ok()
 }
 
-/// # Description
-///
 /// Converts a public key format (concatenated little-endian X and Y
 /// coordinates) to SEC1 (Standard for Efficient Cryptography) format (0x04 || X
 /// || Y).
@@ -40,7 +43,7 @@ pub fn is_valid_p256_point(bytes: &[u8]) -> bool {
 ///
 /// An `Option` containing a 65-byte array in SEC1 format if successful, `None`
 /// otherwise.
-pub fn raw_pubkey_to_sec1_format(raw: &[u8]) -> Option<[u8; 65]> {
+fn raw_pubkey_to_sec1_format(raw: &[u8]) -> Option<[u8; 65]> {
     if raw.len() != 64 {
         return None;
     }
@@ -61,8 +64,6 @@ pub fn raw_pubkey_to_sec1_format(raw: &[u8]) -> Option<[u8; 65]> {
     Some(sec1)
 }
 
-/// # Description
-///
 /// Converts a SEC1 formatted public key (0x04 || X || Y) to the raw public key
 /// format (concatenated little-endian X and Y coordinates).
 ///
@@ -75,7 +76,7 @@ pub fn raw_pubkey_to_sec1_format(raw: &[u8]) -> Option<[u8; 65]> {
 ///
 /// A `Result` containing a `Vec<u8>` in raw format if successful, or an
 /// `anyhow::Error` otherwise.
-pub fn sec1_pubkey_to_raw(sec1_pubkey: &[u8]) -> Result<Vec<u8>> {
+fn sec1_pubkey_to_raw(sec1_pubkey: &[u8]) -> Result<Vec<u8>> {
     // Skip prefix indicatting raw (uncompressed) point
     let gx_be = &sec1_pubkey[1..33];
     let gy_be = &sec1_pubkey[33..65];
@@ -93,8 +94,6 @@ pub fn sec1_pubkey_to_raw(sec1_pubkey: &[u8]) -> Result<Vec<u8>> {
     Ok(sgx_le_pubkey)
 }
 
-/// # Description
-///
 /// Generates an ephemeral ECDH key pair and derives a shared secret using the
 /// provided peer's public key.
 ///
@@ -123,4 +122,44 @@ pub fn generate_ecdhe_keys_and_derive_secret(
         })??;
 
     Ok((my_pubkey.as_ref().to_vec(), shared_secret))
+}
+
+pub fn do_ecdhe_ke(
+    state: &AttestationServiceState,
+    tee: &Tee,
+    node_data: &NodeData,
+    raw_pubkey_bytes: &[u8],
+) -> Result<serde_json::Value> {
+    debug!("parsing pub key bytes to SEC1 format");
+    let pubkey_bytes = raw_pubkey_to_sec1_format(raw_pubkey_bytes)
+        .context("do_ecdhe_ke(): error parsing pubkey to SEC1")?;
+    if !is_valid_p256_point(&pubkey_bytes) {
+        let reason = "error validating SGX-provided public key";
+        error!("do_ecdhe_ke(): {reason}");
+        anyhow::bail!(reason);
+    }
+
+    let (server_pub_key, shared_secret) = generate_ecdhe_keys_and_derive_secret(&pubkey_bytes)
+        .context("do_ecdhe_ke(): error deriving shared secret")?;
+    let server_pub_key_le = sec1_pubkey_to_raw(&server_pub_key).unwrap();
+    let server_pub_b64 = general_purpose::STANDARD.encode(server_pub_key_le);
+
+    debug!("encoding JWT with server's private key (for authenticity)");
+    let claims = JwtClaims::new(
+        state,
+        tee,
+        &node_data.gid,
+        &node_data.workflow_id,
+        &node_data.node_id,
+    )
+    .context("do_ecdhe_ke(): error generating JWT claims")?;
+    let header = jsonwebtoken::Header {
+        alg: jsonwebtoken::Algorithm::RS256,
+        ..Default::default()
+    };
+    let jwt = jsonwebtoken::encode(&header, &claims, &state.jwt_encoding_key)
+        .context("do_ecdhe_ke(): error encoding JSON web token")?;
+
+    // Encrypt JWT with derived shared secret.
+    jwt::encrypt_jwt(jwt, shared_secret, server_pub_b64)
 }

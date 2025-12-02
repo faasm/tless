@@ -1,33 +1,85 @@
+use crate::{
+    state::AttestationServiceState,
+    types::snp::{SnpCa, SnpProcType, SnpVcek},
+};
 use anyhow::Result;
-use log::{error, trace};
+use log::{debug, error, trace};
 use sev::{
-    certs::snp::{Certificate, Verifiable, ca::Chain},
-    firmware::{guest::AttestationReport, host::TcbVersion},
+    certs::snp::{Verifiable, ca::Chain},
+    firmware::host::TcbVersion,
 };
 use snpguest::fetch::ProcType;
-
-/// SNP certificate authority chain made up of AMD's root key (ARK) and AMD's
-/// signing key (ASK). Certificate chain is: ARK --(signs)--> ASK --(signs)-->
-/// VCEK --(signs)--> Report
-pub type SnpCa = Chain;
-
-/// SNP-enabled processor type.
-pub type SnpProcType = ProcType;
-
-/// SNP attestation report
-pub type SnpReport = AttestationReport;
-
-/// Vendor Chip Endorsement Key
-pub type SnpVcek = Certificate;
-
-/// # Description
-///
-/// We cache VCEK certificates to validate SNP reports by the processor type,
-/// and the reported TCB. Note that even though the TCB version is
-/// self-reported, it is included in the report and signed by the PSP.
-pub type SnpVcekCacheKey = (SnpProcType, TcbVersion);
+use std::sync::Arc;
 
 const AMD_KDS_SITE: &str = "https://kdsintf.amd.com";
+
+/// Minimal view of an SNP report needed for AMD KDS & caching.
+///
+/// This trait is intentionally tiny so we can implement it for multiple report
+/// types (i.e. bare metal, using snpguest, and para-virtualized using
+/// az-snp-vtpm).
+// FIXME(#62): unify SNP and SNP-vTPM verification logic to `sev` crate.
+pub trait AmdKdsReport {
+    fn version(&self) -> u32;
+    fn cpuid_fam_id(&self) -> Option<u8>;
+    fn cpuid_mod_id(&self) -> Option<u8>;
+    fn chip_id(&self) -> &[u8; 64];
+    fn tcb_version(&self) -> TcbVersion;
+}
+
+/// Implementation for the AttestationReport structure used in the `snpguest`
+/// crate.
+impl AmdKdsReport for sev::firmware::guest::AttestationReport {
+    fn version(&self) -> u32 {
+        self.version
+    }
+
+    fn cpuid_fam_id(&self) -> Option<u8> {
+        self.cpuid_fam_id
+    }
+
+    fn cpuid_mod_id(&self) -> Option<u8> {
+        self.cpuid_mod_id
+    }
+
+    fn chip_id(&self) -> &[u8; 64] {
+        &self.chip_id
+    }
+
+    fn tcb_version(&self) -> TcbVersion {
+        self.reported_tcb
+    }
+}
+
+/// Implementation for the AttestationReport structure used in the az-snp-vtpm
+/// crate.
+impl AmdKdsReport for az_snp_vtpm::report::AttestationReport {
+    fn version(&self) -> u32 {
+        self.version
+    }
+
+    fn cpuid_fam_id(&self) -> Option<u8> {
+        self.cpuid_fam_id
+    }
+
+    fn cpuid_mod_id(&self) -> Option<u8> {
+        self.cpuid_mod_id
+    }
+
+    fn chip_id(&self) -> &[u8; 64] {
+        &self.chip_id
+    }
+
+    fn tcb_version(&self) -> TcbVersion {
+        TcbVersion {
+            bootloader: self.reported_tcb.bootloader,
+            tee: self.reported_tcb.tee,
+            snp: self.reported_tcb.snp,
+            microcode: self.reported_tcb.microcode,
+            fmc: self.reported_tcb.fmc,
+        }
+    }
+}
 
 fn proc_type_to_kds_url(proc_type: &SnpProcType) -> &str {
     match proc_type {
@@ -59,29 +111,31 @@ pub async fn fetch_ca_from_kds(proc_type: &SnpProcType) -> Result<SnpCa> {
 }
 
 /// Fetches a processor's Vendor-Chip Endorsement Key (VCEK) from AMD's KDS.
-pub async fn fetch_vcek_from_kds(
-    proc_type: &SnpProcType,
-    att_report: &SnpReport,
-) -> Result<SnpVcek> {
+pub async fn fetch_vcek_from_kds<R>(proc_type: &SnpProcType, att_report: &R) -> Result<SnpVcek>
+where
+    R: AmdKdsReport,
+{
     const KDS_VCEK: &str = "/vcek/v1";
 
     // The URL generation part in this function is adapted from the snpguest crate.
-    let hw_id: String = if att_report.chip_id != [0; 64] {
+    let chip_id: &[u8; 64] = att_report.chip_id();
+    let hw_id: String = if *chip_id != [0; 64] {
         match proc_type {
             ProcType::Turin => {
-                let shorter_bytes: &[u8] = &att_report.chip_id[0..8];
+                let shorter_bytes: &[u8] = &chip_id[0..8];
                 hex::encode(shorter_bytes)
             }
-            _ => hex::encode(att_report.chip_id),
+            _ => hex::encode(chip_id),
         }
     } else {
         let reason = "fetch_vcek_from_kds(): hardware ID is 0s on attestation report";
         error!("{reason}");
         anyhow::bail!(reason);
     };
+    let tcb = att_report.tcb_version();
     let url: String = match proc_type {
         ProcType::Turin => {
-            let fmc = if let Some(fmc) = att_report.reported_tcb.fmc {
+            let fmc = if let Some(fmc) = tcb.fmc {
                 fmc
             } else {
                 return Err(anyhow::anyhow!("A Turin processor must have a fmc value"));
@@ -91,10 +145,10 @@ pub async fn fetch_vcek_from_kds(
                 {hw_id}?fmcSPL={:02}&blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
                 proc_type_to_kds_url(proc_type),
                 fmc,
-                att_report.reported_tcb.bootloader,
-                att_report.reported_tcb.tee,
-                att_report.reported_tcb.snp,
-                att_report.reported_tcb.microcode
+                tcb.bootloader,
+                tcb.tee,
+                tcb.snp,
+                tcb.microcode
             )
         }
         _ => {
@@ -102,10 +156,10 @@ pub async fn fetch_vcek_from_kds(
                 "{AMD_KDS_SITE}{KDS_VCEK}/{}/\
                 {hw_id}?blSPL={:02}&teeSPL={:02}&snpSPL={:02}&ucodeSPL={:02}",
                 proc_type_to_kds_url(proc_type),
-                att_report.reported_tcb.bootloader,
-                att_report.reported_tcb.tee,
-                att_report.reported_tcb.snp,
-                att_report.reported_tcb.microcode
+                tcb.bootloader,
+                tcb.tee,
+                tcb.snp,
+                tcb.microcode
             )
         }
     };
@@ -116,7 +170,128 @@ pub async fn fetch_vcek_from_kds(
     let response = response.error_for_status()?;
 
     let body = response.bytes().await?;
-    let vcek = Certificate::from_bytes(&body)?;
+    let vcek = SnpVcek::from_bytes(&body)?;
+
+    Ok(vcek)
+}
+
+async fn get_snp_ca(
+    proc_type: &SnpProcType,
+    state: &Arc<AttestationServiceState>,
+) -> Result<SnpCa> {
+    debug!("get_snp_ca(): getting CA chain for SNP processor (type={proc_type})");
+
+    // Fast path: read CA from the cache.
+    let ca: Option<SnpCa> = {
+        let cache = state.amd_signing_keys.read().await;
+        cache.get(proc_type).cloned()
+    };
+
+    if let Some(ca) = ca {
+        debug!("get_snp_ca(): cache hit, fetching CA from local cache");
+        return Ok(ca);
+    }
+
+    // This method also verifies the CA signatures.
+    debug!("get_snp_ca(): cache miss, fetching CA from AMD's KDS");
+    let ca = fetch_ca_from_kds(proc_type).await?;
+
+    // Cache CA for future use.
+    {
+        let mut cache = state.amd_signing_keys.write().await;
+        cache.insert(proc_type.clone(), ca.clone());
+    }
+
+    Ok(ca)
+}
+
+/// Helper method to get the processor model from a generic attestation report.
+///
+/// The logic in this model is adapted from the `snpguest` crate.
+pub fn get_processor_model<R>(att_report: &R) -> Result<ProcType>
+where
+    R: AmdKdsReport,
+{
+    if att_report.version() < 3 {
+        if [0u8; 64] == *att_report.chip_id() {
+            let reason = "attestation report version is lower than 3 and Chip ID is all 0s. Make sure MASK_CHIP_ID is set to 0 or update firmware";
+            error!("get_processor_model(): {reason}");
+            anyhow::bail!(reason);
+        } else {
+            let chip_id = att_report.chip_id();
+            if chip_id[8..64] == [0; 56] {
+                return Ok(ProcType::Turin);
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Attestation report could be either Milan or Genoa. Update firmware to get a new version of the report."
+                ));
+            }
+        }
+    }
+
+    let cpu_fam = att_report
+        .cpuid_fam_id()
+        .ok_or_else(|| anyhow::anyhow!("Attestation report version 3+ is missing CPU family ID"))?;
+
+    let cpu_mod = att_report
+        .cpuid_mod_id()
+        .ok_or_else(|| anyhow::anyhow!("Attestation report version 3+ is missing CPU model ID"))?;
+
+    match cpu_fam {
+        0x19 => match cpu_mod {
+            0x0..=0xF => Ok(ProcType::Milan),
+            0x10..=0x1F | 0xA0..0xAF => Ok(ProcType::Genoa),
+            _ => Err(anyhow::anyhow!("Processor model not supported")),
+        },
+        0x1A => match cpu_mod {
+            0x0..=0x11 => Ok(ProcType::Turin),
+            _ => Err(anyhow::anyhow!("Processor model not supported")),
+        },
+        _ => Err(anyhow::anyhow!("Processor family not supported")),
+    }
+}
+
+/// Helper method to fetch the VCEK certificate to validate an SNP quote. We
+/// cache the certificates based on the platform and TCB info to avoid
+/// round-trips to the AMD servers during verification (in the general case).
+pub async fn get_snp_vcek<R>(report: &R, state: &Arc<AttestationServiceState>) -> Result<SnpVcek>
+where
+    R: AmdKdsReport,
+{
+    // Fetch the certificate chain from the processor model.
+    let proc_type = get_processor_model(report)?;
+    let ca = get_snp_ca(&proc_type, state).await?;
+
+    // Work-out cache key from report.
+    let tcb_version = report.tcb_version();
+    let cache_key = (proc_type.clone(), tcb_version);
+    debug!(
+        "get_snp_vcek(): fetching VCEK key for report (proc_type={proc_type}, tcb={tcb_version})"
+    );
+
+    // Fast path: read VCEK from the cache.
+    let vcek: Option<SnpVcek> = {
+        let cache = state.snp_vcek_cache.read().await;
+        cache.get(&cache_key).cloned()
+    };
+
+    if let Some(vcek) = vcek {
+        debug!("get_snp_vcek(): cache hit, fetching VCEK from local cache");
+        return Ok(vcek);
+    }
+
+    // Slow path: fetch collateral from AMD's KDS.
+    debug!("get_snp_vcek(): cache miss, fetching VCEK from AMD's KDS");
+    let vcek = fetch_vcek_from_kds(&proc_type, report).await?;
+
+    // Once we fetch a new VCEK, verify its certificate chain before caching it.
+    (&ca.ask, &vcek).verify()?;
+
+    // Cache VCEK for future use.
+    {
+        let mut cache = state.snp_vcek_cache.write().await;
+        cache.insert(cache_key, vcek.clone());
+    }
 
     Ok(vcek)
 }

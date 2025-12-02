@@ -26,7 +26,6 @@ pub struct NodeData {
 }
 
 pub enum Tee {
-    #[allow(dead_code)]
     AzureCvm,
     Sgx,
     Snp,
@@ -77,4 +76,40 @@ pub async fn get_state(
     };
 
     (StatusCode::OK, Json(response_json))
+}
+
+pub mod snp {
+    use crate::request::NodeData;
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct InitTimeData {
+        _data: String,
+        _data_type: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct RuntimeData {
+        pub data: String,
+        _data_type: String,
+    }
+
+    /// This structure corresponds to the JSON we send to verify an SNP report,
+    /// either for bare-metal or vTPM.
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SnpRequest {
+        /// Attributes used for CP-ABE keygen.
+        pub node_data: NodeData,
+        pub _init_time_data: InitTimeData,
+        /// Base64-encoded SNP quote.
+        pub quote: String,
+        /// Additional base64-encoded data that we send with the enclave as part
+        /// of the enclave held data. Even if slightly redundant, it is
+        /// easier to access as a standalone field, and we check its
+        /// integrity from the quote itself, which is signed by the QE.
+        pub runtime_data: RuntimeData,
+    }
 }

@@ -4,8 +4,10 @@
 #include "mock.h"
 
 // Includes from Azure Guest Attestation library
+#include "AttestationLibUtils.h"
 #include "AttestationLogger.h"
 #include "HclReportParser.h"
+#include "Tpm.h"
 #include "TpmCertOperations.h"
 
 #include <array>
@@ -70,24 +72,74 @@ void Logger::Log(const char *log_tag, AttestationLogger::LogLevel level,
     // std::cout << std::string(str.begin(), str.end()) << std::endl;
 }
 
-std::vector<uint8_t> getSnpReportFromTPM() {
-    // First, get HCL report
+// Helper method to append a little-endian u32 to a byte vector.
+static void appendU32LE(std::vector<uint8_t> &out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+}
+
+/**
+ * @brief Get SNP report from TPM.
+ *
+ * This function fetches the SNP report from a vTPM in an Azure cVM (i.e. a
+ * para-virtualized environment). In Azure cVMs, the SNP report is generated
+ * at boot, and cannot be modified. In order to include a fresh key inside the
+ * report, we need to request a vTPM quote, and verify that it has been signed
+ * by the vTPM's Attestation Key (AK) which is included in the report's
+ * runtime_data. The vTPM quote has a message and a signature.
+ *
+ * We treat both the report and the vTPM quote as opaque blobs that we pass on
+ * to the attestation service in a single serialized array with layout:
+ * [0..3]   = reportLen (LE)
+ * [4..7]   = msgLen    (LE)
+ * [8..11]  = sigLen    (LE)
+ * [12..]   = report || msg || sig
+ */
+std::vector<uint8_t>
+getSnpReportFromTPM(const std::array<uint8_t, 64> &reportData) {
     Tpm tpm;
+
+    // First, get HCL report.
     Buffer hclReport = tpm.GetHCLReport();
 
-    Buffer snpReport;
-    Buffer runtimeData;
-    HclReportParser reportParser;
+    // Second, get vTPM quote.
+    PcrList pcrs = GetAttestationPcrList();
+    PcrQuote quote = tpm.GetPCRQuoteWithNonce(
+        pcrs, HashAlg::Sha256,
+        std::vector<unsigned char>(reportData.begin(), reportData.end()));
+    // quote.quote     = marshalled TPM2B_ATTEST
+    // quote.signature = marshalled TPMT_SIGNATURE
 
-    auto result = reportParser.ExtractSnpReportAndRuntimeDataFromHclReport(
-        hclReport, snpReport, runtimeData);
-    if (result.code_ != AttestationResult::ErrorCode::SUCCESS) {
-        std::cerr << "accless: error parsing snp report from HCL report"
-                  << std::endl;
-        throw std::runtime_error("error parsing HCL report");
+    if (hclReport.size() > UINT32_MAX || quote.quote.size() > UINT32_MAX ||
+        quote.signature.size() > UINT32_MAX) {
+        throw std::runtime_error(
+            "Evidence component too large to encode with u32 lengths");
     }
 
-    return snpReport;
+    uint32_t reportLen = static_cast<uint32_t>(hclReport.size());
+    uint32_t quoteLen = static_cast<uint32_t>(quote.quote.size());
+    uint32_t sigLen = static_cast<uint32_t>(quote.signature.size());
+
+    std::vector<uint8_t> blob;
+    blob.reserve(3 * sizeof(uint32_t) + reportLen + quoteLen + sigLen);
+
+    // Layout:
+    // [0..3]   = reportLen (LE)
+    // [4..7]   = quoteLen    (LE)
+    // [8..11]  = sigLen    (LE)
+    // [12..]   = report || msg || sig
+
+    appendU32LE(blob, reportLen);
+    appendU32LE(blob, quoteLen);
+    appendU32LE(blob, sigLen);
+
+    blob.insert(blob.end(), hclReport.begin(), hclReport.end());
+    blob.insert(blob.end(), quote.quote.begin(), quote.quote.end());
+    blob.insert(blob.end(), quote.signature.begin(), quote.signature.end());
+
+    return blob;
 }
 
 void tpmRenewAkCert() {
@@ -181,9 +233,26 @@ std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData) {
         return getSnpReportFromDev(reportData, std::nullopt);
     }
 
-    // FIXME: enable report data for AzCVM use-case.
     if (std::filesystem::exists("/dev/tpmrm0")) {
-        return getSnpReportFromTPM();
+        return getSnpReportFromTPM(reportData);
+    }
+
+    std::cerr << "accless(att): no known SNP device found for attestation"
+              << std::endl;
+    throw std::runtime_error("No known SNP device found!");
+}
+
+static std::string getAsEndpoint(bool isMock) {
+    if (isMock) {
+        return "/verify-snp-report";
+    }
+
+    if (std::filesystem::exists("/dev/sev-guest")) {
+        return "/verify-snp-report";
+    }
+
+    if (std::filesystem::exists("/dev/tpmrm0")) {
+        return "/verify-snp-vtpm-report";
     }
 
     std::cerr << "accless(att): no known SNP device found for attestation"
@@ -206,7 +275,9 @@ std::string getAttestationJwt(const std::string &gid,
     // the signature.
     std::vector<uint8_t> report;
     // FIXME: consider making this check more reliable.
-    if (gid == mock::MOCK_GID) {
+    bool isMock = (gid == mock::MOCK_GID);
+
+    if (isMock) {
         std::cout << "accless(att): WARNING: mocking SNP quote" << std::endl;
         report = accless::attestation::mock::buildMockQuote(
             reportDataVec, mock::MOCK_QUOTE_MAGIC_SNP);
@@ -222,7 +293,7 @@ std::string getAttestationJwt(const std::string &gid,
 
     // Send the request, and get the response back.
     std::string response =
-        accless::attestation::getJwtFromReport("/verify-snp-report", body);
+        accless::attestation::getJwtFromReport(getAsEndpoint(isMock), body);
     std::string encryptedB64 =
         accless::attestation::utils::extractJsonStringField(response,
                                                             "encrypted_token");

@@ -8,7 +8,7 @@ description = "Reference attestation service implementation"
 homepage.workspace = true
 
 [features]
-default = ["sgx", "snp"]
+default = ["azure-cvm", "sgx", "snp"]
 azure-cvm = []
 sgx = []
 snp = []
@@ -27,6 +27,7 @@ aes-gcm.workspace = true
 anyhow.workspace = true
 ark-serialize.workspace = true
 axum.workspace = true
+az-snp-vtpm.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -38,6 +39,7 @@ hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio", "server", "http1", "service"] }
 jsonwebtoken.workspace = true
 log.workspace = true
+openssl.workspace = true
 p256.workspace = true
 rand.workspace = true
 reqwest.workspace = true

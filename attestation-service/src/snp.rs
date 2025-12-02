@@ -1,50 +1,18 @@
 use crate::{
-    amd::{SnpCa, SnpProcType, SnpReport, SnpVcek, fetch_ca_from_kds, fetch_vcek_from_kds},
+    amd::get_snp_vcek,
     ecdhe,
-    jwt::{self, JwtClaims},
     mock::{MockQuote, MockQuoteType},
-    request::{NodeData, Tee},
+    request::{Tee, snp::SnpRequest},
     state::AttestationServiceState,
+    types::snp::SnpReport,
 };
 use anyhow::Result;
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use base64::{Engine as _, engine::general_purpose};
 use log::{debug, error, info};
-use serde::Deserialize;
 use serde_json::json;
-use sev::{certs::snp::Verifiable, parser::ByteParser};
+use sev::parser::ByteParser;
 use std::sync::Arc;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct InitTimeData {
-    _data: String,
-    _data_type: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RuntimeData {
-    data: String,
-    _data_type: String,
-}
-
-/// This struct corresponds to the request that SNP-Knative sends to verify an
-/// SNP attestation report.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SnpRequest {
-    /// Attributes used for CP-ABE keygen.
-    node_data: NodeData,
-    _init_time_data: InitTimeData,
-    /// Base64-encoded SNP quote.
-    quote: String,
-    /// Additional base64-encoded data that we send with the enclave as part of
-    /// the enclave held data. Even if slightly redundant, it is easier to
-    /// access as a standalone field, and we check its integrity from the
-    /// quote itself, which is signed by the QE.
-    runtime_data: RuntimeData,
-}
 
 /// Extract the report payload from the PSP reposnse.
 ///
@@ -105,78 +73,6 @@ fn extract_report(data: &[u8]) -> Result<Vec<u8>> {
     // vec.
     let report_payload = data[OFFSET_REPORT_DATA..required_len].to_vec();
     Ok(report_payload)
-}
-
-async fn get_snp_ca(
-    proc_type: &SnpProcType,
-    state: &Arc<AttestationServiceState>,
-) -> Result<SnpCa> {
-    debug!("get_snp_ca(): getting CA chain for SNP processor (type={proc_type})");
-
-    // Fast path: read CA from the cache.
-    let ca: Option<SnpCa> = {
-        let cache = state.amd_signing_keys.read().await;
-        cache.get(proc_type).cloned()
-    };
-
-    if let Some(ca) = ca {
-        debug!("get_snp_ca(): cache hit, fetching CA from local cache");
-        return Ok(ca);
-    }
-
-    // This method also verifies the CA signatures.
-    debug!("get_snp_ca(): cache miss, fetching CA from AMD's KDS");
-    let ca = fetch_ca_from_kds(proc_type).await?;
-
-    // Cache CA for future use.
-    {
-        let mut cache = state.amd_signing_keys.write().await;
-        cache.insert(proc_type.clone(), ca.clone());
-    }
-
-    Ok(ca)
-}
-
-/// Helper method to fetch the VCEK certificate to validate an SNP quote. We
-/// cache the certificates based on the platform and TCB info to avoid
-/// round-trips to the AMD servers during verification (in the general case).
-async fn get_snp_vcek(report: &SnpReport, state: &Arc<AttestationServiceState>) -> Result<SnpVcek> {
-    // Fetch the certificate chain from the processor model.
-    let proc_type = snpguest::fetch::get_processor_model(report)?;
-    let ca = get_snp_ca(&proc_type, state).await?;
-
-    // Work-out cache key from report.
-    let tcb_version = report.reported_tcb;
-    let cache_key = (proc_type.clone(), tcb_version);
-    debug!(
-        "get_snp_vcek(): fetching VCEK key for report (proc_type={proc_type}, tcb={tcb_version})"
-    );
-
-    // Fast path: read VCEK from the cache.
-    let vcek: Option<SnpVcek> = {
-        let cache = state.snp_vcek_cache.read().await;
-        cache.get(&cache_key).cloned()
-    };
-
-    if let Some(vcek) = vcek {
-        debug!("get_snp_vcek(): cache hit, fetching VCEK from local cache");
-        return Ok(vcek);
-    }
-
-    // Slow path: fetch collateral from AMD's KDS.
-    debug!("get_snp_vcek(): cache miss, fetching VCEK from AMD's KDS");
-    let vcek = fetch_vcek_from_kds(&proc_type, report).await?;
-
-    // Once we fetch a new VCEK, verify its certificate chain before caching it.
-    (&ca.ask, &vcek).verify()?;
-
-    // Cache VCEK for future use.
-    {
-        let mut cache = state.snp_vcek_cache.write().await;
-        cache.insert(cache_key, vcek.clone());
-    }
-
-    Ok(vcek)
 }
 
 pub async fn verify_snp_report(
@@ -306,73 +202,10 @@ pub async fn verify_snp_report(
         );
     }
 
-    debug!("parsing pub key bytes to SEC1 format");
-    let pubkey_bytes = match ecdhe::raw_pubkey_to_sec1_format(&raw_pubkey_bytes) {
-        Some(b) => b,
-        None => {
-            error!("error converting SNP public key to SEC1 format");
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "invalid public key length" })),
-            );
-        }
-    };
-    if !ecdhe::is_valid_p256_point(&pubkey_bytes) {
-        error!("error validating SNP-provided public key");
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "invalid EC public key" })),
-        );
-    }
-
-    let (server_pub_key, shared_secret) =
-        match ecdhe::generate_ecdhe_keys_and_derive_secret(&pubkey_bytes) {
-            Ok(res) => res,
-            Err(e) => {
-                error!("error generating ECDH keys or deriving secret (error={e:?})");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "key generation or derivation failed" })),
-                );
-            }
-        };
-
-    let server_pub_key_le = ecdhe::sec1_pubkey_to_raw(&server_pub_key).unwrap();
-    let server_pub_b64 = general_purpose::URL_SAFE.encode(server_pub_key_le);
-
-    debug!("encoding JWT with server's private key (for authenticity)");
-    let claims = match JwtClaims::new(
-        &state,
-        &Tee::Snp,
-        &payload.node_data.gid,
-        &payload.node_data.workflow_id,
-        &payload.node_data.node_id,
-    ) {
-        Ok(claims) => claims,
-        Err(e) => {
-            error!("error gathering JWT claims (error={e:?})");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "JWT claims gathering" })),
-            );
-        }
-    };
-    let header = jsonwebtoken::Header {
-        alg: jsonwebtoken::Algorithm::RS256,
-        ..Default::default()
-    };
-    let jwt = match jsonwebtoken::encode(&header, &claims, &state.jwt_encoding_key) {
-        Ok(t) => t,
-        Err(e) => {
-            error!("JWT encode error (error={e:?})");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "JWT encoding failed" })),
-            );
-        }
-    };
-
-    match jwt::encrypt_jwt(jwt, shared_secret, server_pub_b64) {
+    // Now that we have verified the attestation report, run the server-side part of
+    // the attribute minting protocol which involves running ECDHE and running
+    // CP-ABE keygen.
+    match ecdhe::do_ecdhe_ke(&state, &Tee::Snp, &payload.node_data, &raw_pubkey_bytes) {
         Ok(response) => (StatusCode::OK, Json(response)),
         Err(e) => {
             error!("error encrypting JWT (error={e:?})");
