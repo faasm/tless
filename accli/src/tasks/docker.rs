@@ -207,6 +207,18 @@ impl Docker {
         }
     }
 
+    /// Helper method to get the group ID of the /dev/tmprm0 device.
+    ///
+    /// This method is only used when using `accli` inside an Azure cVM. Azure
+    /// cVMs do not expose the regular /dev/sev-guest, instead they expose a
+    /// vTPM device.
+    fn get_tpm_group_id() -> Option<u32> {
+        match std::fs::metadata("/dev/tpmrm0") {
+            Ok(metadata) => Some(metadata.gid()),
+            Err(_) => None,
+        }
+    }
+
     fn exec_cmd(
         cmd: &[String],
         cwd: Option<&str>,
@@ -279,6 +291,10 @@ impl Docker {
 
         if let Some(sevgest_gid) = Self::get_sevguest_group_id() {
             run_cmd.arg("-e").arg(format!("SEV_GID={}", sevgest_gid));
+        }
+
+        if let Some(tpm_gid) = Self::get_tpm_group_id() {
+            run_cmd.arg("-e").arg(format!("TPM_GID={}", tpm_gid));
         }
 
         for e in env {
