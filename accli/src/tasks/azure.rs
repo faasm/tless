@@ -282,6 +282,7 @@ impl Azure {
     /// on the same VM will fail. Hence why we support passing a list of ports
     /// so that the operation is only done once.
     pub fn open_vm_ports(vm_name: &str, ports: &[usize]) -> Result<()> {
+        info!("open_vm_ports(): opening VM ports (name={vm_name}, ports={ports:?})");
         let port_str = ports
             .iter()
             .map(|n| n.to_string())
@@ -291,13 +292,14 @@ impl Azure {
             "az vm open-port --resource-group {AZURE_RESOURCE_GROUP} \
             --name {vm_name} --port {port_str}"
         );
-        Self::run_cmd_check_status(&az_cmd, "error opening port on VM")
+        Self::run_cmd_get_output(&az_cmd)?;
+        Ok(())
     }
 
     /// Perform an arbitrary operation `op` on a VM with name `name`. We can
     /// pass additional arguments via extra_args: `["--yes", "--no"]`
     fn vm_op(op: &str, name: &str, extra_args: &[&str]) -> Result<()> {
-        info!("performing {} on vm {}", op, name);
+        info!("vm_op(): performing op on vm (name={name}, op={op})");
 
         let extra = extra_args.join(" ");
         let cmd = format!(
@@ -564,11 +566,15 @@ impl Azure {
         extra_vars: Option<HashMap<&str, &str>>,
     ) -> Result<()> {
         let mut inventory_file = Env::ansible_root().join("inventory");
-        fs::create_dir_all(&inventory_file).expect("invrs: failed to create inventory directory");
+        fs::create_dir_all(&inventory_file)?;
         inventory_file.push("vms.ini");
 
-        let mut inventory = vec![format!("[{inventory_name}]")];
+        info!(
+            "provision_with_ansible(): provisioning VM deployment (name={vm_deployment}, inv_file={}, extra_vars={extra_vars:?})",
+            inventory_file.display()
+        );
 
+        let mut inventory = vec![format!("[{inventory_name}]")];
         let vms: Vec<Value> = Self::list_all_resources("vm", Some(vm_deployment))?;
         for vm in vms {
             let name = vm["name"].as_str().unwrap();

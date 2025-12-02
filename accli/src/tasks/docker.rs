@@ -293,6 +293,10 @@ impl Docker {
             run_cmd.arg("--device=/dev/sev-guest");
         }
 
+        if Path::new("/dev/tpmrm0").exists() {
+            run_cmd.arg("--device=/dev/tpmrm0");
+        }
+
         if mount {
             run_cmd
                 .arg("-v")
