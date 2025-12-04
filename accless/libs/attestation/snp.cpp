@@ -13,9 +13,10 @@
 #include <array>
 #include <fcntl.h>
 #include <filesystem>
-#include <iostream> // Added for std::cerr and std::endl
+#include <iostream>
+#include <openssl/sha.h>
 #include <optional>
-#include <stdexcept> // Added for std::runtime_error
+#include <stdexcept>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <vector>
@@ -80,6 +81,18 @@ static void appendU32LE(std::vector<uint8_t> &out, uint32_t v) {
     out.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
 }
 
+// Helper method to hash a byte array.
+static std::vector<uint8_t> sha256(const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> digest(SHA256_DIGEST_LENGTH);
+
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, data.data(), data.size());
+    SHA256_Final(digest.data(), &ctx);
+
+    return digest;
+}
+
 /**
  * @brief Get SNP report from TPM.
  *
@@ -89,6 +102,10 @@ static void appendU32LE(std::vector<uint8_t> &out, uint32_t v) {
  * report, we need to request a vTPM quote, and verify that it has been signed
  * by the vTPM's Attestation Key (AK) which is included in the report's
  * runtime_data. The vTPM quote has a message and a signature.
+ *
+ * Note that, even though the size of the runtime data (i.e. nonce) that we
+ * can include in both SGX and SNP reports is 64 bytes, the nonce we can
+ * include in the vTPM is only 32 bytes.
  *
  * We treat both the report and the vTPM quote as opaque blobs that we pass on
  * to the attestation service in a single serialized array with layout:
@@ -104,11 +121,11 @@ getSnpReportFromTPM(const std::array<uint8_t, 64> &reportData) {
     // First, get HCL report.
     Buffer hclReport = tpm.GetHCLReport();
 
-    // Second, get vTPM quote.
+    // Second, get vTPM quote (note the hashing of the runtime data).
     PcrList pcrs = GetAttestationPcrList();
     PcrQuote quote = tpm.GetPCRQuoteWithNonce(
         pcrs, HashAlg::Sha256,
-        std::vector<unsigned char>(reportData.begin(), reportData.end()));
+        sha256(std::vector<uint8_t>(reportData.begin(), reportData.end())));
     // quote.quote     = marshalled TPM2B_ATTEST
     // quote.signature = marshalled TPMT_SIGNATURE
 
