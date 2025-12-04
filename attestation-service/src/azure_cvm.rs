@@ -16,6 +16,7 @@ use log::{error, info};
 use openssl::{pkey::PKey, x509::X509};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::Digest;
 use std::sync::Arc;
 
 /// Structure to work-around the lack of a Quote::new constructor in the
@@ -253,7 +254,9 @@ pub async fn verify_snp_vtpm_report(
         }
     };
 
-    // Check that the nonce in the vTPM quote matches the public key in the request.
+    // Check that the nonce in the vTPM quote matches the public key in the request. Given that the
+    // vTPM quote can only carry 32 bytes of data, we need to first hash the raw public key bytes
+    // that we receive with the request.
     let vtpm_nonce = match vtpm_quote.nonce() {
         Ok(vtpm_nonce) => vtpm_nonce,
         Err(e) => {
@@ -264,7 +267,8 @@ pub async fn verify_snp_vtpm_report(
             );
         }
     };
-    if raw_pubkey_bytes != vtpm_nonce {
+    let raw_pubkey_hash = sha2::Sha256::digest(&raw_pubkey_bytes).to_vec();
+    if raw_pubkey_hash != vtpm_nonce {
         error!("verify_snp_vtpm_report(): vTPM nonce and raw pubkey mismatch");
         return (
             StatusCode::BAD_REQUEST,

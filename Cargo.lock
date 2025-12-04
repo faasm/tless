@@ -479,6 +479,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "sev 7.1.0",
+ "sha2",
  "snpguest",
  "tempfile",
  "tokio",

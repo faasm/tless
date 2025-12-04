@@ -61,6 +61,46 @@ async fn health(Extension(state): Extension<Arc<AttestationServiceState>>) -> im
     (StatusCode::OK, state.external_url.clone())
 }
 
+// Work-around not being able to directly call app = app.route(...) with a cfg
+// macro.
+
+#[cfg(feature = "sgx")]
+fn add_sgx_routes(app: Router) -> Router {
+    app.route("/verify-sgx-report", post(sgx::verify_sgx_report))
+}
+
+#[cfg(not(feature = "sgx"))]
+fn add_sgx_routes(app: Router) -> Router {
+    app
+}
+
+// --- SNP routes ---
+
+#[cfg(feature = "snp")]
+fn add_snp_routes(app: Router) -> Router {
+    app.route("/verify-snp-report", post(snp::verify_snp_report))
+}
+
+#[cfg(not(feature = "snp"))]
+fn add_snp_routes(app: Router) -> Router {
+    app
+}
+
+// --- Azure CVM routes ---
+
+#[cfg(feature = "azure-cvm")]
+fn add_azure_cvm_routes(app: Router) -> Router {
+    app.route(
+        "/verify-snp-vtpm-report",
+        post(azure_cvm::verify_snp_vtpm_report),
+    )
+}
+
+#[cfg(not(feature = "azure-cvm"))]
+fn add_azure_cvm_routes(app: Router) -> Router {
+    app
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialise logging and parse CLI arguments.
@@ -88,16 +128,17 @@ async fn main() -> Result<()> {
     )?);
 
     // Start HTTPS server.
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/health", get(health))
         .route("/state", get(request::get_state))
-        .route("/verify-sgx-report", post(sgx::verify_sgx_report))
-        .route("/verify-snp-report", post(snp::verify_snp_report))
-        .route(
-            "/verify-snp-vtpm-report",
-            post(azure_cvm::verify_snp_vtpm_report),
-        )
         .layer(Extension(state.clone()));
+    // .route(...) does not take a mut self, and we cannot add a #[cfg] on an
+    // assignment, so we conditionally add the routes by no-oping the respective
+    // `add_*` functions.
+    app = add_sgx_routes(app);
+    app = add_snp_routes(app);
+    app = add_azure_cvm_routes(app);
+
     let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
     let listener = TcpListener::bind(addr).await;
 
