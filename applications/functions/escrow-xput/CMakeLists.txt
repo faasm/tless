@@ -1,9 +1,8 @@
 set(CMAKE_PROJECT_TARGET escrow-xput)
 
 add_executable(${CMAKE_PROJECT_TARGET}
-    src/main.cpp
-    # src/logger.cpp
-    # src/utils.cpp
+    main.cpp
+    maa.cpp
 )
 
 target_include_directories(${CMAKE_PROJECT_TARGET} PRIVATE ${ACCLESS_HEADERS})
