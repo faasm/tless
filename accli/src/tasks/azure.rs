@@ -244,6 +244,12 @@ impl Azure {
         let stdout = Self::run_cmd_get_output(&az_cmd)?;
         let json: Vec<Value> = serde_json::from_str(&stdout)?;
 
+        if json.is_empty() {
+            let reason = format!("no VMs found with requested name (name={vm_name})");
+            error!("get_vm_ip(): {reason}");
+            anyhow::bail!(reason);
+        }
+
         match json[0]["virtualMachine"]["network"]["publicIpAddresses"][0]["ipAddress"].as_str() {
             Some(ip) => Ok(ip.to_string()),
             None => {

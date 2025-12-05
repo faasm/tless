@@ -45,13 +45,16 @@ pub struct UbenchRunArgs {
 // -------------------------------------------------------------------------
 
 const TEE: &str = "azsnpvtpm";
-const SNP_VM_CODE_DIR: &str = "/home/tless/git";
+
+fn get_coco_code_dir() -> String {
+    format!(
+        "/home/{}/git/confidential-containers",
+        azure::AZURE_USERNAME
+    )
+}
 
 fn get_work_dir() -> String {
-    format!(
-        "{}/confidential-containers/trustee/kbs/test/work",
-        SNP_VM_CODE_DIR
-    )
+    format!("{}/trustee/kbs/test/work", get_coco_code_dir())
 }
 
 fn get_https_cert() -> String {
@@ -71,10 +74,7 @@ fn get_attestation_token() -> String {
 }
 
 fn get_kbs_client_path() -> String {
-    format!(
-        "{}/confidential-containers/trustee/target/release/kbs-client",
-        SNP_VM_CODE_DIR
-    )
+    format!("{}/trustee/target/release/kbs-client", get_coco_code_dir())
 }
 
 async fn set_resource_policy(escrow_url: &str) -> Result<()> {
@@ -97,7 +97,7 @@ input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
             "-E",
             &get_kbs_client_path(),
             "--url",
-            escrow_url,
+            &format!("https://{escrow_url}:8080"),
             "--cert-file",
             &get_https_cert(),
             "config",
@@ -118,7 +118,7 @@ async fn generate_attestation_token(escrow_url: &str) -> Result<()> {
             "-E",
             &get_kbs_client_path(),
             "--url",
-            escrow_url,
+            &format!("https://{escrow_url}:8080"),
             "--cert-file",
             &get_https_cert(),
             "attest",
@@ -138,7 +138,7 @@ pub async fn get_trustee_resource(escrow_url: String) -> Result<()> {
             "-E",
             &get_kbs_client_path(),
             "--url",
-            &escrow_url,
+            &format!("https://{escrow_url}:8080"),
             "--cert-file",
             &get_https_cert(),
             "get-resource",
@@ -166,9 +166,9 @@ pub async fn get_trustee_resource(escrow_url: String) -> Result<()> {
 /// attestation token from MAA.
 pub async fn wrap_key_in_mhsm() -> Result<()> {
     let azure_attest_bin_path = format!(
-        "{}/azure/confidential-computing-cvm-guest-attestation\
+        "/home/{}/git/azure/confidential-computing-cvm-guest-attestation\
         /cvm-securekey-release-app/build",
-        SNP_VM_CODE_DIR
+        azure::AZURE_USERNAME
     );
 
     // This method is ran from the client SNP cVM in Azure, so we cannot
