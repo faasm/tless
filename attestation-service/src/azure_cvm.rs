@@ -173,8 +173,8 @@ fn parse_quote_bytes(quote_bytes: &[u8]) -> Result<(HclReport, Quote)> {
     let sig_end = offset + sig_len;
     let sig_raw = parse_tpmt_signature(&quote_bytes[offset..sig_end])?;
 
-    // FIXME(#55): currently we don't include the PCR values in the parsed quote, so we
-    // cannot use them during verification to compare them against golden
+    // FIXME(#55): currently we don't include the PCR values in the parsed quote, so
+    // we cannot use them during verification to compare them against golden
     // values.
     let quote = quote_from_parts(sig_raw, quote_message, Vec::<[u8; 32]>::new())?;
 

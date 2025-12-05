@@ -142,7 +142,7 @@ pub fn do_ecdhe_ke(
     let (server_pub_key, shared_secret) = generate_ecdhe_keys_and_derive_secret(&pubkey_bytes)
         .context("do_ecdhe_ke(): error deriving shared secret")?;
     let server_pub_key_le = sec1_pubkey_to_raw(&server_pub_key).unwrap();
-    let server_pub_b64 = general_purpose::STANDARD.encode(server_pub_key_le);
+    let server_pub_b64 = general_purpose::URL_SAFE.encode(server_pub_key_le);
 
     debug!("encoding JWT with server's private key (for authenticity)");
     let claims = JwtClaims::new(
