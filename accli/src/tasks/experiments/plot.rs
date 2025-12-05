@@ -510,8 +510,7 @@ fn plot_scale_up_latency(plot_version: &str, data_files: &Vec<PathBuf>) {
     }
 
     let y_max: f64 = 125.0;
-    let mut plot_path = Env::proj_root();
-    plot_path.push("eval");
+    let mut plot_path = Env::experiments_root();
     plot_path.push(Experiment::SCALE_UP_LATENCY_NAME);
     plot_path.push("plots");
     fs::create_dir_all(plot_path.clone()).unwrap();
@@ -738,8 +737,7 @@ fn plot_cold_start_cdf(plot_version: &str, data_files: &Vec<PathBuf>) {
         }
     }
 
-    let mut plot_path = Env::proj_root();
-    plot_path.push("eval");
+    let mut plot_path = Env::experiments_root();
     plot_path.push(Experiment::COLD_START_NAME);
     plot_path.push("plots");
     fs::create_dir_all(plot_path.clone()).unwrap();
@@ -1059,8 +1057,7 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
         }
     }
 
-    let mut plot_path = Env::proj_root();
-    plot_path.push("eval");
+    let mut plot_path = Env::experiments_root();
     plot_path.push(Experiment::ESCROW_XPUT_NAME);
     plot_path.push("plots");
     fs::create_dir_all(plot_path.clone()).unwrap();
@@ -1226,7 +1223,7 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     }
 
     root.present().unwrap();
-    println!("invrs: generated plot at: {}", plot_path.display());
+    info!("plot_escrow_xput(): generated plot at: {}", plot_path.display());
 }
 
 fn plot_escrow_cost() {
@@ -1250,8 +1247,7 @@ fn plot_escrow_cost() {
         .map(|x| (x, ACCLESS_LATENCY_D2[x as usize - 1]))
         .collect();
 
-    let plot_path = Env::proj_root()
-        .join("eval")
+    let plot_path = Env::experiments_root()
         .join(Experiment::ESCROW_COST_NAME)
         .join("plots")
         .join("cost.svg");

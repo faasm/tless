@@ -3,8 +3,60 @@
 - hosts: mhsm
   gather_facts: yes
   tasks:
-    - include_tasks: tasks/mhsm/apt.yaml
-    - include_tasks: tasks/util/az_guest_attestation.yaml
-    - include_tasks: tasks/util/rust.yaml
-    - include_tasks: tasks/mhsm/code.yaml
-    - include_tasks: tasks/mhsm.yaml
+
+# =============================================================================
+# Environment Set-Up
+# =============================================================================
+
+  - name: "Install APT depdencencies"
+    become: yes
+    apt:
+      name:
+        - build-essential
+        - cmake
+        - libboost-all-dev
+        - libcurl4-openssl-dev
+        - libjsoncpp-dev
+        - libssl-dev
+        - nlohmann-json3-dev
+      update_cache: yes
+
+  - name: "Create code dir"
+    file:
+      path: "/home/{{ ansible_user }}/git"
+      state: directory
+
+  - name: "Clone Accless repo"
+    git:
+      repo: "https://www.github.com/faasm/tless.git"
+      dest: "/home/{{ ansible_user }}/git/faasm/accless"
+      update: yes
+      recursive: no
+      clone: yes
+      force: yes
+      accept_hostkey: yes
+
+  - name: "Clone Azure repos"
+    git:
+      repo: "https://www.github.com/Azure/{{ item }}.git"
+      dest: "/home/{{ ansible_user }}/git/azure/{{ item }}"
+      update: yes
+      recursive: no
+      clone: yes
+      force: yes
+      accept_hostkey: yes
+    with_items:
+      - "confidential-computing-cvm-guest-attestation"
+
+  - include_tasks: tasks/util/az_guest_attestation.yaml
+  - include_tasks: tasks/util/rust.yaml
+
+# =============================================================================
+# Managed HSM Baseline Configuration
+# =============================================================================
+
+  - name: "Build demo application"
+    shell: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j `nproc`
+    args:
+      chdir: "/home/{{ ansible_user }}/git/azure/confidential-computing-cvm-guest-attestation/cvm-securekey-release-app"
+      executable: /bin/bash

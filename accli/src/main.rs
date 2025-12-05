@@ -741,18 +741,18 @@ async fn main() -> anyhow::Result<()> {
             },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5")?;
-                    Azure::create_aa("tlessmhsm")?;
+                    Azure::create_snp_guest("accless-mhsm-cvm", "Standard_DC8as_v5")?;
+                    Azure::create_aa("acclessmhsm")?;
                     // WARNING: the key release policy in the mHSM depends
                     // on the name of the attestaion provider even though it
                     // is not passed as an argument (it is used in the ARM
-                    // template file: ./azure/mhsm_skr_policy.json)
-                    Azure::create_mhsm("tless-mhsm-kv", "tless-mhsm-cvm", "tless-mhsm-key")?;
+                    // template file: ./config/azure/mhsm_skr_policy.json)
+                    Azure::create_mhsm("accless-mhsm-kv", "accless-mhsm-cvm", "accless-mhsm-key")?;
 
-                    Azure::open_vm_ports("tless-mhsm-cvm", &[22])?;
+                    Azure::open_vm_ports("accless-mhsm-cvm", &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("tless-mhsm", "mhsm", None)?;
+                    Azure::provision_with_ansible("accless-mhsm", "mhsm", None)?;
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless";
@@ -873,49 +873,22 @@ async fn main() -> anyhow::Result<()> {
                     Azure::open_vm_ports(experiments::TRUSTEE_SERVER_VM_NAME, &[22, 8080])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    // let client_ip = Azure::get_vm_ip(experiments::TRUSTEE_CLIENT_VM_NAME)?;
                     let server_ip = Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?;
-
                     let trustee_code_dir = format!(
                         "/home/{}/git/confidential-containers/trustee",
+                        azure::AZURE_USERNAME
+                    );
+                    let accless_code_dir = format!(
+                        "/home/{}/git/faasm/accless",
                         azure::AZURE_USERNAME
                     );
 
                     let vars: HashMap<&str, &str> = HashMap::from([
                         ("kbs_ip", server_ip.as_str()),
                         ("trustee_code_dir", trustee_code_dir.as_str()),
+                        ("accless_code_dir", accless_code_dir.as_str()),
                     ]);
                     Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
-
-                    // Copy the necessary stuff from the server to the client
-                    // let work_dir =
-                    // "/home/tless/git/confidential-containers/trustee/kbs/
-                    // test/work"; for file in ["https.crt",
-                    // "kbs.key", "tee.key"] {
-                    // let scp_cmd_in =
-                    // format!("scp tless@{server_ip}:{work_dir}/{file}
-                    // /tmp/{file}"); let status =
-                    // process::Command::new("sh")
-                    // .arg("-c")
-                    // .arg(scp_cmd_in)
-                    // .status()
-                    // .expect("accli: error scp-ing data (in)");
-                    // if !status.success() {
-                    // panic!("accli: error scp-ing data (in)");
-                    // }
-                    //
-                    // let scp_cmd_out =
-                    // format!("scp /tmp/{file}
-                    // tless@{client_ip}:{work_dir}/{file}");
-                    // let status = process::Command::new("sh")
-                    // .arg("-c")
-                    // .arg(scp_cmd_out)
-                    // .status()
-                    // .expect("accli: error scp-ing data (out)");
-                    // if !status.success() {
-                    // panic!("accli: error scp-ing data (out)");
-                    // }
-                    // }
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless";

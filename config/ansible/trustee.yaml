@@ -160,15 +160,23 @@
       dest: "{{ trustee_code_dir }}/kbs/test/work/tee.key"
       content: "{{ hostvars['accless-trustee-server'].server_tee_key.content | b64decode }}"
 
-  # Start server (To-Do).
+  # Start server.
+  - name: "Start server in background"
+    when: inventory_hostname == "accless-trustee-server"
+    become: true
+    shell: nohup ../../target/release/kbs --config-file ./config/kbs.toml > /var/log/trustee_kbs.log 2>&1 &
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs/test"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
   # Prepare client.
-  - name: "Dump server key material in client (tee.key)"
+  - name: "Prepare client"
     when: inventory_hostname == "accless-trustee-client"
-    # FIXME: remove branch name
-    shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh --help
+    shell: ./scripts/apt.sh && ./scripts/accli_wrapper.sh --help
     args:
-      chdir: "{{ ansible_code_dir }}"
+      chdir: "{{ accless_code_dir }}"
       executable: /bin/bash
     environment:
       PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

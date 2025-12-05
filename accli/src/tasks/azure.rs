@@ -460,7 +460,7 @@ impl Azure {
     /// WARNING: creating a managed HSM can take between 15 to 30 minutes. To
     /// avoid this cost, for the time being we use an AKV with premium SKU.
     pub fn create_mhsm(mhsm_name: &str, vm_name: &str, key_name: &str) -> Result<()> {
-        info!("creating managed hsm: {mhsm_name} (paired with vm: {vm_name})");
+        info!("create_mhsm(): creating mhsm (name={mhsm_name}, paired with vm={vm_name})");
 
         // Create managed HSM
         // FIXME: allocating a mHSM can take between 15 to 30'. To avoid this,
@@ -479,7 +479,7 @@ impl Azure {
             --resource-group {AZURE_RESOURCE_GROUP} --sku premium \
             --enable-rbac-authorization false"
         );
-        Self::run_cmd_check_status(&az_cmd, "error creating managed-hsm")?;
+        Self::run_cmd_get_output(&az_cmd)?;
 
         // FIXME: see above
         // Activate managed HSM
@@ -491,7 +491,7 @@ impl Azure {
             --object-id {} --key-permissions release",
             Self::get_managed_identity_oid(vm_name)?
         );
-        Self::run_cmd_check_status(&az_cmd, "error granting cVM access to mHSM")?;
+        Self::run_cmd_get_output(&az_cmd)?;
 
         // Create an exportable key with an attached key-release policy. Given
         // that we use a managed HSM, we must select a key type with the -HSM
@@ -506,7 +506,7 @@ impl Azure {
                 .join("mhsm_skr_policy.json")
                 .display()
         );
-        Self::run_cmd_check_status(&az_cmd, "error creating key with release policy")?;
+        Self::run_cmd_get_output(&az_cmd)?;
 
         Ok(())
     }
