@@ -299,6 +299,8 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                     run_args.num_repeats.to_string(),
                     "--num-requests".to_string(),
                     num_reqs,
+                    "--results_file".to_string(),
+                    results_file.display().to_string(),
                 ],
             )?;
         }
@@ -329,7 +331,7 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
             format!("{}", run_args.baseline),
         ];
 
-        let client_ip = match run_args.baseline {
+        let client_vm_name = match run_args.baseline {
             EscrowBaseline::Trustee => {
                 cmd_in_vm.push("--escrow-url".to_string());
                 cmd_in_vm.push(Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?);
@@ -348,9 +350,17 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
             _ => todo!(),
         };
 
-        Azure::run_cmd_in_vm(client_ip, &cmd_in_vm)?;
+        // Run experiment in Azure VM.
+        Azure::run_cmd_in_vm(client_vm_name, &cmd_in_vm)?;
 
-        // TODO: scp results
+        // SCP results.
+        let src_results = format!("{client_vm_name}:git/faasm/accless/{}/data/{}.csv",
+            Experiment::ESCROW_XPUT_NAME, run_args.baseline);
+        let dst_results = Env::experiments_root()
+            .join(Experiment::ESCROW_XPUT_NAME)
+            .join("data")
+            .join(format!("{}.csv", run_args.baseline));
+        Azure::run_scp_cmd(&src_results, &dst_results.display().to_string())?;
 
         return Ok(());
     }

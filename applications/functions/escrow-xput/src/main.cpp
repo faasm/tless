@@ -580,14 +580,11 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism,
 }
 
 void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
-                 int numRepeats, bool maa) {
+                 int numRepeats, bool maa, const std::string &resultsFile) {
     // Write elapsed time to CSV
-    std::string fileName = maa ? "accless-maa.csv" : "accless.csv";
-    std::ofstream csvFile(fileName, std::ios::out);
+    std::ofstream csvFile(resultsFile, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
 
-    // WARNING: this is copied from invrs/src/tasks/ubench.rs and must be
-    // kept in sync!
     int maxParallelism = 100;
     try {
         for (const auto &i : numRequests) {
@@ -628,6 +625,7 @@ int main(int argc, char **argv) {
     std::vector<int> numRequests;
     int numWarmupRepeats = 1;
     int numRepeats = 3;
+    std::string resultsFile;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -658,6 +656,14 @@ int main(int argc, char **argv) {
                           << std::endl;
                 return 1;
             }
+        } else if (arg == "--results-file") {
+            if (i + 1 < argc) {
+                resultsFile = argv[++i];
+            } else {
+                std::cerr << "--results-file option requires one argument."
+                          << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -666,7 +672,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa);
+    doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa, resultsFile);
 
     return 0;
 }
