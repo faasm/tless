@@ -35,7 +35,7 @@ void Logger::Log(const char *log_tag, LogLevel level, const char *function,
     va_end(args);
 
     // Uncomment for debug logs
-    std::cout << std::string(str.begin(), str.end()) << std::endl;
+    // std::cout << std::string(str.begin(), str.end()) << std::endl;
 }
 
 void tpmRenewAkCert() {

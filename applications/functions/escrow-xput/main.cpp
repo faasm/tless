@@ -219,7 +219,10 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
             for (int j = 0; j < numRepeats; j++) {
                 std::chrono::duration<double> elapsedTimeSecs;
                 if (maa) {
-                    elapsedTimeSecs = runMaaRequests(i, maxParallelism, maaUrl);
+                    // We need lower parallelism because we share an AzClient
+                    // instance among all client threads, so we must prevent
+                    // race conditions.
+                    elapsedTimeSecs = runMaaRequests(i, 10, maaUrl);
                 } else {
                     elapsedTimeSecs = runRequests(i, maxParallelism);
                 }
