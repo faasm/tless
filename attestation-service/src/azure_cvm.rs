@@ -57,6 +57,58 @@ fn read_u32_le(bytes: &[u8]) -> Result<u32> {
     Ok(u32::from_le_bytes(b))
 }
 
+/// Extract the raw signature from the TPMT signature struct received from the
+/// client.
+///
+/// The TPMT_SIGNATURE is described in (TPM 2.0 Library Spec, Part 2:
+/// Structures) [1]. The marshalled form of the RSA signature is:
+/// - sigAlg (u16) = TPM2_ALG_RSASSA | TPM2_ALG_RSAPSS
+/// - hashAlg (u16) = hash selector (e.g. TPM2_ALG_SHA256)
+/// - sig_len (u16)
+/// - sig_bytes (sig_len)
+///
+/// We only need the signature bytes to perform the verification, so we discard
+/// everything else. [1] https://trustedcomputinggroup.org/wp-content/uploads/TPM-2.0-1.83-Part-2-Structures.pdf
+fn parse_tpmt_signature(sig: &[u8]) -> Result<Vec<u8>> {
+    // These values are extracted from Table 9 in [1].
+    const TPM2_ALG_RSASSA: u16 = 0x0014;
+    const TPM2_ALG_RSAPSS: u16 = 0x0016;
+    const TPM2_ALG_SHA256: u16 = 0x000b;
+
+    if sig.len() < 6 {
+        let reason = "TPMT_SIGNATURE too short";
+        error!("parse_tpmt_signature(): {reason}");
+        anyhow::bail!(reason);
+    }
+
+    let alg = u16::from_be_bytes([sig[0], sig[1]]);
+    match alg {
+        TPM2_ALG_RSASSA | TPM2_ALG_RSAPSS => {}
+        other => {
+            let reason = format!("unsupported TPM signature algorithm: {other:#06x}");
+            error!("parse_tpmt_signature(): {reason}");
+            anyhow::bail!(reason)
+        }
+    }
+    let hash_alg = u16::from_be_bytes([sig[2], sig[3]]);
+    if hash_alg != TPM2_ALG_SHA256 {
+        let reason = format!("unsupported TPM hashing algroitghm: {hash_alg:#06x}");
+        error!("parse_tpmt_signature(): {reason}");
+        anyhow::bail!(reason)
+    }
+
+    let sig_len = u16::from_be_bytes([sig[4], sig[5]]) as usize;
+    let start = 6;
+    let end = start + sig_len;
+    if sig.len() < end {
+        let reason = "TPMT_SIGNATURE length exceeds payload";
+        error!("parse_tpmt_signature(): {reason}");
+        anyhow::bail!(reason);
+    }
+
+    Ok(sig[start..end].to_vec())
+}
+
 /// Parse the vTPM report and the vTPM quote from the raw bytes received from
 /// the client.
 ///
@@ -104,16 +156,27 @@ fn parse_quote_bytes(quote_bytes: &[u8]) -> Result<(HclReport, Quote)> {
     offset = report_end;
 
     let msg_end = offset + msg_len;
-    let quote_message = quote_bytes[offset..msg_end].to_vec();
+    let mut quote_message = quote_bytes[offset..msg_end].to_vec();
     offset = msg_end;
 
+    // TPM returns TPM2B_ATTEST (len + TPMS_ATTEST), but the verifier expects just
+    // TPMS_ATTEST.
+    if quote_message.len() < 2 {
+        anyhow::bail!("vTPM quote too short for TPM2B_ATTEST header");
+    }
+    let att_size = u16::from_be_bytes([quote_message[0], quote_message[1]]) as usize;
+    if att_size + 2 > quote_message.len() {
+        anyhow::bail!("vTPM quote length header exceeds payload");
+    }
+    quote_message = quote_message[2..2 + att_size].to_vec();
+
     let sig_end = offset + sig_len;
-    let quote_signature = quote_bytes[offset..sig_end].to_vec();
+    let sig_raw = parse_tpmt_signature(&quote_bytes[offset..sig_end])?;
 
     // FIXME: currently we don't include the PCR values in the parsed quote, so we
     // cannot use them during verification to compare them against golden
     // values.
-    let quote = quote_from_parts(quote_signature, quote_message, Vec::<[u8; 32]>::new())?;
+    let quote = quote_from_parts(sig_raw, quote_message, Vec::<[u8; 32]>::new())?;
 
     Ok((vtpm_report, quote))
 }
@@ -211,7 +274,7 @@ pub async fn verify_snp_vtpm_report(
     }
 
     // Verify that the AK was signed the vTPM quote.
-    let der = match ak_pub.key.try_to_der() {
+    let ak_der = match ak_pub.key.try_to_der() {
         Ok(der) => der,
         Err(e) => {
             error!("verify_snp_vtpm_report(): error converting AK to DER (error={e:?})");
@@ -221,7 +284,7 @@ pub async fn verify_snp_vtpm_report(
             );
         }
     };
-    let pub_key = match PKey::public_key_from_der(&der) {
+    let ak_pub_key = match PKey::public_key_from_der(&ak_der) {
         Ok(pub_key) => pub_key,
         Err(e) => {
             error!("verify_snp_vtpm_report(): error converting DER to PKey (error={e:?})");
@@ -241,7 +304,7 @@ pub async fn verify_snp_vtpm_report(
             );
         }
     };
-    match vtpm_quote.verify_signature(&pub_key) {
+    match vtpm_quote.verify_signature(&ak_pub_key) {
         Ok(()) => {
             info!("verify_snp_vtpm_report(): verified SNP-vTPM quote");
         }
@@ -254,9 +317,9 @@ pub async fn verify_snp_vtpm_report(
         }
     };
 
-    // Check that the nonce in the vTPM quote matches the public key in the request. Given that the
-    // vTPM quote can only carry 32 bytes of data, we need to first hash the raw public key bytes
-    // that we receive with the request.
+    // Check that the nonce in the vTPM quote matches the public key in the request.
+    // Given that the vTPM quote can only carry 32 bytes of data, we need to
+    // first hash the raw public key bytes that we receive with the request.
     let vtpm_nonce = match vtpm_quote.nonce() {
         Ok(vtpm_nonce) => vtpm_nonce,
         Err(e) => {

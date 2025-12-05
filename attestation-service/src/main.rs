@@ -130,14 +130,14 @@ async fn main() -> Result<()> {
     // Start HTTPS server.
     let mut app = Router::new()
         .route("/health", get(health))
-        .route("/state", get(request::get_state))
-        .layer(Extension(state.clone()));
+        .route("/state", get(request::get_state));
     // .route(...) does not take a mut self, and we cannot add a #[cfg] on an
     // assignment, so we conditionally add the routes by no-oping the respective
     // `add_*` functions.
     app = add_sgx_routes(app);
     app = add_snp_routes(app);
     app = add_azure_cvm_routes(app);
+    app = app.layer(Extension(state.clone()));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
     let listener = TcpListener::bind(addr).await;
