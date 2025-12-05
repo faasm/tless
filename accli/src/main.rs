@@ -878,10 +878,8 @@ async fn main() -> anyhow::Result<()> {
                         "/home/{}/git/confidential-containers/trustee",
                         azure::AZURE_USERNAME
                     );
-                    let accless_code_dir = format!(
-                        "/home/{}/git/faasm/accless",
-                        azure::AZURE_USERNAME
-                    );
+                    let accless_code_dir =
+                        format!("/home/{}/git/faasm/accless", azure::AZURE_USERNAME);
 
                     let vars: HashMap<&str, &str> = HashMap::from([
                         ("kbs_ip", server_ip.as_str()),

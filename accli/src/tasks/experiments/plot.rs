@@ -1223,7 +1223,10 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     }
 
     root.present().unwrap();
-    info!("plot_escrow_xput(): generated plot at: {}", plot_path.display());
+    info!(
+        "plot_escrow_xput(): generated plot at: {}",
+        plot_path.display()
+    );
 }
 
 fn plot_escrow_cost() {
