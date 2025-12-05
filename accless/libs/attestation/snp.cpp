@@ -82,7 +82,7 @@ static void appendU32LE(std::vector<uint8_t> &out, uint32_t v) {
 }
 
 // Helper method to hash a byte array.
-static std::vector<uint8_t> sha256(const std::vector<uint8_t>& data) {
+static std::vector<uint8_t> sha256(const std::vector<uint8_t> &data) {
     std::vector<uint8_t> digest(SHA256_DIGEST_LENGTH);
 
     SHA256_CTX ctx;
