@@ -673,10 +673,7 @@ async fn main() -> anyhow::Result<()> {
                     // Copy to client cVM.
                     Azure::run_scp_cmd(
                         &local_cert_path.display().to_string(),
-                        &format!(
-                            "{}:{as_vm_cert_path}",
-                            experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME
-                        ),
+                        &format!("{}:{as_vm_cert_path}", experiments::ACCLESS_VM_NAME),
                     )?;
                 }
                 AzureSubCommand::ScpResults {} => {

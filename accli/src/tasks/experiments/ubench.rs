@@ -3,7 +3,6 @@ use crate::{
     tasks::{
         applications::{ApplicationName, ApplicationType, Applications},
         azure::Azure,
-        cvm,
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
 };
@@ -280,7 +279,7 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 .join("config")
                 .join("attestation-service")
                 .join("certs")
-                .join("az_cert.pem");
+                .join("cert.pem");
             let num_reqs = request_counts
                 .iter()
                 .map(|n| n.to_string())
@@ -290,9 +289,7 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
             Applications::run(
                 ApplicationType::Function,
                 ApplicationName::EscrowXput,
-                // FIXME(#56): for the time being, we pass --in-cvm. Once we support validating az
-                // cVM quotes we can get rid of this.
-                true,
+                false,
                 Some(format!("https://{escrow_url}:8443")),
                 Some(cert_path),
                 vec![
@@ -304,9 +301,6 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                     num_reqs,
                 ],
             )?;
-
-            // SCP results from the cVM to local filesystem.
-            cvm::scp("cvm:accless.csv", &results_file.display().to_string())?;
         }
     }
 
@@ -322,49 +316,52 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
     let in_azure = Azure::is_azure_vm().await;
 
     if !in_azure {
-        match run_args.baseline {
+        let mut cmd_in_vm = vec![
+            "./scripts/accli_wrapper.sh".to_string(),
+            "experiments".to_string(),
+            "escrow-xput".to_string(),
+            "run".to_string(),
+            "--num-repeats".to_string(),
+            run_args.num_repeats.to_string(),
+            "--num-warmup-repeats".to_string(),
+            run_args.num_warmup_repeats.to_string(),
+            "--baseline".to_string(),
+            format!("{}", run_args.baseline),
+        ];
+
+        let client_ip = match run_args.baseline {
             EscrowBaseline::Trustee => {
-                let cmd_in_vm = vec![
-                    "./scripts/accli_wrapper.sh".to_string(),
-                    "experiments".to_string(),
-                    "escrow-xput".to_string(),
-                    "run".to_string(),
-                    "--baseline".to_string(),
-                    "trustee".to_string(),
-                    "--escrow-url".to_string(),
-                    Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?,
-                    "--num-repeats".to_string(),
-                    run_args.num_repeats.to_string(),
-                    "--num-warmup-repeats".to_string(),
-                    run_args.num_warmup_repeats.to_string(),
-                ];
-                Azure::run_cmd_in_vm(experiments::TRUSTEE_CLIENT_VM_NAME, &cmd_in_vm)?;
+                cmd_in_vm.push("--escrow-url".to_string());
+                cmd_in_vm.push(Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?);
 
-                // TODO: scp results
-
-                return Ok(());
+                experiments::TRUSTEE_CLIENT_VM_NAME
             }
-            // FIXME(#55): for the time being, we run Accless baselines locally, not in an
-            // azure cVM.
-            EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {}
+            EscrowBaseline::Accless => {
+                cmd_in_vm.push("--escrow-url".to_string());
+                cmd_in_vm.push(Azure::get_vm_ip(
+                    experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
+                )?);
+
+                experiments::ACCLESS_VM_NAME
+            }
+            EscrowBaseline::AcclessMaa => todo!(),
             _ => todo!(),
-        }
+        };
+
+        Azure::run_cmd_in_vm(client_ip, &cmd_in_vm)?;
+
+        // TODO: scp results
+
+        return Ok(());
     }
 
-    // Get the escrow URL from the ansible deployment.
-    let escrow_url = match run_args.baseline {
-        EscrowBaseline::Trustee | EscrowBaseline::ManagedHSM => {
-            if run_args.escrow_url.is_none() {
-                let reason = "running baseline in azure VM but no escrow URL provided";
-                error!("run(): {reason}");
-                anyhow::bail!(reason);
-            }
-            run_args.escrow_url.clone().unwrap()
-        }
-        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
-            Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?
-        }
-    };
+    // Get the escrow URL.
+    if run_args.escrow_url.is_none() {
+        let reason = "running baseline in azure VM but no escrow URL provided";
+        error!("run(): {reason}");
+        anyhow::bail!(reason);
+    }
+    let escrow_url = run_args.escrow_url.clone().unwrap();
 
     match ubench {
         Experiment::EscrowCost { .. } => anyhow::bail!("escrow-cost is not meant to be ran"),

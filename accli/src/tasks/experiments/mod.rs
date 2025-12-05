@@ -13,7 +13,7 @@ pub mod workflows;
 /// experiments methods.
 pub const ACCLESS_VM_NAME: &str = "accless-cvm";
 pub const ACCLESS_ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
-pub const ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
+pub const ATTESTATION_SERVICE_VM_NAME: &str = "attestation-service";
 pub const TRUSTEE_CLIENT_VM_NAME: &str = "tless-trustee-client";
 pub const TRUSTEE_SERVER_VM_NAME: &str = "tless-trustee-server";
 
