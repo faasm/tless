@@ -4,7 +4,7 @@ use crate::{
         accless::Accless,
         applications::{self, Applications},
         attestation_service::AttestationService,
-        azure::{Azure, AzureUtilsCommand},
+        azure::{self, Azure, AzureUtilsCommand},
         cvm::{self, Component, parse_host_guest_path},
         dev::Dev,
         docker::{Docker, DockerContainer},
@@ -54,7 +54,7 @@ enum Command {
         dev_command: DevCommand,
     },
     /// Run evaluation experiments and plot results
-    Experiment {
+    Experiments {
         #[command(subcommand)]
         experiments_command: Experiment,
     },
@@ -543,7 +543,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         },
-        Command::Experiment {
+        Command::Experiments {
             experiments_command: exp,
         } => match exp {
             Experiment::ColdStart { eval_sub_command }
@@ -641,40 +641,20 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let server_ip =
                         Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?;
-                    let accless_version = Env::get_version()?;
+                    let accless_code_dir = format!(
+                        "/home/{}/{}",
+                        azure::AZURE_USERNAME,
+                        experiments::ACCLESS_VM_CODE_DIR
+                    );
+                    let as_cert_path =
+                        format!("{accless_code_dir}/config/attestation-service/certs/cert.pem");
 
                     let vars: HashMap<&str, &str> = HashMap::from([
                         ("as_ip", server_ip.as_str()),
-                        ("accless_version", accless_version.as_str()),
+                        ("accless_code_dir", accless_code_dir.as_str()),
+                        ("as_cert_path", as_cert_path.as_str()),
                     ]);
                     Azure::provision_with_ansible("accless", "accless", Some(vars))?;
-
-                    // Copy the attestation service certificate PEM file locally, and to the
-                    // client.
-                    let as_vm_cert_path = format!(
-                        "{}/config/attestation-service/certs/cert.pem",
-                        Azure::accless_vm_code_dir()
-                    );
-                    let local_cert_path = Env::proj_root()
-                        .join("config")
-                        .join("attestation-service")
-                        .join("certs")
-                        .join("az_cert.pem");
-
-                    // Copy into local filesystem.
-                    Azure::run_scp_cmd(
-                        &format!(
-                            "{}:{as_vm_cert_path}",
-                            experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME
-                        ),
-                        &local_cert_path.display().to_string(),
-                    )?;
-
-                    // Copy to client cVM.
-                    Azure::run_scp_cmd(
-                        &local_cert_path.display().to_string(),
-                        &format!("{}:{as_vm_cert_path}", experiments::ACCLESS_VM_NAME),
-                    )?;
                 }
                 AzureSubCommand::ScpResults {} => {
                     let src_results_dir = "/home/tless/git/faasm/tless/ubench/escrow-xput/build";

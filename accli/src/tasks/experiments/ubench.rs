@@ -351,11 +351,19 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
         };
 
         // Run experiment in Azure VM.
-        Azure::run_cmd_in_vm(client_vm_name, &cmd_in_vm)?;
+        Azure::run_cmd_in_vm(
+            client_vm_name,
+            &cmd_in_vm,
+            Some(experiments::ACCLESS_VM_CODE_DIR),
+        )?;
 
         // SCP results.
-        let src_results = format!("{client_vm_name}:git/faasm/accless/{}/data/{}.csv",
-            Experiment::ESCROW_XPUT_NAME, run_args.baseline);
+        let src_results = format!(
+            "{client_vm_name}:{}/experiments/{}/data/{}.csv",
+            experiments::ACCLESS_VM_CODE_DIR,
+            Experiment::ESCROW_XPUT_NAME,
+            run_args.baseline
+        );
         let dst_results = Env::experiments_root()
             .join(Experiment::ESCROW_XPUT_NAME)
             .join("data")

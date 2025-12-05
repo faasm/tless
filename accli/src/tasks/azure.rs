@@ -14,7 +14,7 @@ use std::{
 };
 
 const AZURE_RESOURCE_GROUP: &str = "faasm";
-const AZURE_USERNAME: &str = "accless";
+pub const AZURE_USERNAME: &str = "accless";
 const AZURE_LOCATION: &str = "eastus";
 
 const AZURE_SSH_PRIV_KEY: &str = "~/.ssh/id_rsa";
@@ -658,13 +658,13 @@ impl Azure {
                     "-p".to_string(),
                     parent_str.to_string(),
                 ];
-                Self::run_cmd_in_vm(vm_name, &mkdir_cmd)?;
+                Self::run_cmd_in_vm(vm_name, &mkdir_cmd, None)?;
             }
         } else if let Some(parent) = std::path::Path::new(local_path)
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
         {
-            info!(
+            debug!(
                 "run_scp_cmd(): creating local directory '{}'",
                 parent.display()
             );
@@ -686,7 +686,7 @@ impl Azure {
             ssh_priv_key, final_src, final_dst,
         );
 
-        info!("run_scp_cmd(): running scp command: {}", cmd);
+        debug!("run_scp_cmd(): running scp command: {}", cmd);
         Self::run_cmd_check_status(&cmd, "failed to run scp command")?;
 
         Ok(())
@@ -706,10 +706,16 @@ impl Azure {
         ))
     }
 
-    pub fn run_cmd_in_vm(vm_name: &str, cmd: &[String]) -> Result<()> {
+    pub fn run_cmd_in_vm(vm_name: &str, cmd: &[String], cwd: Option<&str>) -> Result<()> {
+        let mut full_cmd = String::new();
+        if let Some(working_dir) = cwd {
+            full_cmd.push_str(&format!("cd {} && ", working_dir));
+        }
+        full_cmd.push_str(&cmd.join(" "));
+
         let mut ssh_cmd = Self::build_ssh_command(vm_name)?;
         ssh_cmd.push_str(" \"");
-        ssh_cmd.push_str(&cmd.join(" "));
+        ssh_cmd.push_str(&full_cmd);
         ssh_cmd.push('\"');
 
         debug!("run_cmd_in_vm(): running cmd: {}", ssh_cmd);

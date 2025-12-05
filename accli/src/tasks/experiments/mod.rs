@@ -11,6 +11,7 @@ pub mod workflows;
 
 /// Useful constants shared between the provisioning methods, and the
 /// experiments methods.
+pub const ACCLESS_VM_CODE_DIR: &str = "git/faasm/accless";
 pub const ACCLESS_VM_NAME: &str = "accless-cvm";
 pub const ACCLESS_ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
 pub const ATTESTATION_SERVICE_VM_NAME: &str = "attestation-service";
