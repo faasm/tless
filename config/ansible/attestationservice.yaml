@@ -1,6 +1,6 @@
 ---
 
-- hosts: accless
+- hosts: attestationservice
   gather_facts: yes
   tasks:
     - include_tasks: tasks/attestation-service/apt.yaml

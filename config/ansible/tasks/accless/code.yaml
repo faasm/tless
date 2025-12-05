@@ -5,17 +5,12 @@
     path: "/home/{{ ansible_user }}/git"
     state: directory
 
-- name: "Clone TLess repos"
+- name: "Clone Accless repos"
   git:
-    repo: "https://www.github.com/faasm/{{ item }}.git"
-    dest: "/home/{{ ansible_user }}/git/faasm/{{ item }}"
+    repo: "https://www.github.com/faasm/tless.git"
+    dest: "{{ accless_code_dir }}"
     update: yes
     recursive: yes
     clone: yes
     force: yes
     accept_hostkey: yes
-  with_items:
-    - "tless"
-    - "azure-cvm-guest-attestation"
-    - "examples"
-    - "snpguest"

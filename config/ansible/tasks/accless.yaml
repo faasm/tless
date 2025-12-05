@@ -1,21 +1,90 @@
-- name: "Build demo"
-  shell: rm -rf build && mkdir build && cd build && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release && ninja
-  args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/ubench/escrow-xput"
-    executable: /bin/bash
+# =============================================================================
+# Server-side configuration
+# =============================================================================
 
-- name: "Generate keys"
-  shell: ./bin/gen_keys.sh --force
+# In the attestation service node, we only rebuild the AS.
+- name: "Build Attestation Service"
+  when: inventory_hostname == "accless-as"
+  # FIXME: remove branch name.
+  shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh attestation-service build
   args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
+    chdir: "{{ accless_code_dir }}"
     executable: /bin/bash
   environment:
-    AS_URL: "{{ as_ip }}"
+    PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-- name: "Build Attestation Service"
-  shell: cargo build --release
+- name: "Install attestation-service systemd unit"
+  when: inventory_hostname == "accless-as"
+  become: true
+  copy:
+    dest: /etc/systemd/system/attestation-service.service
+    content: |
+      [Unit]
+      Description=Accless Attestation Service
+      After=network.target
+
+      [Service]
+      WorkingDirectory={{ accless_code_dir }}
+      ExecStart=/bin/bash -lc './scripts/accli_wrapper.sh attestation-service run --overwrite-external-ip {{ as_ip }}'
+      Restart=on-failure
+      User={{ ansible_user }}
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: "Reload systemd"
+  when: inventory_hostname == "accless-as"
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: "Enable & start attestation-service"
+  when: inventory_hostname == "accless-as"
+  become: true
+  ansible.builtin.systemd:
+    name: attestation-service
+    enabled: yes
+    state: started
+
+- name: "Wait for attestation-service certificate to exist"
+  when: inventory_hostname == "accless-as"
+  ansible.builtin.wait_for:
+    path: "{{ as_cert_path }}"
+    state: present
+    timeout: 120
+
+- name: "Read attestation-service certificate (slurp)"
+  when: inventory_hostname == "accless-as"
+  ansible.builtin.slurp:
+    src: "{{ as_cert_path }}"
+  register: as_cert_pem
+
+# =============================================================================
+# Client-side configuration
+# =============================================================================
+
+# First, copy the cert from accless-as's hostvars to the client filesystem.
+- name: "Ensure cert directory exists on client"
+  when: inventory_hostname == "accless-cvm"
+  ansible.builtin.file:
+    path: "{{ as_cert_path | dirname }}"
+    state: directory
+    mode: "0755"
+- name: "Write attestation-service certificate on client"
+  when: inventory_hostname == "accless-cvm"
+  ansible.builtin.copy:
+    dest: "{{ as_cert_path }}"
+    mode: "0600"
+    content: "{{ hostvars['accless-as'].as_cert_pem.content | b64decode }}"
+
+# Build all applications with the new certificate. Under the hood this also
+# pulls the work-on container image and builds `accli`, so it may take a while.
+- name: "Build applications"
+  when: inventory_hostname == "accless-cvm"
+  # FIXME: remove branch name
+  shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh applications build --clean --as-cert-path {{ as_cert_path }}
   args:
-    chdir: "/home/{{ ansible_user }}/git/faasm/tless/attestation-service"
+    chdir: "{{ accless_code_dir }}"
     executable: /bin/bash
   environment:
     PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

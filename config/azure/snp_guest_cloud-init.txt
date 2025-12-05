@@ -1,12 +1,43 @@
-users:
-  - name: tless
-    sudo: ['ALL=(ALL) NOPASSWD:ALL']
-    shell: /bin/bash
+#cloud-config
+
+# Configure a non-1000 UID for the `accless` user.
+runcmd:
+  - |
+    set -eux
+
+    TARGET_USER="accless"
+    TARGET_UID=2000
+
+    if id "$TARGET_USER" >/dev/null 2>&1; then
+      CURRENT_UID=$(id -u "$TARGET_USER")
+      if [ "$CURRENT_UID" != "$TARGET_UID" ]; then
+        EXISTING_USER=$(getent passwd "$TARGET_UID" | cut -d: -f1 || true)
+        if [ -n "$EXISTING_USER" ] && [ "$EXISTING_USER" != "$TARGET_USER" ]; then
+          echo "UID $TARGET_UID already used by $EXISTING_USER, not changing $TARGET_USER UID" >&2
+        else
+          usermod -u "$TARGET_UID" "$TARGET_USER"
+        fi
+      fi
+
+      HOME_DIR=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+      if [ -d "$HOME_DIR" ]; then
+        chown -R "$TARGET_USER:$TARGET_USER" "$HOME_DIR"
+      fi
+
+      if getent group sudo >/dev/null 2>&1; then
+        usermod -aG sudo "$TARGET_USER" || true
+      fi
+
+      echo '%sudo ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/90-cloud-init-sudo
+      chmod 440 /etc/sudoers.d/90-cloud-init-sudo
+    else
+      echo "User $TARGET_USER does not exist yet, nothing to do" >&2
+    fi
 
 write_files:
-  - path: /home/tless/.vimrc
+  - path: /home/accless/.vimrc
     permissions: '0644'
-    owner: tless:tless
+    owner: accless:accless
     content: |
         set tabstop=4
         set softtabstop=4

@@ -4,9 +4,7 @@
   gather_facts: yes
   tasks:
     - include_tasks: tasks/accless/apt.yaml
-    - include_tasks: tasks/util/az_guest_attestation.yaml
+    - include_tasks: tasks/util/docker.yaml
     - include_tasks: tasks/util/rust.yaml
     - include_tasks: tasks/accless/code.yaml
-    - include_tasks: tasks/accless/rabe.yaml
-    - include_tasks: tasks/accless/az_guest_attestation_prereq.yaml
     - include_tasks: tasks/accless.yaml

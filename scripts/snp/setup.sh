@@ -297,7 +297,7 @@ fetch_disk_image() {
     fi
 
     local qemu_img="${OUTPUT_DIR}/qemu/qemu-${QEMU_VERSION}/build/qemu-img"
-    ${qemu_img} resize "${OUTPUT_DIR}/disk.img" +20G > /dev/null 2>&1
+    ${qemu_img} resize "${OUTPUT_DIR}/disk.img" +40G > /dev/null 2>&1
     print_success "cloud-init disk image resized successfully."
 
     provision_disk_image

@@ -4,6 +4,9 @@
     name:
       - build-essential
       - cmake
+      - libfontconfig1-dev
+      - libssl-dev
       - ninja-build
+      - pkg-config
       - python3-venv
     update_cache: yes

@@ -1,7 +1,6 @@
 use crate::{
     ecdhe,
     intel::{INTEL_PCS_URL, IntelCa, SgxCollateral, SgxQuote},
-    jwt::{self, JwtClaims},
     mock::{MockQuote, MockQuoteType},
     request::{NodeData, Tee},
     state::AttestationServiceState,
@@ -280,73 +279,10 @@ pub async fn verify_sgx_report(
         );
     }
 
-    debug!("parsing pub key bytes to SEC1 format");
-    let pubkey_bytes = match ecdhe::raw_pubkey_to_sec1_format(&raw_pubkey_bytes) {
-        Some(b) => b,
-        None => {
-            error!("error converting SGX public key to SEC1 format");
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "invalid public key length" })),
-            );
-        }
-    };
-    if !ecdhe::is_valid_p256_point(&pubkey_bytes) {
-        error!("error validating SGX-provided public key");
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "invalid EC public key" })),
-        );
-    }
-
-    let (server_pub_key, shared_secret) =
-        match ecdhe::generate_ecdhe_keys_and_derive_secret(&pubkey_bytes) {
-            Ok(res) => res,
-            Err(e) => {
-                error!("error generating ECDH keys or deriving secret (error={e:?})");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "key generation or derivation failed" })),
-                );
-            }
-        };
-
-    let server_pub_key_le = ecdhe::sec1_pubkey_to_raw(&server_pub_key).unwrap();
-    let server_pub_b64 = general_purpose::STANDARD.encode(server_pub_key_le);
-
-    debug!("encoding JWT with server's private key (for authenticity)");
-    let claims = match JwtClaims::new(
-        &state,
-        &Tee::Sgx,
-        &payload.node_data.gid,
-        &payload.node_data.workflow_id,
-        &payload.node_data.node_id,
-    ) {
-        Ok(claims) => claims,
-        Err(e) => {
-            error!("error gathering JWT claims (error={e:?})");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "JWT claims gathering" })),
-            );
-        }
-    };
-    let header = jsonwebtoken::Header {
-        alg: jsonwebtoken::Algorithm::RS256,
-        ..Default::default()
-    };
-    let jwt = match jsonwebtoken::encode(&header, &claims, &state.jwt_encoding_key) {
-        Ok(t) => t,
-        Err(e) => {
-            error!("JWT encode error (error={e:?})");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "JWT encoding failed" })),
-            );
-        }
-    };
-
-    match jwt::encrypt_jwt(jwt, shared_secret, server_pub_b64) {
+    // Now that we have verified the attestation report, run the server-side part of
+    // the attribute minting protocol which involves running ECDHE and running
+    // CP-ABE keygen.
+    match ecdhe::do_ecdhe_ke(&state, &Tee::Sgx, &payload.node_data, &raw_pubkey_bytes) {
         Ok(response) => (StatusCode::OK, Json(response)),
         Err(e) => {
             error!("error encrypting JWT (error={e:?})");

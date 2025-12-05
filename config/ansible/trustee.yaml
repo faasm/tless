@@ -3,7 +3,180 @@
 - hosts: trustee
   gather_facts: yes
   tasks:
-    - include_tasks: tasks/trustee/apt.yaml
-    - include_tasks: tasks/util/rust.yaml
-    - include_tasks: tasks/trustee/code.yaml
-    - include_tasks: tasks/trustee.yaml
+
+# =============================================================================
+# Environment set-up
+# =============================================================================
+
+  - name: "Add Intel SGX apt key"
+    apt_key:
+      url: "https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key"
+      keyring: "/usr/share/keyrings/intel-sgx-archive-keyring.gpg"
+      state: present
+    become: yes
+
+  - name: "Add Intel SGX repository"
+    apt_repository:
+      repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-sgx-archive-keyring.gpg] https://download.01.org/intel-sgx/sgx_repo/ubuntu noble main"
+      filename: intel-sgx
+      state: present
+    become: yes
+
+  - name: "Update apt cache"
+    apt:
+      update_cache: yes
+    become: yes
+
+  - name: "Install APT depdencencies"
+    become: yes
+    apt:
+      name:
+        - build-essential
+        - libclang-dev
+        - libssl-dev
+        - libsgx-dcap-quote-verify-dev
+        - libtdx-attest-dev
+        - libtss2-dev
+        - pkg-config
+        - protobuf-compiler
+        - python3-venv
+      update_cache: yes
+
+  - include_tasks: tasks/util/rust.yaml
+
+  - name: "Create code dir"
+    file:
+      path: "/home/{{ ansible_user }}/git"
+      state: directory
+
+# =============================================================================
+# Code set-up
+# =============================================================================
+
+  - name: "Clone Accless repo"
+    git:
+      repo: "https://www.github.com/faasm/tless.git"
+      dest: "/home/{{ ansible_user }}/git/faasm/accless"
+      update: yes
+      recursive: no
+      clone: yes
+      force: yes
+      accept_hostkey: yes
+
+  - name: "Clone Trustee repos"
+    git:
+      repo: "https://www.github.com/confidential-containers/trustee.git"
+      dest: "{{ trustee_code_dir }}"
+      update: yes
+      recursive: no
+      clone: yes
+      force: yes
+      accept_hostkey: yes
+    with_items:
+      - "trustee"
+
+# =============================================================================
+# Trustee configuration
+# =============================================================================
+
+  - name: "Build KBS CLI"
+    when: inventory_hostname == "accless-trustee-client"
+    shell: make cli CLI_FEATURES=sample_only,az-snp-vtpm-attester,sgx-attester
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  - name: "Build KBS"
+    when: inventory_hostname == "accless-trustee-server"
+    shell: make background-check-kbs
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  - name: "Make the KBS server bind to all input IPs"
+    when: inventory_hostname == "accless-trustee-server"
+    shell: sed -i 's/127\.0\.0\.1:8080/0.0.0.0:8080/' test/config/kbs.toml
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs"
+      executable: /bin/bash
+
+  - name: "Update KBS certificates to point to the cVM's external IP"
+    when: inventory_hostname == "accless-trustee-server"
+    shell: sed -i "s/subjectAltName=IP:[0-9.]\+/subjectAltName=IP:${KBS_IP}/" test/Makefile
+    args:
+      executable: /bin/bash
+      chdir: "{{ trustee_code_dir }}/kbs"
+    environment:
+      KBS_IP: "{{ kbs_ip }}"
+
+  - name: "Prepare certs and keys for KBS load test"
+    when: inventory_hostname == "accless-trustee-server"
+    shell: make kbs-certs {{ trustee_code_dir }}/kbs/test/work/tee.key {{ trustee_code_dir }}/kbs/test/work/repository/one/two/three
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs/test"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  - name: "Load server key material (https.crt)"
+    when: inventory_hostname == "accless-trustee-server"
+    ansible.builtin.slurp:
+      src: "{{ trustee_code_dir }}/kbs/test/work/https.crt"
+    register: server_https_crt
+  - name: "Load server key material (kbs.key)"
+    when: inventory_hostname == "accless-trustee-server"
+    ansible.builtin.slurp:
+      src: "{{ trustee_code_dir }}/kbs/test/work/kbs.key"
+    register: server_kbs_key
+  - name: "Load server key material (tee.key)"
+    when: inventory_hostname == "accless-trustee-server"
+    ansible.builtin.slurp:
+      src: "{{ trustee_code_dir }}/kbs/test/work/tee.key"
+    register: server_tee_key
+
+  - name: "Ensure client work directory exists on client"
+    when: inventory_hostname == "accless-truste-client"
+    ansible.builtin.file:
+      path: "{{ trustee_code_dir }}/kbs/test/work"
+      state: directory
+      mode: "0755"
+  - name: "Dump server key material in client (https.crt)"
+    when: inventory_hostname == "accless-trustee-client"
+    ansible.builtin.copy:
+      dest: "{{ trustee_code_dir }}/kbs/test/work/https.crt"
+      content: "{{ hostvars['accless-trustee-server'].server_https_crt.content | b64decode }}"
+  - name: "Dump server key material in client (kbs.key)"
+    when: inventory_hostname == "accless-trustee-client"
+    ansible.builtin.copy:
+      dest: "{{ trustee_code_dir }}/kbs/test/work/kbs.key"
+      content: "{{ hostvars['accless-trustee-server'].server_kbs_key.content | b64decode }}"
+  - name: "Dump server key material in client (tee.key)"
+    when: inventory_hostname == "accless-trustee-client"
+    ansible.builtin.copy:
+      dest: "{{ trustee_code_dir }}/kbs/test/work/tee.key"
+      content: "{{ hostvars['accless-trustee-server'].server_tee_key.content | b64decode }}"
+
+  # Start server.
+  - name: "Start server in background"
+    when: inventory_hostname == "accless-trustee-server"
+    become: true
+    shell: nohup ../../target/release/kbs --config-file ./config/kbs.toml > /var/log/trustee_kbs.log 2>&1 &
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs/test"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  # Prepare client.
+  - name: "Prepare client"
+    when: inventory_hostname == "accless-trustee-client"
+    shell: ./scripts/apt.sh && ./scripts/accli_wrapper.sh --help
+    args:
+      chdir: "{{ accless_code_dir }}"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

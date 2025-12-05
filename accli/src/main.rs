@@ -4,16 +4,17 @@ use crate::{
         accless::Accless,
         applications::{self, Applications},
         attestation_service::AttestationService,
-        azure::Azure,
+        azure::{self, Azure, AzureUtilsCommand},
         cvm::{self, Component, parse_host_guest_path},
         dev::Dev,
         docker::{Docker, DockerContainer},
-        experiments::{E2eSubScommand, Experiment, UbenchSubCommand},
+        experiments::{self, E2eSubScommand, Experiment, UbenchSubCommand},
         s3::S3,
     },
 };
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
+use log::info;
 use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
@@ -53,7 +54,7 @@ enum Command {
         dev_command: DevCommand,
     },
     /// Run evaluation experiments and plot results
-    Experiment {
+    Experiments {
         #[command(subcommand)]
         experiments_command: Experiment,
     },
@@ -97,6 +98,9 @@ enum AttestationServiceCommand {
         /// Run the attestation service in the background, storing its PID.
         #[arg(long, default_value_t = false)]
         background: bool,
+        /// Overwrite the public IP of the attestation service.
+        #[arg(long)]
+        overwrite_external_ip: Option<String>,
     },
     /// Stop a running attestation service (started with --background).
     Stop {},
@@ -182,6 +186,15 @@ enum CvmCommand {
         /// Set the working directory inside the container
         #[arg(long)]
         cwd: Option<PathBuf>,
+    },
+    /// SCP a file to/from the cVM.
+    Scp {
+        /// Path to the source file. To indicate a path inside the cVM,
+        /// prefix it with `cvm:`.
+        src_path: String,
+        /// Path to the destination file. To indicate a path inside the cVM,
+        /// prefix it with `cvm:`.
+        dst_path: String,
     },
 }
 
@@ -340,6 +353,11 @@ enum AzureCommand {
         #[command(subcommand)]
         az_sub_command: AzureSubCommand,
     },
+    /// Utility azure-related commands.
+    Utils {
+        #[command(subcommand)]
+        az_utils_command: AzureUtilsCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -348,8 +366,6 @@ enum AzureSubCommand {
     Create {},
     /// Provision Azure resource using Ansible
     Provision {},
-    /// Copy the results directory corresponding to this resoiurce
-    ScpResults {},
     /// Get a SSH command into the Azure resource (if applicable)
     Ssh {},
     /// Delete the Azure resource
@@ -404,6 +420,15 @@ enum ApplicationsCommand {
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
         as_cert_path: Option<PathBuf>,
+        /// Run the application with sudo privileges.
+        #[arg(long, default_value_t = false)]
+        run_as_root: bool,
+        /// Extra flags to pass to the docker run command.
+        #[arg(long)]
+        extra_docker_flags: Option<Vec<String>>,
+        /// Arbitrary arguments to pass to the function.
+        #[arg(last = true)]
+        args: Vec<String>,
     },
 }
 
@@ -441,13 +466,22 @@ async fn main() -> anyhow::Result<()> {
                 in_cvm,
                 as_url,
                 as_cert_path,
+                run_as_root,
+                extra_docker_flags,
+                args,
             } => {
+                let extra_docker_flags_str: Option<Vec<&str>> = extra_docker_flags
+                    .as_ref()
+                    .map(|flags| flags.iter().map(AsRef::as_ref).collect());
                 Applications::run(
                     app_type.clone(),
                     app_name.clone(),
                     *in_cvm,
                     as_url.clone(),
                     as_cert_path.clone(),
+                    *run_as_root,
+                    extra_docker_flags_str.as_deref(),
+                    args.clone(),
                 )?;
             }
         },
@@ -497,7 +531,15 @@ async fn main() -> anyhow::Result<()> {
                     net,
                     capture_output,
                 } => {
-                    Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
+                    Docker::run(
+                        cmd,
+                        *mount,
+                        cwd.as_deref(),
+                        env,
+                        *net,
+                        *capture_output,
+                        None,
+                    )?;
                 }
             },
             DevCommand::Cvm { cvm_command } => match cvm_command {
@@ -515,9 +557,12 @@ async fn main() -> anyhow::Result<()> {
                 CvmCommand::Cli { cwd } => {
                     cvm::cli(cwd.as_ref())?;
                 }
+                CvmCommand::Scp { src_path, dst_path } => {
+                    cvm::scp(src_path, dst_path)?;
+                }
             },
         },
-        Command::Experiment {
+        Command::Experiments {
             experiments_command: exp,
         } => match exp {
             Experiment::ColdStart { eval_sub_command }
@@ -599,147 +644,111 @@ async fn main() -> anyhow::Result<()> {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("accless-cvm", "Standard_DC8as_v5");
-                    Azure::create_snp_guest("accless-as", "Standard_DC2as_v5");
-                    Azure::create_aa("accless");
+                    Azure::create_snp_guest(experiments::ACCLESS_VM_NAME, "Standard_DC8as_v5")?;
+                    Azure::create_snp_guest(
+                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
+                        "Standard_DC2as_v5",
+                    )?;
+                    Azure::create_aa(experiments::ACCLESS_MAA_NAME)?;
 
-                    Azure::open_vm_ports("accless-cvm", &[22]);
-                    Azure::open_vm_ports("accless-as", &[22, 8443]);
+                    Azure::open_vm_ports(experiments::ACCLESS_VM_NAME, &[22])?;
+                    Azure::open_vm_ports(
+                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
+                        &[22, 8443],
+                    )?;
                 }
                 AzureSubCommand::Provision {} => {
-                    let client_ip = Azure::get_vm_ip("accless-cvm");
-                    let server_ip = Azure::get_vm_ip("accless-as");
+                    let server_ip =
+                        Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?;
+                    let accless_code_dir = format!(
+                        "/home/{}/{}",
+                        azure::AZURE_USERNAME,
+                        experiments::ACCLESS_VM_CODE_DIR
+                    );
+                    let as_cert_path =
+                        format!("{accless_code_dir}/config/attestation-service/certs/cert.pem");
 
-                    let vars: HashMap<&str, &str> = HashMap::from([("as_ip", server_ip.as_str())]);
-                    Azure::provision_with_ansible("accless", "accless", Some(vars));
-
-                    // Copy the necessary stuff from the server to the client
-                    let work_dir = "/home/tless/git/faasm/tless/attestation-service/certs/";
-
-                    #[allow(clippy::single_element_loop)]
-                    for file in ["cert.pem"] {
-                        let scp_cmd_in =
-                            format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");
-                        let status = process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd_in)
-                            .status()
-                            .expect("accli: error scp-ing data (in)");
-                        if !status.success() {
-                            panic!("accli: error scp-ing data (in)");
-                        }
-
-                        let scp_cmd_out =
-                            format!("scp /tmp/{file} tless@{client_ip}:{work_dir}/{file}");
-                        let status = process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd_out)
-                            .status()
-                            .expect("accli: error scp-ing data (out)");
-                        if !status.success() {
-                            panic!("accli: error scp-ing data (out)");
-                        }
-                    }
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/ubench/escrow-xput/build";
-                    let results_file = vec!["accless.csv", "accless-maa.csv"];
-                    let result_path = "eval/escrow-xput/data/";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("accless-cvm"),
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("as_ip", server_ip.as_str()),
+                        ("accless_code_dir", accless_code_dir.as_str()),
+                        ("as_cert_path", as_cert_path.as_str()),
+                    ]);
+                    Azure::provision_with_ansible("accless", "accless", Some(vars))?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
-                    Azure::build_ssh_command("accless-cvm");
+                    println!("{}", Azure::build_ssh_command("accless-cvm")?);
                     println!("attestation server:");
-                    Azure::build_ssh_command("accless-as");
+                    println!("{}", Azure::build_ssh_command("accless-as")?);
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("accless-cvm");
-                    Azure::delete_snp_guest("accless-as");
-                    Azure::delete_aa("accless");
+                    Azure::delete_snp_guest("accless-cvm")?;
+                    Azure::delete_snp_guest("accless-as")?;
+                    Azure::delete_aa("accless")?;
                 }
             },
             AzureCommand::AttestationService { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("attestation-service", "Standard_DC8as_v5");
-                    Azure::open_vm_ports("attestation-service", &[22, 8443]);
+                    Azure::create_snp_guest(
+                        experiments::ATTESTATION_SERVICE_VM_NAME,
+                        "Standard_DC8as_v5",
+                    )?;
+                    Azure::open_vm_ports(experiments::ATTESTATION_SERVICE_VM_NAME, &[22, 8443])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    let service_ip = Azure::get_vm_ip("attestation-service");
+                    let service_ip = Azure::get_vm_ip(experiments::ATTESTATION_SERVICE_VM_NAME)?;
 
                     let vars: HashMap<&str, &str> = HashMap::from([("as_ip", service_ip.as_str())]);
                     Azure::provision_with_ansible(
                         "attestation-service",
                         "attestationservice",
                         Some(vars),
-                    );
-                }
-                AzureSubCommand::ScpResults {} => {
-                    println!("scp-results does not apply");
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
-                    Azure::build_ssh_command("attestation-service");
+                    println!(
+                        "{}",
+                        Azure::build_ssh_command(experiments::ATTESTATION_SERVICE_VM_NAME)?
+                    );
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("attestation-service");
+                    Azure::delete_snp_guest(experiments::ATTESTATION_SERVICE_VM_NAME)?;
                 }
             },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("tless-mhsm-cvm", "Standard_DC8as_v5");
-                    Azure::create_aa("tlessmhsm");
+                    Azure::create_snp_guest(experiments::MHSM_CLIENT_VM_NAME, "Standard_DC8as_v5")?;
+                    Azure::create_aa(experiments::MHSM_ATTESTATION_SERVICE_NAME)?;
                     // WARNING: the key release policy in the mHSM depends
                     // on the name of the attestaion provider even though it
                     // is not passed as an argument (it is used in the ARM
-                    // template file: ./azure/mhsm_skr_policy.json)
-                    Azure::create_mhsm("tless-mhsm-kv", "tless-mhsm-cvm", "tless-mhsm-key");
+                    // template file: ./config/azure/mhsm_skr_policy.json)
+                    Azure::create_mhsm(
+                        experiments::MHSM_NAME,
+                        experiments::MHSM_CLIENT_VM_NAME,
+                        experiments::MHSM_KEY,
+                    )?;
 
-                    Azure::open_vm_ports("tless-mhsm-cvm", &[22]);
+                    Azure::open_vm_ports(experiments::MHSM_CLIENT_VM_NAME, &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("tless-mhsm", "mhsm", None);
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless";
-                    let result_path = "eval/escrow-xput/data/managed-hsm.csv";
-
-                    let scp_cmd = format!(
-                        "{}:{src_results_dir}/{result_path} {}",
-                        Azure::build_scp_command("tless-mhsm-cvm"),
-                        Env::proj_root().join(result_path).display(),
-                    );
-
-                    process::Command::new("sh")
-                        .arg("-c")
-                        .arg(scp_cmd)
-                        .status()
-                        .expect("accli: error scp-ing results");
+                    Azure::provision_with_ansible("accless-mhsm", "mhsm", None)?;
                 }
                 AzureSubCommand::Ssh {} => {
-                    Azure::build_ssh_command("tless-mhsm-cvm");
+                    println!(
+                        "{}",
+                        Azure::build_ssh_command(experiments::MHSM_CLIENT_VM_NAME)?
+                    );
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-mhsm-cvm");
-                    Azure::delete_aa("tlessmhsm");
-                    Azure::delete_mhsm("tless-mhsm-kv");
+                    Azure::delete_snp_guest(experiments::MHSM_CLIENT_VM_NAME)?;
+                    Azure::delete_aa(experiments::MHSM_ATTESTATION_SERVICE_NAME)?;
+                    Azure::delete_mhsm(experiments::MHSM_NAME)?;
                 }
             },
             AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3");
+                    Azure::create_sgx_vm("sgx-faasm-vm", "Standard_DC8ds_v3")?;
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
@@ -748,143 +757,87 @@ async fn main() -> anyhow::Result<()> {
                         ("accless_version", version.as_str()),
                         ("faasm_version", faasm_version.as_str()),
                     ]);
-                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars));
-                }
-                AzureSubCommand::ScpResults {} => {
-                    // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/scale-up-latency/data";
-                    // let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
-                    let results_file = vec!["accless-faasm.csv"];
-                    let result_path = "eval/scale-up-latency/data";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("sgx-faasm-vm"),
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
+                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars))?;
                 }
                 AzureSubCommand::Ssh {} => {
-                    Azure::build_ssh_command("sgx-faasm-vm");
+                    println!("{}", Azure::build_ssh_command("sgx-faasm-vm")?);
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_sgx_vm("sgx-faasm-vm");
+                    Azure::delete_sgx_vm("sgx-faasm-vm")?;
                 }
             },
             AzureCommand::SnpKnative { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5");
+                    Azure::create_snp_cc_vm("snp-knative-vm", "Standard_DC8as_cc_v5")?;
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
                     let vars: HashMap<&str, &str> =
                         HashMap::from([("accless_version", version.as_str())]);
-                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars));
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let results_file =
-                        vec!["knative.csv", "snp-knative.csv", "accless-knative.csv"];
-                    let result_path = "eval/cold-start/data";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("snp-knative-vm"),
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
+                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars))?;
                 }
                 AzureSubCommand::Ssh {} => {
-                    Azure::build_ssh_command("snp-knative-vm");
+                    println!("{}", Azure::build_ssh_command("snp-knative-vm")?);
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_sgx_vm("snp-knative-vm");
+                    Azure::delete_sgx_vm("snp-knative-vm")?;
                 }
             },
             AzureCommand::Trustee { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    // DC2 is 62.78$/month -> original experiments w/ this
-                    // DC4 is DC2 * 2
-                    // DC8 is DC2 * 4
-                    Azure::create_snp_guest("tless-trustee-client", "Standard_DC2as_v5");
-                    Azure::create_snp_guest("tless-trustee-server", "Standard_DC2as_v5");
+                    Azure::create_snp_guest(
+                        experiments::TRUSTEE_CLIENT_VM_NAME,
+                        "Standard_DC8as_v5",
+                    )?;
+                    Azure::create_snp_guest(
+                        experiments::TRUSTEE_SERVER_VM_NAME,
+                        "Standard_DC2as_v5",
+                    )?;
 
                     // Open port 8080 on the server VM
-                    Azure::open_vm_ports("tless-trustee-client", &[22]);
-                    Azure::open_vm_ports("tless-trustee-server", &[22, 8080]);
+                    Azure::open_vm_ports(experiments::TRUSTEE_CLIENT_VM_NAME, &[22])?;
+                    Azure::open_vm_ports(experiments::TRUSTEE_SERVER_VM_NAME, &[22, 8080])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    let client_ip = Azure::get_vm_ip("tless-trustee-client");
-                    let server_ip = Azure::get_vm_ip("tless-trustee-server");
-
-                    let vars: HashMap<&str, &str> = HashMap::from([("kbs_ip", server_ip.as_str())]);
-                    Azure::provision_with_ansible("tless-trustee", "trustee", Some(vars));
-
-                    // Copy the necessary stuff from the server to the client
-                    let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";
-                    for file in ["https.crt", "kbs.key", "tee.key"] {
-                        let scp_cmd_in =
-                            format!("scp tless@{server_ip}:{work_dir}/{file} /tmp/{file}");
-                        let status = process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd_in)
-                            .status()
-                            .expect("accli: error scp-ing data (in)");
-                        if !status.success() {
-                            panic!("accli: error scp-ing data (in)");
-                        }
-
-                        let scp_cmd_out =
-                            format!("scp /tmp/{file} tless@{client_ip}:{work_dir}/{file}");
-                        let status = process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd_out)
-                            .status()
-                            .expect("accli: error scp-ing data (out)");
-                        if !status.success() {
-                            panic!("accli: error scp-ing data (out)");
-                        }
-                    }
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless";
-                    let result_path = "eval/escrow-xput/data/trustee.csv";
-
-                    let scp_cmd = format!(
-                        "{}:{src_results_dir}/{result_path} {}",
-                        Azure::build_scp_command("tless-trustee-client"),
-                        Env::proj_root().join(result_path).display(),
+                    let server_ip = Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?;
+                    let trustee_code_dir = format!(
+                        "/home/{}/git/confidential-containers/trustee",
+                        azure::AZURE_USERNAME
                     );
+                    let accless_code_dir =
+                        format!("/home/{}/git/faasm/accless", azure::AZURE_USERNAME);
 
-                    process::Command::new("sh")
-                        .arg("-c")
-                        .arg(scp_cmd)
-                        .status()
-                        .expect("accli: error scp-ing results");
+                    let vars: HashMap<&str, &str> = HashMap::from([
+                        ("kbs_ip", server_ip.as_str()),
+                        ("trustee_code_dir", trustee_code_dir.as_str()),
+                        ("accless_code_dir", accless_code_dir.as_str()),
+                    ]);
+                    Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
-                    Azure::build_ssh_command("tless-trustee-client");
+                    println!(
+                        "{}",
+                        Azure::build_ssh_command(experiments::TRUSTEE_CLIENT_VM_NAME)?
+                    );
                     println!("server:");
-                    Azure::build_ssh_command("tless-trustee-server");
+                    println!(
+                        "{}",
+                        Azure::build_ssh_command(experiments::TRUSTEE_SERVER_VM_NAME)?
+                    );
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-trustee-client");
-                    Azure::delete_snp_guest("tless-trustee-server");
+                    Azure::delete_snp_guest(experiments::TRUSTEE_CLIENT_VM_NAME)?;
+                    Azure::delete_snp_guest(experiments::TRUSTEE_SERVER_VM_NAME)?;
+                }
+            },
+            AzureCommand::Utils { az_utils_command } => match az_utils_command {
+                AzureUtilsCommand::InAzureVm {} => {
+                    if Azure::is_azure_vm().await {
+                        info!("main(): executing inside azure VM");
+                    } else {
+                        info!("main(): NOT executing inside azure VM");
+                    }
                 }
             },
         },
@@ -902,6 +855,7 @@ async fn main() -> anyhow::Result<()> {
                 mock,
                 rebuild,
                 background,
+                overwrite_external_ip,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -911,6 +865,7 @@ async fn main() -> anyhow::Result<()> {
                     *mock,
                     *rebuild,
                     *background,
+                    overwrite_external_ip.clone(),
                 )?;
             }
             AttestationServiceCommand::Stop {} => {

@@ -43,8 +43,12 @@ pub enum ApplicationName {
     AttClientSgx,
     #[value(name = "att-client-snp")]
     AttClientSnp,
+    #[value(name = "breakdown-snp")]
+    BreakdownSnp,
     #[value(name = "escrow-xput")]
     EscrowXput,
+    #[value(name = "hello-snp")]
+    HelloSnp,
 }
 
 impl Display for ApplicationName {
@@ -52,7 +56,9 @@ impl Display for ApplicationName {
         match self {
             ApplicationName::AttClientSgx => write!(f, "att-client-sgx"),
             ApplicationName::AttClientSnp => write!(f, "att-client-snp"),
+            ApplicationName::BreakdownSnp => write!(f, "breakdown-snp"),
             ApplicationName::EscrowXput => write!(f, "escrow-xput"),
+            ApplicationName::HelloSnp => write!(f, "hello-snp"),
         }
     }
 }
@@ -64,7 +70,9 @@ impl FromStr for ApplicationName {
         match s {
             "att-client-sgx" => Ok(ApplicationName::AttClientSgx),
             "att-client-snp" => Ok(ApplicationName::AttClientSnp),
+            "breakdown-snp" => Ok(ApplicationName::BreakdownSnp),
             "escrow-xput" => Ok(ApplicationName::EscrowXput),
+            "hello-snp" => Ok(ApplicationName::HelloSnp),
             _ => anyhow::bail!("Invalid Function: {}", s),
         }
     }
@@ -171,16 +179,28 @@ impl Applications {
             let workdir_str = workdir.to_str().ok_or_else(|| {
                 anyhow::anyhow!("Workdir path is not valid UTF-8: {}", workdir.display())
             })?;
-            Docker::run(&cmd, true, Some(workdir_str), &[], false, capture_output)
+            Docker::run(
+                &cmd,
+                true,
+                Some(workdir_str),
+                &[],
+                false,
+                capture_output,
+                None,
+            )
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run(
         app_type: ApplicationType,
         app_name: ApplicationName,
         in_cvm: bool,
         as_url: Option<String>,
         as_cert_path: Option<PathBuf>,
+        run_as_root: bool,
+        extra_docker_flags: Option<&[&str]>,
+        args: Vec<String>,
     ) -> anyhow::Result<Option<String>> {
         // If --in-cvm flag is passed, we literally re run the same `accli` command, but
         // inside the cVM.
@@ -207,6 +227,15 @@ impl Applications {
                 );
             }
 
+            if run_as_root {
+                cmd.push("--run-as-root".to_string());
+            }
+
+            if !args.is_empty() {
+                cmd.push("--".to_string());
+                cmd.extend(args);
+            }
+
             // We don't need to SCP any files here, because we assume that the certificates
             // have been copied during the build stage, and persisted in the
             // disk image.
@@ -229,7 +258,12 @@ impl Applications {
             let binary_path_str = binary_path.to_str().ok_or_else(|| {
                 anyhow::anyhow!("Binary path is not valid UTF-8: {}", binary_path.display())
             })?;
-            let cmd = vec![binary_path_str.to_string()];
+            let mut cmd = if run_as_root {
+                vec!["sudo".to_string(), binary_path_str.to_string()]
+            } else {
+                vec![binary_path_str.to_string()]
+            };
+            cmd.extend(args);
 
             let as_env_vars: Vec<String> = match (as_url, as_cert_path) {
                 (Some(as_url), Some(host_cert_path)) => {
@@ -242,7 +276,15 @@ impl Applications {
                 _ => vec![],
             };
 
-            Docker::run(&cmd, true, None, &as_env_vars, true, false)
+            Docker::run(
+                &cmd,
+                true,
+                None,
+                &as_env_vars,
+                true,
+                false,
+                extra_docker_flags,
+            )
         }
     }
 }

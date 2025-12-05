@@ -6,8 +6,11 @@ USER_ID=${HOST_UID:-9001}
 GROUP_ID=${HOST_GID:-9001}
 USER_NAME=accless
 
-# Group ID that owns /dev/sev-guest for SNP deployments (if present).
+# Group ID that owns /dev/sev-guest for bare-metal SNP deployments (if present).
 SEV_GID=${SEV_GID:-}
+
+# Group ID that owns /dev/tpmrm0 for SNP deployments on Azure (if present).
+TPM_GID=${TPM_GID:-}
 
 # Create group if it doesn't exist
 if ! getent group "$GROUP_ID" >/dev/null 2>&1; then
@@ -49,6 +52,21 @@ if [ -e /dev/sev-guest ]; then
         usermod -aG "$SEV_GID" ${USER_NAME} || true
     else
         echo "WARNING: /dev/sev-guest present but SEV_GID not set!"
+    fi
+fi
+
+# Add /dev/tpmrm0 owning group if necessary.
+if [ -e /dev/tpmrm0 ]; then
+    if [ -n "$TPM_GID" ]; then
+        # Create a group with that GID if needed.
+        if ! getent group "$TPM_GID" >/dev/null; then
+            groupadd -g "$TPM_GID" tssctr || true
+        fi
+
+        # Add accless to that group (by GID to be robust to name differences)
+        usermod -aG "${TPM_GID}" ${USER_NAME} || true
+    else
+        echo "WARNING: /dev/tpmrm0 present but TPM_GID not set!"
     fi
 fi
 

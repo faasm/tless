@@ -9,6 +9,23 @@ pub mod plot;
 pub mod ubench;
 pub mod workflows;
 
+/// Useful constants shared between the provisioning methods, and the
+/// experiments methods.
+pub const ACCLESS_MAA_NAME: &str = "accless";
+pub const ACCLESS_VM_CODE_DIR: &str = "git/faasm/accless";
+pub const ACCLESS_VM_NAME: &str = "accless-cvm";
+pub const ACCLESS_ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
+
+pub const ATTESTATION_SERVICE_VM_NAME: &str = "attestation-service";
+
+pub const MHSM_ATTESTATION_SERVICE_NAME: &str = "acclessmhsm";
+pub const MHSM_CLIENT_VM_NAME: &str = "accless-mhsm-cvm";
+pub const MHSM_KEY: &str = "accless-mhsm-key";
+pub const MHSM_NAME: &str = "accless-mhsm-kv";
+
+pub const TRUSTEE_CLIENT_VM_NAME: &str = "accless-trustee-client";
+pub const TRUSTEE_SERVER_VM_NAME: &str = "accless-trustee-server";
+
 /// Supported experiments in Accless. For a detailed explanation of each of
 /// them, refer to `./experiments/README.md`.
 #[derive(Debug, Subcommand)]

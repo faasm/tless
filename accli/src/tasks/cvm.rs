@@ -433,3 +433,98 @@ pub fn cli(cwd: Option<&PathBuf>) -> Result<()> {
 
     Ok(())
 }
+
+pub fn scp(src_path: &str, dst_path: &str) -> Result<()> {
+    // Determine if we are copying to or from the cVM.
+    let (is_copy_in, host_path, cvm_path) =
+        if let Some(stripped_src) = src_path.strip_prefix("cvm:") {
+            // Copy from cVM to host.
+            (false, dst_path.to_string(), stripped_src.to_string())
+        } else if let Some(stripped_dst) = dst_path.strip_prefix("cvm:") {
+            // Copy from host to cVM.
+            (true, src_path.to_string(), stripped_dst.to_string())
+        } else {
+            anyhow::bail!("one of src or dst must be prefixed with 'cvm:'");
+        };
+
+    // Start QEMU and capture stdout.
+    info!("scp(): starting cVM...");
+    let mut qemu_child = Command::new(format!("{}/run.sh", snp_root().display()))
+        .current_dir(Env::proj_root())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .context("scp(): failed to spawn QEMU")?;
+
+    let qemu_stdout = qemu_child
+        .stdout
+        .take()
+        .context("scp(): failed to capture QEMU stdout")?;
+
+    let _qemu_guard = QemuGuard { child: qemu_child };
+
+    // Wait for cloud-init to signal readiness.
+    info!("scp(): waiting for cVM to become ready");
+    wait_for_cvm_ready(qemu_stdout, CVM_BOOT_TIMEOUT)?;
+
+    let mut scp_cmd = Command::new("scp");
+    scp_cmd
+        .arg("-P")
+        .arg(SSH_PORT.to_string())
+        .arg("-i")
+        .arg(format!("{}/{EPH_PRIVKEY}", snp_output_dir().display()))
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null");
+
+    if is_copy_in {
+        info!(
+            "scp(): copying file into cVM (host: {}, cvm: {})",
+            host_path, cvm_path
+        );
+
+        // Before SCP-ing, we need to make sure the destination directory
+        // exists.
+        let cvm_dir = Path::new(&cvm_path)
+            .parent()
+            .context(format!("invalid cvm path: {}", cvm_path))?;
+        let mut ssh_mkdir_cmd = Command::new("ssh");
+        set_ssh_options(&mut ssh_mkdir_cmd);
+        ssh_mkdir_cmd.args([
+            "mkdir".to_string(),
+            "-p".to_string(),
+            format!("{CVM_ACCLESS_ROOT}/{}", cvm_dir.display()),
+        ]);
+        let status = ssh_mkdir_cmd.status()?;
+        if !status.success() {
+            anyhow::bail!("scp(): failed to mkdir inside cVM");
+        }
+
+        scp_cmd.arg(host_path).arg(format!(
+            "{}@localhost:{}/{}",
+            CVM_USER, CVM_ACCLESS_ROOT, cvm_path
+        ));
+    } else {
+        info!(
+            "scp(): copying file out of cVM (cvm: {}, host: {})",
+            cvm_path, host_path
+        );
+        scp_cmd.arg(format!(
+            "{}@localhost:{}/{}",
+            CVM_USER, CVM_ACCLESS_ROOT, cvm_path
+        ));
+        scp_cmd.arg(host_path);
+    };
+
+    let status = scp_cmd.status()?;
+    if !status.success() {
+        anyhow::bail!(
+            "scp(): failed to copy file to cVM (exit_code={})",
+            status.code().unwrap_or_default()
+        );
+    }
+
+    Ok(())
+}

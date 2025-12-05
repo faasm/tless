@@ -103,7 +103,11 @@ pub fn get_node_url() -> Result<String> {
 /// # Returns
 ///
 /// The path to the directory where the TLS certificates are stored.
-fn initialize_tls_keys(certs_dir: Option<PathBuf>, clean: bool) -> Result<PathBuf> {
+fn initialize_tls_keys(
+    certs_dir: Option<PathBuf>,
+    clean: bool,
+    external_ip: &String,
+) -> Result<PathBuf> {
     let certs_dir = certs_dir.unwrap_or(get_default_certs_dir());
 
     if clean {
@@ -128,7 +132,6 @@ fn initialize_tls_keys(certs_dir: Option<PathBuf>, clean: bool) -> Result<PathBu
         std::fs::create_dir_all(&certs_dir)?;
     }
 
-    let url = get_node_url()?;
     let status = Command::new("openssl")
         .arg("req")
         .arg("-x509")
@@ -142,11 +145,11 @@ fn initialize_tls_keys(certs_dir: Option<PathBuf>, clean: bool) -> Result<PathBu
         .arg("365")
         .arg("-nodes")
         .arg("-subj")
-        .arg(format!("/CN={}", url))
+        .arg(format!("/CN={}", external_ip))
         .arg("-addext")
         .arg(format!(
             "subjectAltName = IP:{},IP:127.0.0.1,IP:0.0.0.0,DNS:localhost",
-            url
+            external_ip
         ))
         .stderr(Stdio::null())
         .stdout(Stdio::null())
@@ -178,9 +181,13 @@ fn initialize_tls_keys(certs_dir: Option<PathBuf>, clean: bool) -> Result<PathBu
 /// # Returns
 ///
 /// The TLS acceptor.
-pub async fn load_config(certs_dir: Option<PathBuf>, clean: bool) -> Result<TlsAcceptor> {
+pub async fn load_config(
+    certs_dir: Option<PathBuf>,
+    clean: bool,
+    external_ip: &String,
+) -> Result<TlsAcceptor> {
     // Initialize, generating if necessary, the TLS keys and certificates.
-    let certs_dir = initialize_tls_keys(certs_dir, clean)?;
+    let certs_dir = initialize_tls_keys(certs_dir, clean, external_ip)?;
 
     let cert_file = &mut BufReader::new(File::open(get_public_certificate_path(&certs_dir))?);
     let key_file = &mut BufReader::new(File::open(get_private_key_path(&certs_dir))?);
@@ -260,19 +267,20 @@ mod tests {
         }
         let temp_dir = tempdir().unwrap();
         let certs_dir = temp_dir.path().to_path_buf();
+        let url = get_node_url().unwrap();
 
         // First time, keys should be generated.
-        let result = initialize_tls_keys(Some(certs_dir.clone()), false);
+        let result = initialize_tls_keys(Some(certs_dir.clone()), false, &url);
         assert!(result.is_ok());
         assert!(get_private_key_path(&certs_dir).exists());
         assert!(get_public_certificate_path(&certs_dir).exists());
 
         // Second time, keys should not be regenerated.
-        let result = initialize_tls_keys(Some(certs_dir.clone()), false);
+        let result = initialize_tls_keys(Some(certs_dir.clone()), false, &url);
         assert!(result.is_ok());
 
         // With clean flag, keys should be regenerated.
-        let result = initialize_tls_keys(Some(certs_dir.clone()), true);
+        let result = initialize_tls_keys(Some(certs_dir.clone()), true, &url);
         assert!(result.is_ok());
         assert!(get_private_key_path(&certs_dir).exists());
         assert!(get_public_certificate_path(&certs_dir).exists());
@@ -288,35 +296,36 @@ mod tests {
 
         let temp_dir = tempdir().unwrap();
         let certs_dir = temp_dir.path().to_path_buf();
+        let url = get_node_url().unwrap();
 
         CryptoProvider::install_default(rustls::crypto::ring::default_provider()).unwrap();
 
         // Test with non-existent certs_dir, it should be created.
-        let result = load_config(Some(certs_dir.clone()), false).await;
+        let result = load_config(Some(certs_dir.clone()), false, &url).await;
         assert!(result.is_ok());
 
         // Test with existing certs_dir.
-        let result = load_config(Some(certs_dir.clone()), false).await;
+        let result = load_config(Some(certs_dir.clone()), false, &url).await;
         assert!(result.is_ok());
 
         // Test with the clean flag.
-        let result = load_config(Some(certs_dir.clone()), true).await;
+        let result = load_config(Some(certs_dir.clone()), true, &url).await;
         assert!(result.is_ok());
 
         // Test with corrupted private key.
         let private_key_path = get_private_key_path(&certs_dir);
         let mut file = fs::File::create(private_key_path).unwrap();
         file.write_all(b"corrupted key").unwrap();
-        let result = load_config(Some(certs_dir.clone()), false).await;
+        let result = load_config(Some(certs_dir.clone()), false, &url).await;
         assert!(result.is_err());
 
         // Test with corrupted public cert.
-        let result = initialize_tls_keys(Some(certs_dir.clone()), true);
+        let result = initialize_tls_keys(Some(certs_dir.clone()), true, &url);
         assert!(result.is_ok());
         let public_cert_path = get_public_certificate_path(&certs_dir);
         let mut file = fs::File::create(public_cert_path).unwrap();
         file.write_all(b"corrupted cert").unwrap();
-        let result = load_config(Some(certs_dir.clone()), false).await;
+        let result = load_config(Some(certs_dir.clone()), false, &url).await;
         assert!(result.is_err());
     }
 }

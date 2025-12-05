@@ -41,6 +41,7 @@ impl AttestationService {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run(
         certs_dir: Option<&std::path::Path>,
         port: Option<u16>,
@@ -49,6 +50,7 @@ impl AttestationService {
         mock: bool,
         rebuild: bool,
         background: bool,
+        overwrite_external_ip: Option<String>,
     ) -> Result<()> {
         if rebuild {
             Self::build()?;
@@ -74,6 +76,9 @@ impl AttestationService {
         }
         if mock {
             cmd.arg("--mock");
+        }
+        if let Some(ip) = overwrite_external_ip {
+            cmd.arg("--overwrite-external-ip").arg(ip);
         }
 
         if background {

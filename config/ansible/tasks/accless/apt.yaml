@@ -3,13 +3,10 @@
   apt:
     name:
       - build-essential
-      - cmake
-      - libboost-all-dev
-      - libcurl4-openssl-dev
-      - libjsoncpp-dev
+      - libfontconfig1-dev
+      - libtss2-dev
+      - libtss2-sys1t64
       - libssl-dev
-      - ninja-build
-      - nlohmann-json3-dev
       - pkg-config
       - python3-venv
     update_cache: yes

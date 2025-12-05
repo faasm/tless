@@ -10,7 +10,7 @@ pushd ${PROJ_ROOT}>>/dev/null
 # ----------------------------
 
 export PROJ_ROOT=${PROJ_ROOT}
-export TLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
+export ACCLESS_VERSION=$(cat ${PROJ_ROOT}/VERSION)
 export PS1="(accless) $PS1"
 source ${PROJ_ROOT}/scripts/env.sh
 
@@ -68,7 +68,7 @@ source ${VENV_PATH}/bin/activate
 echo ""
 echo "----------------------------------"
 echo "Accless CLI"
-echo "Version: ${TLESS_VERSION}"
+echo "Version: ${ACCLESS_VERSION}"
 echo "Project root: ${PROJ_ROOT}"
 echo "----------------------------------"
 echo ""

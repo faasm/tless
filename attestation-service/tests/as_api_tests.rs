@@ -173,6 +173,9 @@ async fn test_att_clients() -> Result<()> {
         false,
         Some(as_url.clone()),
         Some(cert_path.clone()),
+        false,
+        None,
+        vec![],
     )?;
 
     info!("running mock snp client...");
@@ -182,6 +185,9 @@ async fn test_att_clients() -> Result<()> {
         false,
         Some(as_url),
         Some(cert_path),
+        false,
+        None,
+        vec![],
     )?;
 
     match std::fs::remove_dir_all(&certs_dir) {

@@ -98,15 +98,15 @@ RUN rm -rf /code \
     && setfacl -R -d -m g:faasm:rwX ${EXAMPLES_DIR}
 
 # Prepare repository structure
+ENV ACCLESS_DOCKER=on
 ARG ACCLESS_VERSION
 RUN cd /code \
     && git clone -b v${ACCLESS_VERSION} https://github.com/faasm/tless /code/accless \
     && cd /code/accless \
-    && source ./scripts/workon.sh
+    && ./scripts/create_venv.sh
 
 # Build workflow code (WASM for Faasm + Native for Knative)
 # ENV PATH=${PATH}:/root/.cargo/bin
-ENV ACCLESS_DOCKER=on
 # RUN cd /code/accless \
     #     # Activate faasmtools
 #     && source /code/faasm-examples/cpp/bin/workon.sh \

@@ -207,6 +207,18 @@ impl Docker {
         }
     }
 
+    /// Helper method to get the group ID of the /dev/tmprm0 device.
+    ///
+    /// This method is only used when using `accli` inside an Azure cVM. Azure
+    /// cVMs do not expose the regular /dev/sev-guest, instead they expose a
+    /// vTPM device.
+    fn get_tpm_group_id() -> Option<u32> {
+        match std::fs::metadata("/dev/tpmrm0") {
+            Ok(metadata) => Some(metadata.gid()),
+            Err(_) => None,
+        }
+    }
+
     fn exec_cmd(
         cmd: &[String],
         cwd: Option<&str>,
@@ -249,6 +261,7 @@ impl Docker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run_cmd(
         cmd: &[String],
         mount: bool,
@@ -257,6 +270,7 @@ impl Docker {
         env: &[String],
         net: bool,
         capture_output: bool,
+        extra_flags: Option<&[&str]>,
     ) -> anyhow::Result<Option<String>> {
         let image_tag = Self::get_docker_tag(&DockerContainer::Experiments);
         let mut run_cmd = Command::new("docker");
@@ -281,6 +295,10 @@ impl Docker {
             run_cmd.arg("-e").arg(format!("SEV_GID={}", sevgest_gid));
         }
 
+        if let Some(tpm_gid) = Self::get_tpm_group_id() {
+            run_cmd.arg("-e").arg(format!("TPM_GID={}", tpm_gid));
+        }
+
         for e in env {
             run_cmd.arg("-e").arg(e);
         }
@@ -293,6 +311,10 @@ impl Docker {
             run_cmd.arg("--device=/dev/sev-guest");
         }
 
+        if Path::new("/dev/tpmrm0").exists() {
+            run_cmd.arg("--device=/dev/tpmrm0");
+        }
+
         if mount {
             run_cmd
                 .arg("-v")
@@ -300,6 +322,12 @@ impl Docker {
         }
         if let Some(workdir) = cwd {
             run_cmd.arg("--workdir").arg(workdir);
+        }
+
+        if let Some(flags) = extra_flags {
+            for flag in flags {
+                run_cmd.arg(flag);
+            }
         }
 
         run_cmd.arg(image_tag);
@@ -344,6 +372,7 @@ impl Docker {
                 &[],
                 net,
                 false,
+                None,
             )?;
         }
         Ok(())
@@ -356,6 +385,7 @@ impl Docker {
         env: &[String],
         net: bool,
         capture_output: bool,
+        extra_flags: Option<&[&str]>,
     ) -> anyhow::Result<Option<String>> {
         if Self::is_container_running() {
             if !mount {
@@ -365,7 +395,16 @@ impl Docker {
             }
             Self::exec_cmd(cmd, cwd, true, capture_output)
         } else {
-            Self::run_cmd(cmd, mount, cwd, false, env, net, capture_output)
+            Self::run_cmd(
+                cmd,
+                mount,
+                cwd,
+                false,
+                env,
+                net,
+                capture_output,
+                extra_flags,
+            )
         }
     }
 }
