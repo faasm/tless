@@ -173,6 +173,8 @@ async fn test_att_clients() -> Result<()> {
         false,
         Some(as_url.clone()),
         Some(cert_path.clone()),
+        false,
+        None,
         vec![],
     )?;
 
@@ -183,6 +185,8 @@ async fn test_att_clients() -> Result<()> {
         false,
         Some(as_url),
         Some(cert_path),
+        false,
+        None,
         vec![],
     )?;
 
