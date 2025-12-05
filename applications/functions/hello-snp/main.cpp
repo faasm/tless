@@ -41,7 +41,6 @@ int doAcclessSkr() {
     }
     std::cout << "escrow-xput: ran CP-ABE encryption" << std::endl;
 
-    // TODO: Should start measuring now!
     std::cout << "escrow-xput: running remote attestation..." << std::endl;
     try {
         const std::string jwt =
@@ -98,4 +97,4 @@ int doAcclessSkr() {
     return 0;
 }
 
-int main(int argc, char **argv) { doAcclessSkr(); }
+int main(int argc, char **argv) { return doAcclessSkr(); }
