@@ -14,7 +14,7 @@ use crate::{
 };
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
-use log::{error, info};
+use log::info;
 use std::{collections::HashMap, path::PathBuf, process};
 
 pub mod attestation_service;
@@ -366,8 +366,6 @@ enum AzureSubCommand {
     Create {},
     /// Provision Azure resource using Ansible
     Provision {},
-    /// Copy the results directory corresponding to this resoiurce
-    ScpResults {},
     /// Get a SSH command into the Azure resource (if applicable)
     Ssh {},
     /// Delete the Azure resource
@@ -677,25 +675,6 @@ async fn main() -> anyhow::Result<()> {
                     ]);
                     Azure::provision_with_ansible("accless", "accless", Some(vars))?;
                 }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/ubench/escrow-xput/build";
-                    let results_file = vec!["accless.csv", "accless-maa.csv"];
-                    let result_path = "eval/escrow-xput/data/";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("accless-cvm")?,
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
-                }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
                     println!("{}", Azure::build_ssh_command("accless-cvm")?);
@@ -726,9 +705,6 @@ async fn main() -> anyhow::Result<()> {
                         Some(vars),
                     )?;
                 }
-                AzureSubCommand::ScpResults {} => {
-                    error!("scp-results does not apply");
-                }
                 AzureSubCommand::Ssh {} => {
                     println!(
                         "{}",
@@ -741,42 +717,33 @@ async fn main() -> anyhow::Result<()> {
             },
             AzureCommand::ManagedHSM { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
-                    Azure::create_snp_guest("accless-mhsm-cvm", "Standard_DC8as_v5")?;
-                    Azure::create_aa("acclessmhsm")?;
+                    Azure::create_snp_guest(experiments::MHSM_CLIENT_VM_NAME, "Standard_DC8as_v5")?;
+                    Azure::create_aa(experiments::MHSM_ATTESTATION_SERVICE_NAME)?;
                     // WARNING: the key release policy in the mHSM depends
                     // on the name of the attestaion provider even though it
                     // is not passed as an argument (it is used in the ARM
                     // template file: ./config/azure/mhsm_skr_policy.json)
-                    Azure::create_mhsm("accless-mhsm-kv", "accless-mhsm-cvm", "accless-mhsm-key")?;
+                    Azure::create_mhsm(
+                        experiments::MHSM_NAME,
+                        experiments::MHSM_CLIENT_VM_NAME,
+                        experiments::MHSM_KEY,
+                    )?;
 
-                    Azure::open_vm_ports("accless-mhsm-cvm", &[22])?;
+                    Azure::open_vm_ports(experiments::MHSM_CLIENT_VM_NAME, &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
                     Azure::provision_with_ansible("accless-mhsm", "mhsm", None)?;
                 }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless";
-                    let result_path = "eval/escrow-xput/data/managed-hsm.csv";
-
-                    let scp_cmd = format!(
-                        "{}:{src_results_dir}/{result_path} {}",
-                        Azure::build_scp_command("tless-mhsm-cvm")?,
-                        Env::proj_root().join(result_path).display(),
-                    );
-
-                    process::Command::new("sh")
-                        .arg("-c")
-                        .arg(scp_cmd)
-                        .status()
-                        .expect("accli: error scp-ing results");
-                }
                 AzureSubCommand::Ssh {} => {
-                    println!("{}", Azure::build_ssh_command("tless-mhsm-cvm")?);
+                    println!(
+                        "{}",
+                        Azure::build_ssh_command(experiments::MHSM_CLIENT_VM_NAME)?
+                    );
                 }
                 AzureSubCommand::Delete {} => {
-                    Azure::delete_snp_guest("tless-mhsm-cvm")?;
-                    Azure::delete_aa("tlessmhsm")?;
-                    Azure::delete_mhsm("tless-mhsm-kv")?;
+                    Azure::delete_snp_guest(experiments::MHSM_CLIENT_VM_NAME)?;
+                    Azure::delete_aa(experiments::MHSM_ATTESTATION_SERVICE_NAME)?;
+                    Azure::delete_mhsm(experiments::MHSM_NAME)?;
                 }
             },
             AzureCommand::SgxFaasm { az_sub_command } => match az_sub_command {
@@ -791,27 +758,6 @@ async fn main() -> anyhow::Result<()> {
                         ("faasm_version", faasm_version.as_str()),
                     ]);
                     Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars))?;
-                }
-                AzureSubCommand::ScpResults {} => {
-                    // let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/scale-up-latency/data";
-                    // let results_file = vec!["faasm.csv", "sgx-faasm.csv", "accless-faasm.csv"];
-                    let results_file = vec!["accless-faasm.csv"];
-                    let result_path = "eval/scale-up-latency/data";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("sgx-faasm-vm")?,
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("sgx-faasm-vm")?);
@@ -829,26 +775,6 @@ async fn main() -> anyhow::Result<()> {
                     let vars: HashMap<&str, &str> =
                         HashMap::from([("accless_version", version.as_str())]);
                     Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars))?;
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless/eval/cold-start/data";
-                    let results_file =
-                        vec!["knative.csv", "snp-knative.csv", "accless-knative.csv"];
-                    let result_path = "eval/cold-start/data";
-
-                    for result_file in results_file {
-                        let scp_cmd = format!(
-                            "{}:{src_results_dir}/{result_file} {}/{result_file}",
-                            Azure::build_scp_command("snp-knative-vm")?,
-                            Env::proj_root().join(result_path).display(),
-                        );
-
-                        process::Command::new("sh")
-                            .arg("-c")
-                            .arg(scp_cmd)
-                            .status()
-                            .expect("accli: error scp-ing results");
-                    }
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("snp-knative-vm")?);
@@ -887,22 +813,6 @@ async fn main() -> anyhow::Result<()> {
                         ("accless_code_dir", accless_code_dir.as_str()),
                     ]);
                     Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
-                }
-                AzureSubCommand::ScpResults {} => {
-                    let src_results_dir = "/home/tless/git/faasm/tless";
-                    let result_path = "eval/escrow-xput/data/trustee.csv";
-
-                    let scp_cmd = format!(
-                        "{}:{src_results_dir}/{result_path} {}",
-                        Azure::build_scp_command("tless-trustee-client")?,
-                        Env::proj_root().join(result_path).display(),
-                    );
-
-                    process::Command::new("sh")
-                        .arg("-c")
-                        .arg(scp_cmd)
-                        .status()
-                        .expect("accli: error scp-ing results");
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");

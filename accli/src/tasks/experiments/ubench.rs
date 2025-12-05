@@ -164,7 +164,7 @@ pub async fn get_trustee_resource(escrow_url: String) -> Result<()> {
 /// The individual request to the managed HSM is to wrap a payload using
 /// the policy-protected key. To unlock the key we must provide a valid
 /// attestation token from MAA.
-pub async fn wrap_key_in_mhsm() -> Result<()> {
+pub async fn wrap_key_in_mhsm(escrow_url: String) -> Result<()> {
     let azure_attest_bin_path = format!(
         "/home/{}/git/azure/confidential-computing-cvm-guest-attestation\
         /cvm-securekey-release-app/build",
@@ -173,16 +173,19 @@ pub async fn wrap_key_in_mhsm() -> Result<()> {
 
     // This method is ran from the client SNP cVM in Azure, so we cannot
     // use create::Azure (i.e. `az`) to query for the resource URIs
-    let az_attestation_uri = "https://tlessmhsm.eus.attest.azure.net";
-    let az_kv_kid = "https://tless-mhsm-kv.vault.azure.net/keys/tless-mhsm-key";
+    let az_kv_kid = format!(
+        "https://{}.vault.azure.net/keys/{}",
+        experiments::MHSM_NAME,
+        experiments::MHSM_KEY
+    );
 
     Command::new("sudo")
         .args([
             format!("{azure_attest_bin_path}/AzureAttestSKR").as_str(),
             "-a",
-            az_attestation_uri,
+            &escrow_url,
             "-k",
-            az_kv_kid,
+            &az_kv_kid,
             "-s",
             "foobar123",
             "-w",
@@ -211,7 +214,10 @@ async fn measure_requests_latency(
                 let owned_escrow_url = escrow_url.to_string();
                 tokio::spawn(get_trustee_resource(owned_escrow_url))
             }
-            EscrowBaseline::ManagedHSM => tokio::spawn(wrap_key_in_mhsm()),
+            EscrowBaseline::ManagedHSM => {
+                let owned_escrow_url = escrow_url.to_string();
+                tokio::spawn(wrap_key_in_mhsm(owned_escrow_url))
+            }
             EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
                 panic!("accless-based baselines must be run from different script")
             }
@@ -409,7 +415,14 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
 
                 experiments::ACCLESS_VM_NAME
             }
-            _ => todo!(),
+            EscrowBaseline::ManagedHSM => {
+                cmd_in_vm.push("--escrow-url".to_string());
+                cmd_in_vm.push(Azure::get_aa_attest_uri(
+                    experiments::MHSM_ATTESTATION_SERVICE_NAME,
+                )?);
+
+                experiments::MHSM_CLIENT_VM_NAME
+            }
         };
 
         // Run experiment in Azure VM.
