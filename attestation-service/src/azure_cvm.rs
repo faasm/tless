@@ -173,7 +173,7 @@ fn parse_quote_bytes(quote_bytes: &[u8]) -> Result<(HclReport, Quote)> {
     let sig_end = offset + sig_len;
     let sig_raw = parse_tpmt_signature(&quote_bytes[offset..sig_end])?;
 
-    // FIXME: currently we don't include the PCR values in the parsed quote, so we
+    // FIXME(#55): currently we don't include the PCR values in the parsed quote, so we
     // cannot use them during verification to compare them against golden
     // values.
     let quote = quote_from_parts(sig_raw, quote_message, Vec::<[u8; 32]>::new())?;
@@ -247,7 +247,7 @@ pub async fn verify_snp_vtpm_report(
             );
         }
     };
-    // FIXME(#66): given the duplication between the `sev` and `az-snp-vtpm` crate,
+    // FIXME(#62): given the duplication between the `sev` and `az-snp-vtpm` crate,
     // we need to work-around their different Vcek definitions by converting to
     // an OpenSSL struct.
     let az_vcek = az_snp_vtpm::certs::Vcek(X509::from(vcek));
