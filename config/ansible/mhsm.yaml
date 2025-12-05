@@ -55,6 +55,12 @@
 # Managed HSM Baseline Configuration
 # =============================================================================
 
+  - name: "Prepare accless"
+    shell: ./scripts/apt.sh && ./scripts/accli_wrapper.sh --help
+    args:
+      chdir: "/home/{{ ansible_user }}/git/faasm/accless"
+      executable: /bin/bash
+
   - name: "Build demo application"
     shell: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j `nproc`
     args:
