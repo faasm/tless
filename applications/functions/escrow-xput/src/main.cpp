@@ -403,7 +403,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
 
     // Send the request to Accless' attestation service, and get the response
     // back.
-    return accless::attestation::getJwtFromReport("/verify-snp-report", body);
+    return accless::attestation::getJwtFromReport(
+        accless::attestation::snp::getAsEndpoint(false), body);
 }
 
 /**

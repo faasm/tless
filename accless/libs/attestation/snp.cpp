@@ -259,7 +259,7 @@ std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData) {
     throw std::runtime_error("No known SNP device found!");
 }
 
-static std::string getAsEndpoint(bool isMock) {
+std::string getAsEndpoint(bool isMock) {
     if (isMock) {
         return "/verify-snp-report";
     }

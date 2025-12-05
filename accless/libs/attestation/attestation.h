@@ -58,6 +58,18 @@ class Logger : public attest::AttestationLogger {
 };
 
 /**
+ * @brief Get the Attestation Service request path.
+ *
+ * SNP or SNP-vTPM environemnts must use different request paths when
+ * verifying a report using the attestation-service. This helper method gives
+ * the right path depending on the detected environment.
+ *
+ * @param isMock Whereas mock mode is enabled.
+ * @return The path to POST verification requests to.
+ */
+std::string getAsEndpoint(bool isMock);
+
+/**
  * @brief Fetches attestation report from SNP hardware.
  *
  * This function can be used to fetch the hardware attestation report. It
