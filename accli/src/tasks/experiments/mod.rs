@@ -11,12 +11,13 @@ pub mod workflows;
 
 /// Useful constants shared between the provisioning methods, and the
 /// experiments methods.
+pub const ACCLESS_MAA_NAME: &str = "accless";
 pub const ACCLESS_VM_CODE_DIR: &str = "git/faasm/accless";
 pub const ACCLESS_VM_NAME: &str = "accless-cvm";
 pub const ACCLESS_ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
 pub const ATTESTATION_SERVICE_VM_NAME: &str = "attestation-service";
-pub const TRUSTEE_CLIENT_VM_NAME: &str = "tless-trustee-client";
-pub const TRUSTEE_SERVER_VM_NAME: &str = "tless-trustee-server";
+pub const TRUSTEE_CLIENT_VM_NAME: &str = "accless-trustee-client";
+pub const TRUSTEE_SERVER_VM_NAME: &str = "accless-trustee-server";
 
 /// Supported experiments in Accless. For a detailed explanation of each of
 /// them, refer to `./experiments/README.md`.

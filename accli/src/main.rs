@@ -422,6 +422,12 @@ enum ApplicationsCommand {
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
         as_cert_path: Option<PathBuf>,
+        /// Run the application with sudo privileges.
+        #[arg(long, default_value_t = false)]
+        run_as_root: bool,
+        /// Extra flags to pass to the docker run command.
+        #[arg(long)]
+        extra_docker_flags: Option<Vec<String>>,
         /// Arbitrary arguments to pass to the function.
         #[arg(last = true)]
         args: Vec<String>,
@@ -462,14 +468,21 @@ async fn main() -> anyhow::Result<()> {
                 in_cvm,
                 as_url,
                 as_cert_path,
+                run_as_root,
+                extra_docker_flags,
                 args,
             } => {
+                let extra_docker_flags_str: Option<Vec<&str>> = extra_docker_flags
+                    .as_ref()
+                    .map(|flags| flags.iter().map(AsRef::as_ref).collect());
                 Applications::run(
                     app_type.clone(),
                     app_name.clone(),
                     *in_cvm,
                     as_url.clone(),
                     as_cert_path.clone(),
+                    *run_as_root,
+                    extra_docker_flags_str.as_deref(),
                     args.clone(),
                 )?;
             }
@@ -520,7 +533,15 @@ async fn main() -> anyhow::Result<()> {
                     net,
                     capture_output,
                 } => {
-                    Docker::run(cmd, *mount, cwd.as_deref(), env, *net, *capture_output)?;
+                    Docker::run(
+                        cmd,
+                        *mount,
+                        cwd.as_deref(),
+                        env,
+                        *net,
+                        *capture_output,
+                        None,
+                    )?;
                 }
             },
             DevCommand::Cvm { cvm_command } => match cvm_command {
@@ -630,7 +651,7 @@ async fn main() -> anyhow::Result<()> {
                         experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
                         "Standard_DC2as_v5",
                     )?;
-                    Azure::create_aa("accless")?;
+                    Azure::create_aa(experiments::ACCLESS_MAA_NAME)?;
 
                     Azure::open_vm_ports(experiments::ACCLESS_VM_NAME, &[22])?;
                     Azure::open_vm_ports(
@@ -859,7 +880,7 @@ async fn main() -> anyhow::Result<()> {
                     let server_ip = Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?;
 
                     let vars: HashMap<&str, &str> = HashMap::from([("kbs_ip", server_ip.as_str())]);
-                    Azure::provision_with_ansible("tless-trustee", "trustee", Some(vars))?;
+                    Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
 
                     // Copy the necessary stuff from the server to the client
                     let work_dir = "/home/tless/git/confidential-containers/trustee/kbs/test/work";

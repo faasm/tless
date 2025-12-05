@@ -2,7 +2,7 @@ use crate::{
     env::Env,
     tasks::{
         applications::{ApplicationName, ApplicationType, Applications},
-        azure::Azure,
+        azure::{self, Azure},
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
 };
@@ -272,7 +272,7 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
             }
         }
         // The Accless baselines run a function that performs SKR and CP-ABE keygen.
-        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+        EscrowBaseline::Accless => {
             // This path is hard-coded during the Ansible provisioning of the
             // attestation-service.
             let cert_path = Env::proj_root()
@@ -292,6 +292,8 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 false,
                 Some(format!("https://{escrow_url}:8443")),
                 Some(cert_path),
+                false,
+                None,
                 vec![
                     "--num-warmup-repeats".to_string(),
                     run_args.num_warmup_repeats.to_string(),
@@ -303,6 +305,61 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                     results_file.display().to_string(),
                 ],
             )?;
+        }
+        EscrowBaseline::AcclessMaa => {
+            let num_reqs = request_counts
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            Applications::run(
+                ApplicationType::Function,
+                ApplicationName::EscrowXput,
+                false,
+                None,
+                None,
+                true, // Must run application as root.
+                // When running the Accless MAA baseline, we need additional access to the TPM
+                // logs, as required by the Azure library. We currently don't need these for
+                // Accless, so instead of making them available in the container by default, we
+                // just add some low-level tweaks to the docker command.
+                Some(&[
+                    "--privileged",
+                    "--device=/dev/tpm0",
+                    "--mount",
+                    "type=bind,src=/sys/kernel/security,dst=/sys/kernel/security,ro",
+                ]),
+                vec![
+                    "--maa".to_string(),
+                    "--maa-url".to_string(),
+                    escrow_url.to_string(),
+                    "--num-warmup-repeats".to_string(),
+                    run_args.num_warmup_repeats.to_string(),
+                    "--num-repeats".to_string(),
+                    run_args.num_repeats.to_string(),
+                    "--num-requests".to_string(),
+                    num_reqs,
+                    "--results_file".to_string(),
+                    results_file.display().to_string(),
+                ],
+            )?;
+
+            // Chown the results file.
+            let status = Command::new("sudo")
+                .arg("chown")
+                .arg(format!(
+                    "{}:{}",
+                    azure::AZURE_USERNAME,
+                    azure::AZURE_USERNAME
+                ))
+                .arg(results_file.display().to_string())
+                .status()?;
+            if !status.success() {
+                let reason = format!("command failed (status={status})");
+                error!("run_escrow_ubench(): {reason}");
+                anyhow::bail!(reason);
+            }
         }
     }
 
@@ -346,7 +403,12 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
 
                 experiments::ACCLESS_VM_NAME
             }
-            EscrowBaseline::AcclessMaa => todo!(),
+            EscrowBaseline::AcclessMaa => {
+                cmd_in_vm.push("--escrow-url".to_string());
+                cmd_in_vm.push(Azure::get_aa_attest_uri(experiments::ACCLESS_MAA_NAME)?);
+
+                experiments::ACCLESS_VM_NAME
+            }
             _ => todo!(),
         };
 

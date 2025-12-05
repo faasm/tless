@@ -179,16 +179,27 @@ impl Applications {
             let workdir_str = workdir.to_str().ok_or_else(|| {
                 anyhow::anyhow!("Workdir path is not valid UTF-8: {}", workdir.display())
             })?;
-            Docker::run(&cmd, true, Some(workdir_str), &[], false, capture_output)
+            Docker::run(
+                &cmd,
+                true,
+                Some(workdir_str),
+                &[],
+                false,
+                capture_output,
+                None,
+            )
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run(
         app_type: ApplicationType,
         app_name: ApplicationName,
         in_cvm: bool,
         as_url: Option<String>,
         as_cert_path: Option<PathBuf>,
+        run_as_root: bool,
+        extra_docker_flags: Option<&[&str]>,
         args: Vec<String>,
     ) -> anyhow::Result<Option<String>> {
         // If --in-cvm flag is passed, we literally re run the same `accli` command, but
@@ -214,6 +225,10 @@ impl Applications {
                         .display()
                         .to_string(),
                 );
+            }
+
+            if run_as_root {
+                cmd.push("--run-as-root".to_string());
             }
 
             if !args.is_empty() {
@@ -243,7 +258,11 @@ impl Applications {
             let binary_path_str = binary_path.to_str().ok_or_else(|| {
                 anyhow::anyhow!("Binary path is not valid UTF-8: {}", binary_path.display())
             })?;
-            let mut cmd = vec![binary_path_str.to_string()];
+            let mut cmd = if run_as_root {
+                vec!["sudo".to_string(), binary_path_str.to_string()]
+            } else {
+                vec![binary_path_str.to_string()]
+            };
             cmd.extend(args);
 
             let as_env_vars: Vec<String> = match (as_url, as_cert_path) {
@@ -257,7 +276,15 @@ impl Applications {
                 _ => vec![],
             };
 
-            Docker::run(&cmd, true, None, &as_env_vars, true, false)
+            Docker::run(
+                &cmd,
+                true,
+                None,
+                &as_env_vars,
+                true,
+                false,
+                extra_docker_flags,
+            )
         }
     }
 }

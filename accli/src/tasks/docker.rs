@@ -261,6 +261,7 @@ impl Docker {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run_cmd(
         cmd: &[String],
         mount: bool,
@@ -269,6 +270,7 @@ impl Docker {
         env: &[String],
         net: bool,
         capture_output: bool,
+        extra_flags: Option<&[&str]>,
     ) -> anyhow::Result<Option<String>> {
         let image_tag = Self::get_docker_tag(&DockerContainer::Experiments);
         let mut run_cmd = Command::new("docker");
@@ -322,6 +324,12 @@ impl Docker {
             run_cmd.arg("--workdir").arg(workdir);
         }
 
+        if let Some(flags) = extra_flags {
+            for flag in flags {
+                run_cmd.arg(flag);
+            }
+        }
+
         run_cmd.arg(image_tag);
         if !cmd.is_empty() {
             run_cmd.arg("bash").arg("-c").arg(cmd.join(" "));
@@ -364,6 +372,7 @@ impl Docker {
                 &[],
                 net,
                 false,
+                None,
             )?;
         }
         Ok(())
@@ -376,6 +385,7 @@ impl Docker {
         env: &[String],
         net: bool,
         capture_output: bool,
+        extra_flags: Option<&[&str]>,
     ) -> anyhow::Result<Option<String>> {
         if Self::is_container_running() {
             if !mount {
@@ -385,7 +395,16 @@ impl Docker {
             }
             Self::exec_cmd(cmd, cwd, true, capture_output)
         } else {
-            Self::run_cmd(cmd, mount, cwd, false, env, net, capture_output)
+            Self::run_cmd(
+                cmd,
+                mount,
+                cwd,
+                false,
+                env,
+                net,
+                capture_output,
+                extra_flags,
+            )
         }
     }
 }
