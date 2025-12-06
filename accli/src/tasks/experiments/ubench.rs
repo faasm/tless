@@ -6,6 +6,7 @@ use crate::{
             host_cert_dir_to_target_path,
         },
         azure::{self, Azure},
+        docker::Docker,
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
 };
@@ -324,7 +325,7 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                     "--num-requests".to_string(),
                     num_reqs,
                     "--results_file".to_string(),
-                    results_file.display().to_string(),
+                    Docker::remap_to_docker_path(&results_file)?.display().to_string(),
                 ],
             )?;
         }
