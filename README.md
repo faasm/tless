@@ -5,18 +5,13 @@
     <strong>Access Control for Confidential Serverless</strong>
   </p>
 
-  <p>
-    <a href="https://github.com/faasm/tless/blob/main/VERSION">
-      <img src="version.svg" alt="Accless Version" />
-    </a>
-    <a href="https://github.com/faasm/tless/actions/workflows/tests.yml">
-      <img src="https://github.com/faasm/tless/actions/workflows/tests.yml/badge.svg"
-           alt="Integration Tests" />
-    </a>
-    <a href="https://github.com/faasm/tless/actions/workflows/snp.yml">
-      <img src="https://github.com/faasm/tless/actions/workflows/snp.yml/badge.svg"
-           alt="SNP End-to-End Tests" />
-    </a>
+  <p style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+    <img
+      src="https://img.shields.io/github/v/tag/faasm/tless?sort=semver&label=version"
+      alt="Accless Version"
+    />   
+    <a href="https://github.com/faasm/tless/actions/workflows/tests.yml"><img src="https://github.com/faasm/tless/actions/workflows/tests.yml/badge.svg" alt="Integration Tests" /></a> 
+    <a href="https://github.com/faasm/tless/actions/workflows/snp.yml"><img src="https://github.com/faasm/tless/actions/workflows/snp.yml/badge.svg" alt="SNP End-to-End Tests" /></a>
   </p>
   <hr>
 </div>
