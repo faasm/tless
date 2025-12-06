@@ -386,6 +386,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if (!maa && (asUrls.empty() || asCertPaths.empty())) {
+        std::cerr << "Usage: --as-urls and --as-cert-paths are mandatory when "
+                     "--maa is not set"
+                  << std::endl;
+        return 1;
+    }
+
     if (numRequests.empty()) {
         std::cerr << "Missing mandatory argument --num-requests" << std::endl;
         return 1;

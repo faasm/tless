@@ -1,7 +1,10 @@
 use crate::{
     env::Env,
     tasks::{
-        applications::{ApplicationBackend, ApplicationName, ApplicationType, Applications},
+        applications::{
+            ApplicationBackend, ApplicationName, ApplicationType, Applications,
+            host_cert_dir_to_target_path,
+        },
         azure::{self, Azure},
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
@@ -279,13 +282,24 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
         }
         // The Accless baselines run a function that performs SKR and CP-ABE keygen.
         EscrowBaseline::Accless => {
-            // This path is hard-coded during the Ansible provisioning of the
-            // attestation-service.
-            let cert_path = Env::proj_root()
-                .join("config")
-                .join("attestation-service")
-                .join("certs")
-                .join("cert.pem");
+            // These paths are hard-coded during the Ansible provisioning of
+            // the attestation-service.
+            let mut cert_paths = vec![];
+            let cert_path_base = host_cert_dir_to_target_path(
+                &Env::proj_root()
+                    .join("config")
+                    .join("attestation-service")
+                    .join("certs"),
+                &ApplicationBackend::Docker,
+            )?;
+            for i in 0..(escrow_url.matches(",").count() + 1) {
+                cert_paths.push(
+                    cert_path_base
+                        .join(format!("accless-as-{i}.pem"))
+                        .display()
+                        .to_string(),
+                );
+            }
             let num_reqs = request_counts
                 .iter()
                 .map(|n| n.to_string())
@@ -299,10 +313,10 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 false,
                 None,
                 vec![
-                    "--as-url".to_string(),
-                    format!("https://{escrow_url}:8443"),
-                    "--as-cert-path".to_string(),
-                    cert_path.display().to_string(),
+                    "--as-urls".to_string(),
+                    escrow_url.to_string(),
+                    "--as-cert-paths".to_string(),
+                    cert_paths.join(","),
                     "--num-warmup-repeats".to_string(),
                     run_args.num_warmup_repeats.to_string(),
                     "--num-repeats".to_string(),

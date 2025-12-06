@@ -709,10 +709,20 @@ async fn main() -> anyhow::Result<()> {
                     )?;
                 }
                 AzureSubCommand::Ssh {} => {
+                    let mut as_names = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        as_names.push(format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        ));
+                    }
+
                     println!("client:");
                     println!("{}", Azure::build_ssh_command("accless-cvm")?);
-                    println!("attestation server:");
-                    println!("{}", Azure::build_ssh_command("accless-as")?);
+                    println!("attestation servers:");
+                    for as_name in &as_names {
+                        println!("- {as_name}: {}", Azure::build_ssh_command(as_name)?);
+                    }
                 }
                 AzureSubCommand::Delete {} => {
                     Azure::delete_snp_guest("accless-cvm")?;
