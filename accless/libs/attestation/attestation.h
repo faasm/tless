@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstdint>
+#include <curl/curl.h>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -41,6 +43,29 @@ std::string buildRequestBody(const std::string &quoteB64,
                              const std::string &workflowId,
                              const std::string &nodeId);
 } // namespace utils
+
+// Helper methods around a thread-local, re-usable HTTP client.
+namespace http {
+class HttpClient {
+  public:
+    explicit HttpClient(const std::string &certPath);
+    ~HttpClient();
+
+    std::string get(const std::string &url);
+    std::string postJson(const std::string &url, const std::string &body);
+
+  private:
+    CURL *curl_{nullptr};
+    std::string certPath_;
+    std::string response_;
+    char errbuf_[CURL_ERROR_SIZE];
+
+    void prepareRequest();
+    void perform();
+};
+
+HttpClient &getHttpClient(const std::string &certPath);
+} // namespace http
 
 // Mock helpers used in integration tests.
 namespace mock {

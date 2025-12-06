@@ -258,7 +258,7 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
     std::ofstream csvFile(resultsFile, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
 
-    int maxParallelism = 100;
+    int maxParallelism = 10;
     try {
         for (const auto &i : numRequests) {
             for (int j = 0; j < numWarmupRepeats; j++) {
