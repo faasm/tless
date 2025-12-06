@@ -224,7 +224,7 @@ runRequests(int numRequests, int maxParallelism,
                   << std::endl;
         throw std::runtime_error("escrow-xput: bad JWT");
     }
-    std::string uskB64 = accless::abe4::packFullKey(ids, {partialUskB64});
+    std::string uskB64 = accless::abe4::packFullKey({ids[0]}, {partialUskB64});
 
     // Run decryption.
     std::optional<std::string> decrypted_gt =
