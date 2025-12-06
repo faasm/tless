@@ -1,7 +1,7 @@
 use crate::{
     env::Env,
     tasks::{
-        applications::{ApplicationName, ApplicationType, Applications},
+        applications::{ApplicationBackend, ApplicationName, ApplicationType, Applications},
         azure::{self, Azure},
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
@@ -293,14 +293,16 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 .join(",");
 
             Applications::run(
-                ApplicationType::Function,
-                ApplicationName::EscrowXput,
-                false,
-                Some(format!("https://{escrow_url}:8443")),
-                Some(cert_path),
+                &ApplicationType::Function,
+                &ApplicationName::EscrowXput,
+                &ApplicationBackend::Docker,
                 false,
                 None,
                 vec![
+                    "--as-url".to_string(),
+                    format!("https://{escrow_url}:8443"),
+                    "--as-cert-path".to_string(),
+                    cert_path.display().to_string(),
                     "--num-warmup-repeats".to_string(),
                     run_args.num_warmup_repeats.to_string(),
                     "--num-repeats".to_string(),
@@ -320,11 +322,9 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 .join(",");
 
             Applications::run(
-                ApplicationType::Function,
-                ApplicationName::EscrowXput,
-                false,
-                None,
-                None,
+                &ApplicationType::Function,
+                &ApplicationName::EscrowXput,
+                &ApplicationBackend::Docker,
                 true, // Must run application as root.
                 // When running the Accless MAA baseline, we need additional access to the TPM
                 // logs, as required by the Azure library. We currently don't need these for

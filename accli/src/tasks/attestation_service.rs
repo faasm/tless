@@ -13,15 +13,15 @@ use std::{
 };
 
 const AS_URL_ENV_VAR: &str = "ACCLESS_AS_URL";
-const AS_CERT_PATH_ENV_VAR: &str = "ACCLESS_AS_CERT_PATH";
+const AS_CERT_DIR_ENV_VAR: &str = "ACCLESS_AS_CERT_DIR";
 const PID_FILE_PATH: &str = "./config/attestation-service/PID";
 
 /// Returns the required attestation-service env. vars given a URL and cert
 /// path.
-pub fn get_as_env_vars(as_url: &str, as_cert_path: &str) -> Vec<String> {
+pub fn get_as_env_vars(as_url: &str, as_cert_dir: &str) -> Vec<String> {
     vec![
         format!("{AS_URL_ENV_VAR}={as_url}"),
-        format!("{AS_CERT_PATH_ENV_VAR}={as_cert_path}"),
+        format!("{AS_CERT_DIR_ENV_VAR}={as_cert_dir}"),
     ]
 }
 
@@ -127,10 +127,10 @@ impl AttestationService {
         Ok(())
     }
 
-    pub async fn health(url: Option<String>, cert_path: Option<std::path::PathBuf>) -> Result<()> {
+    pub async fn health(url: Option<String>, cert_dir: Option<std::path::PathBuf>) -> Result<()> {
         let url = url.or_else(|| std::env::var(AS_URL_ENV_VAR).ok());
-        let cert_path = cert_path.or_else(|| {
-            std::env::var(AS_CERT_PATH_ENV_VAR)
+        let cert_dir = cert_dir.or_else(|| {
+            std::env::var(AS_CERT_DIR_ENV_VAR)
                 .ok()
                 .map(std::path::PathBuf::from)
         });
@@ -142,13 +142,19 @@ impl AttestationService {
             }
         };
 
-        let client = match cert_path {
-            Some(cert_path) => {
-                let cert = fs::read(cert_path)?;
-                let cert = reqwest::Certificate::from_pem(&cert)?;
-                reqwest::Client::builder()
-                    .add_root_certificate(cert)
-                    .build()
+        let client = match cert_dir {
+            Some(cert_dir) => {
+                let mut client_builder = reqwest::Client::builder();
+                for entry in fs::read_dir(cert_dir)? {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() && path.extension().is_some_and(|s| s == "pem") {
+                        let cert = fs::read(&path)?;
+                        let cert = reqwest::Certificate::from_pem(&cert)?;
+                        client_builder = client_builder.add_root_certificate(cert);
+                    }
+                }
+                client_builder.build()
             }
             None => reqwest::Client::builder().build(),
         }?;

@@ -26,9 +26,6 @@ struct Cli {
     // The name of the task to execute
     #[clap(subcommand)]
     task: Command,
-
-    #[arg(short, long, global = true)]
-    debug: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -110,7 +107,7 @@ enum AttestationServiceCommand {
         url: Option<String>,
         /// Path to the attestation service's public certificate PEM file
         #[arg(long)]
-        cert_path: Option<PathBuf>,
+        cert_dir: Option<PathBuf>,
     },
 }
 
@@ -400,7 +397,7 @@ enum ApplicationsCommand {
         debug: bool,
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
-        as_cert_path: Option<PathBuf>,
+        as_cert_dir: Option<PathBuf>,
         /// Whether to build the application inside a cVM.
         #[arg(long, default_value_t = false)]
         in_cvm: bool,
@@ -411,15 +408,9 @@ enum ApplicationsCommand {
         app_type: applications::ApplicationType,
         /// Name of the application to run
         app_name: applications::ApplicationName,
-        /// Whether to run the application inside a cVM.
-        #[arg(long, default_value_t = false)]
-        in_cvm: bool,
-        /// URL of the attestation service to contact.
+        /// Application backend.
         #[arg(long)]
-        as_url: Option<String>,
-        /// Path to the attestation service's public certificate PEM file.
-        #[arg(long)]
-        as_cert_path: Option<PathBuf>,
+        backend: Option<applications::ApplicationBackend>,
         /// Run the application with sudo privileges.
         #[arg(long, default_value_t = false)]
         run_as_root: bool,
@@ -455,17 +446,15 @@ async fn main() -> anyhow::Result<()> {
             ApplicationsCommand::Build {
                 clean,
                 debug,
-                as_cert_path,
+                as_cert_dir,
                 in_cvm,
             } => {
-                Applications::build(*clean, *debug, as_cert_path.clone(), false, *in_cvm)?;
+                Applications::build(*clean, *debug, as_cert_dir.clone(), false, *in_cvm)?;
             }
             ApplicationsCommand::Run {
                 app_type,
                 app_name,
-                in_cvm,
-                as_url,
-                as_cert_path,
+                backend,
                 run_as_root,
                 extra_docker_flags,
                 args,
@@ -473,12 +462,16 @@ async fn main() -> anyhow::Result<()> {
                 let extra_docker_flags_str: Option<Vec<&str>> = extra_docker_flags
                     .as_ref()
                     .map(|flags| flags.iter().map(AsRef::as_ref).collect());
+                let app_backend = if let Some(backend) = backend {
+                    backend
+                } else {
+                    &applications::ApplicationBackend::Docker
+                };
+
                 Applications::run(
-                    app_type.clone(),
-                    app_name.clone(),
-                    *in_cvm,
-                    as_url.clone(),
-                    as_cert_path.clone(),
+                    app_type,
+                    app_name,
+                    app_backend,
                     *run_as_root,
                     extra_docker_flags_str.as_deref(),
                     args.clone(),
@@ -665,13 +658,13 @@ async fn main() -> anyhow::Result<()> {
                         azure::AZURE_USERNAME,
                         experiments::ACCLESS_VM_CODE_DIR
                     );
-                    let as_cert_path =
-                        format!("{accless_code_dir}/config/attestation-service/certs/cert.pem");
+                    let as_cert_dir =
+                        format!("{accless_code_dir}/config/attestation-service/certs");
 
                     let vars: HashMap<&str, &str> = HashMap::from([
                         ("as_ip", server_ip.as_str()),
                         ("accless_code_dir", accless_code_dir.as_str()),
-                        ("as_cert_path", as_cert_path.as_str()),
+                        ("as_cert_dir", as_cert_dir.as_str()),
                     ]);
                     Azure::provision_with_ansible("accless", "accless", Some(vars))?;
                 }
@@ -871,8 +864,8 @@ async fn main() -> anyhow::Result<()> {
             AttestationServiceCommand::Stop {} => {
                 AttestationService::stop()?;
             }
-            AttestationServiceCommand::Health { url, cert_path } => {
-                AttestationService::health(url.clone(), cert_path.clone()).await?;
+            AttestationServiceCommand::Health { url, cert_dir } => {
+                AttestationService::health(url.clone(), cert_dir.clone()).await?;
             }
         },
     }
