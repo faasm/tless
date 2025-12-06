@@ -637,22 +637,37 @@ async fn main() -> anyhow::Result<()> {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
+                    let mut as_names = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        as_names.push(format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        ));
+                    }
+
                     Azure::create_snp_guest(experiments::ACCLESS_VM_NAME, "Standard_DC8as_v5")?;
-                    Azure::create_snp_guest(
-                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                        "Standard_DC2as_v5",
-                    )?;
+                    for as_name in &as_names {
+                        Azure::create_snp_guest(as_name, "Standard_DC2as_v5")?;
+                    }
                     Azure::create_aa(experiments::ACCLESS_MAA_NAME)?;
 
                     Azure::open_vm_ports(experiments::ACCLESS_VM_NAME, &[22])?;
-                    Azure::open_vm_ports(
-                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                        &[22, 8443],
-                    )?;
+                    for as_name in &as_names {
+                        Azure::open_vm_ports(as_name, &[22, 8443])?;
+                    }
                 }
                 AzureSubCommand::Provision {} => {
-                    let server_ip =
-                        Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?;
+                    let mut as_names = vec![];
+                    let mut as_ips = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        let as_name = format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        );
+                        as_ips.push(Azure::get_vm_ip(&as_name)?);
+                        as_names.push(as_name);
+                    }
+
                     let accless_code_dir = format!(
                         "/home/{}/{}",
                         azure::AZURE_USERNAME,
@@ -660,13 +675,38 @@ async fn main() -> anyhow::Result<()> {
                     );
                     let as_cert_dir =
                         format!("{accless_code_dir}/config/attestation-service/certs");
-
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("as_ip", server_ip.as_str()),
-                        ("accless_code_dir", accless_code_dir.as_str()),
-                        ("as_cert_dir", as_cert_dir.as_str()),
+                    let inventory: HashMap<&str, Vec<String>> = HashMap::from([
+                        ("accless_as", as_names.clone()),
+                        (
+                            "accless_cli",
+                            vec![experiments::ACCLESS_VM_NAME.to_string()],
+                        ),
                     ]);
-                    Azure::provision_with_ansible("accless", "accless", Some(vars))?;
+
+                    let mut vars: HashMap<&str, HashMap<&str, &str>> = HashMap::new();
+                    vars.insert(
+                        experiments::ACCLESS_VM_NAME,
+                        HashMap::from([
+                            ("accless_code_dir", accless_code_dir.as_str()),
+                            ("as_cert_dir", as_cert_dir.as_str()),
+                        ]),
+                    );
+                    for (as_name, as_ip) in as_names.iter().zip(as_ips.iter()) {
+                        vars.insert(
+                            as_name,
+                            HashMap::from([
+                                ("as_ip", as_ip.as_str()),
+                                ("accless_code_dir", accless_code_dir.as_str()),
+                                ("as_cert_dir", as_cert_dir.as_str()),
+                            ]),
+                        );
+                    }
+                    Azure::provision_with_ansible(
+                        "accless",
+                        inventory,
+                        &Env::ansible_root().join("accless.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
@@ -691,10 +731,18 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let service_ip = Azure::get_vm_ip(experiments::ATTESTATION_SERVICE_VM_NAME)?;
 
-                    let vars: HashMap<&str, &str> = HashMap::from([("as_ip", service_ip.as_str())]);
+                    let inventory = HashMap::from([(
+                        "attestation_service",
+                        vec![experiments::ATTESTATION_SERVICE_VM_NAME.to_string()],
+                    )]);
+                    let vars = HashMap::from([(
+                        experiments::ATTESTATION_SERVICE_VM_NAME,
+                        HashMap::from([("as_ip", service_ip.as_str())]),
+                    )]);
                     Azure::provision_with_ansible(
                         "attestation-service",
-                        "attestationservice",
+                        inventory,
+                        &Env::ansible_root().join("attestation_service.yaml"),
                         Some(vars),
                     )?;
                 }
@@ -725,7 +773,16 @@ async fn main() -> anyhow::Result<()> {
                     Azure::open_vm_ports(experiments::MHSM_CLIENT_VM_NAME, &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("accless-mhsm", "mhsm", None)?;
+                    let inventory = HashMap::from([(
+                        "mhsm",
+                        vec![experiments::MHSM_CLIENT_VM_NAME.to_string()],
+                    )]);
+                    Azure::provision_with_ansible(
+                        "mhsm",
+                        inventory,
+                        &Env::ansible_root().join("mhsm.yaml"),
+                        None,
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!(
@@ -746,11 +803,21 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
                     let faasm_version = Env::get_faasm_version();
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("accless_version", version.as_str()),
-                        ("faasm_version", faasm_version.as_str()),
-                    ]);
-                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars))?;
+                    let inventory =
+                        HashMap::from([("sgx_faasm", vec!["sgx-faasm-vm".to_string()])]);
+                    let vars = HashMap::from([(
+                        "sgx-faasm-vm",
+                        HashMap::from([
+                            ("accless_version", version.as_str()),
+                            ("faasm_version", faasm_version.as_str()),
+                        ]),
+                    )]);
+                    Azure::provision_with_ansible(
+                        "sgx_faasm",
+                        inventory,
+                        &Env::ansible_root().join("sgx_faasm.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("sgx-faasm-vm")?);
@@ -765,9 +832,18 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
-                    let vars: HashMap<&str, &str> =
-                        HashMap::from([("accless_version", version.as_str())]);
-                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars))?;
+                    let inventory =
+                        HashMap::from([("snp_knative", vec!["snp-knative-vm".to_string()])]);
+                    let vars = HashMap::from([(
+                        "snp-knative-vm",
+                        HashMap::from([("accless_version", version.as_str())]),
+                    )]);
+                    Azure::provision_with_ansible(
+                        "snp_knative",
+                        inventory,
+                        &Env::ansible_root().join("snp_knative.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("snp-knative-vm")?);
@@ -799,13 +875,28 @@ async fn main() -> anyhow::Result<()> {
                     );
                     let accless_code_dir =
                         format!("/home/{}/git/faasm/accless", azure::AZURE_USERNAME);
-
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("kbs_ip", server_ip.as_str()),
-                        ("trustee_code_dir", trustee_code_dir.as_str()),
-                        ("accless_code_dir", accless_code_dir.as_str()),
-                    ]);
-                    Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
+                    let vm_names = vec![
+                        experiments::TRUSTEE_CLIENT_VM_NAME.to_string(),
+                        experiments::TRUSTEE_SERVER_VM_NAME.to_string(),
+                    ];
+                    let inventory = HashMap::from([("trustee", vm_names.clone())]);
+                    let mut vars: HashMap<&str, HashMap<&str, &str>> = HashMap::new();
+                    for vm_name in &vm_names {
+                        vars.insert(
+                            vm_name,
+                            HashMap::from([
+                                ("kbs_ip", server_ip.as_str()),
+                                ("trustee_code_dir", trustee_code_dir.as_str()),
+                                ("accless_code_dir", accless_code_dir.as_str()),
+                            ]),
+                        );
+                    }
+                    Azure::provision_with_ansible(
+                        "trustee",
+                        inventory,
+                        &Env::ansible_root().join("trustee.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");

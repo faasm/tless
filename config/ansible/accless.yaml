@@ -1,10 +1,116 @@
 ---
 
-- hosts: accless
+- name: "Set-Up Common Environment"
+  hosts: accless_as,accless_cli
   gather_facts: yes
   tasks:
-    - include_tasks: tasks/accless/apt.yaml
-    - include_tasks: tasks/util/docker.yaml
-    - include_tasks: tasks/util/rust.yaml
-    - include_tasks: tasks/accless/code.yaml
-    - include_tasks: tasks/accless.yaml
+  - include_tasks: tasks/util/docker.yaml
+  - include_tasks: tasks/util/rust.yaml
+  - name: "Create code dir"
+    file:
+      path: "/home/{{ ansible_user }}/git"
+      state: directory
+  - name: "Clone Accless repos"
+    git:
+      repo: "https://www.github.com/faasm/tless.git"
+      dest: "{{ accless_code_dir }}"
+      update: yes
+      recursive: yes
+      clone: yes
+      force: yes
+      accept_hostkey: yes
+  - name: "Install Accless' APT Dependencies"
+    shell: ./scripts/apt.sh
+    args:
+      chdir: "{{ accless_code_dir }}"
+      executable: /bin/bash
+
+# =============================================================================
+# Server-side configuration
+# =============================================================================
+
+- name: "Configure Attestation Services"
+  hosts: accless_as
+  tasks:
+  - name: "Build Attestation Service"
+    # FIXME: remove branch name.
+    shell: git checkout feature-multi-as && ./scripts/accli_wrapper.sh attestation-service build
+    args:
+      chdir: "{{ accless_code_dir }}"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  - name: "Install attestation-service systemd unit"
+    become: true
+    copy:
+      dest: /etc/systemd/system/attestation-service.service
+      content: |
+        [Unit]
+        Description=Accless Attestation Service
+        After=network.target
+
+        [Service]
+        WorkingDirectory={{ accless_code_dir }}
+        ExecStart=/bin/bash -lc './scripts/accli_wrapper.sh attestation-service run --overwrite-external-ip {{ as_ip }}'
+        Restart=on-failure
+        User={{ ansible_user }}
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: "Reload systemd"
+    become: true
+    ansible.builtin.systemd:
+      daemon_reload: yes
+
+  - name: "Enable & start attestation-service"
+    become: true
+    ansible.builtin.systemd:
+      name: attestation-service
+      enabled: yes
+      state: started
+
+  - name: "Wait for attestation-service certificate to exist"
+    ansible.builtin.wait_for:
+      path: "{{ as_cert_dir }}/cert.pem"
+      state: present
+      timeout: 120
+
+  - name: "Read attestation-service certificate (slurp)"
+    ansible.builtin.slurp:
+      src: "{{ as_cert_dir }}/cert.pem"
+    register: as_cert_pem
+
+# =============================================================================
+# Client-side configuration
+# =============================================================================
+
+- name: "Configure Attestation Services"
+  hosts: accless_cli
+  tasks:
+  # First, copy the cert from accless-as's hostvars to the client filesystem.
+  - name: "Ensure cert directory exists on client"
+    ansible.builtin.file:
+      path: "{{ as_cert_dir }}"
+      state: directory
+      mode: "0755"
+
+  - name: "Write attestation-service certificates on client (one per AS host)"
+    ansible.builtin.copy:
+      dest: "{{ as_cert_dir }}/{{ item }}.pem"
+      mode: "0600"
+      content: "{{ hostvars[item].as_cert_pem.content | b64decode }}"
+    loop: "{{ groups['accless_as'] }}"
+
+  # Build all applications with the new certificate. Under the hood this also
+  # pulls the work-on container image and builds `accli`, so it may take a while.
+  - name: "Build applications"
+    when: inventory_hostname == "accless-cvm"
+    # FIXME: remove branch name
+    shell: git checkout feature-multi-as && ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir {{ as_cert_dir }}
+    args:
+      chdir: "{{ accless_code_dir }}"
+      executable: /bin/bash
+    environment:
+      PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

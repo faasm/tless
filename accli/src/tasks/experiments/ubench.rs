@@ -402,10 +402,17 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
                 experiments::TRUSTEE_CLIENT_VM_NAME
             }
             EscrowBaseline::Accless => {
+                let mut as_urls = vec![];
+                for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                    let as_ip = Azure::get_vm_ip(&format!(
+                        "{}-{i}",
+                        experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                    ))?;
+                    as_urls.push(format!("https://{as_ip}:8443"));
+                }
+
                 cmd_in_vm.push("--escrow-url".to_string());
-                cmd_in_vm.push(Azure::get_vm_ip(
-                    experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                )?);
+                cmd_in_vm.push(as_urls.join(","));
 
                 experiments::ACCLESS_VM_NAME
             }
