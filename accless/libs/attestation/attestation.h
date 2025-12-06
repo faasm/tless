@@ -44,8 +44,10 @@ std::string buildRequestBody(const std::string &quoteB64,
 
 // Mock helpers used in integration tests.
 namespace mock {
-std::string getMockSgxAttestationJwt();
-std::string getMockSnpAttestationJwt();
+std::string getMockSgxAttestationJwt(const std::string &asUrl,
+                                     const std::string &certPath);
+std::string getMockSnpAttestationJwt(const std::string &asUrl,
+                                     const std::string &certPath);
 } // namespace mock
 
 // SNP-related methods
@@ -97,16 +99,20 @@ std::vector<uint8_t> getReport(std::array<uint8_t, 64> reportData);
  * @param nodeId The node ID.
  * @return A JSON string representing the JWT.
  */
-std::string getAttestationJwt(const std::string &gid,
+std::string getAttestationJwt(const std::string &asUrl,
+                              const std::string &certPath,
+                              const std::string &gid,
                               const std::string &workflowId,
                               const std::string &nodeId);
 } // namespace snp
 
 // Attestation-service methods
-std::string getAttestationServiceUrl();
-std::string getAttestationServiceCertPath();
-std::pair<std::string, std::string> getAttestationServiceState();
-std::string getJwtFromReport(const std::string &endpoint,
+std::pair<std::string, std::string>
+getAttestationServiceState(const std::string &asUrl,
+                           const std::string &certPath);
+std::string getJwtFromReport(const std::string &asUrl,
+                             const std::string &certPath,
+                             const std::string &endpoint,
                              const std::string &reportJson);
 std::string decryptJwt(const std::vector<uint8_t> &encrypted,
                        const std::vector<uint8_t> &aesKey);

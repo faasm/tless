@@ -67,29 +67,9 @@ static std::string http_get(const std::string &url,
     return response;
 }
 
-// Get the URL of our own attestation service (**not** MAA)
-std::string getAttestationServiceUrl() {
-    const char *val = std::getenv("ACCLESS_AS_URL");
-    if (val == nullptr) {
-        // This url uses https://ip:port
-        std::cerr << "accless(att): must set ACCLESS_AS_URL" << std::endl;
-        throw std::runtime_error("must set ACCLESS_AS_URL");
-    }
-    return std::string(val);
-}
-
-std::string getAttestationServiceCertPath() {
-    const char *val = std::getenv("ACCLESS_AS_CERT_PATH");
-    if (val == nullptr) {
-        std::cerr << "accless(att): must set ACCLESS_AS_CERT_PATH" << std::endl;
-        throw std::runtime_error("must set ACCLESS_AS_CERT_PATH");
-    }
-    return std::string(val);
-}
-
-std::pair<std::string, std::string> getAttestationServiceState() {
-    std::string asUrl = getAttestationServiceUrl();
-    std::string certPath = getAttestationServiceCertPath();
+std::pair<std::string, std::string>
+getAttestationServiceState(const std::string &asUrl,
+                           const std::string &certPath) {
     std::string url = asUrl + "/state";
 
     std::string response = http_get(url, certPath);
@@ -102,7 +82,9 @@ std::pair<std::string, std::string> getAttestationServiceState() {
 
 // endpoint must be one in `/verify-snp-report` or `/verify-sgx-report`.
 // the report here is a JSON-string
-std::string getJwtFromReport(const std::string &endpoint,
+std::string getJwtFromReport(const std::string &asUrl,
+                             const std::string &certPath,
+                             const std::string &endpoint,
                              const std::string &reportJson) {
     std::string jwt;
 
@@ -112,9 +94,8 @@ std::string getJwtFromReport(const std::string &endpoint,
         throw std::runtime_error("curl error");
     }
 
-    std::string asUrl = getAttestationServiceUrl() + endpoint;
-    std::string certPath = getAttestationServiceCertPath();
-    curl_easy_setopt(curl, CURLOPT_URL, asUrl.c_str());
+    std::string url = asUrl + endpoint;
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_CAINFO, certPath.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
