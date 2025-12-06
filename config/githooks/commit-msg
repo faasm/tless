@@ -10,8 +10,8 @@ if [ $(echo "$commit_msg_title" | wc -c) -gt $max_length ]; then
     exit 1
 fi
 
-if ! echo "$commit_msg" | grep -q -E '\[(accless|accli|applications|as|build|ci|config|docs|scripts|template-graph)\] (B|E|F|W): '; then
+if ! echo "$commit_msg" | grep -q -E '\[(accless|accli|applications|as|build|ci|config|docs|experiments|scripts|template-graph)\] (B|E|F|W): '; then
 	echo "ERROR: Commit message does not match pattern: '[module-name] (B|E|F|W): Short Description"
-    echo "ERROR: List of modules: accless, accli, applications, as, build, ci, config, docs, scripts, template-graph"
+    echo "ERROR: List of modules: accless, accli, applications, as, build, ci, config, docs, experiments, scripts, template-graph"
     exit 1
 fi
