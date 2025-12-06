@@ -12,7 +12,9 @@
 #include <semaphore>
 #include <thread>
 
-std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
+std::string sendSingleAcclessRequest(const std::string &asUrl,
+                                     const std::string &asCertPath,
+                                     const std::vector<uint8_t> &report,
                                      const std::vector<uint8_t> &reportData,
                                      const std::string &gid,
                                      const std::string &workflowId,
@@ -25,7 +27,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
     // Send the request to Accless' attestation service, and get the response
     // back.
     return accless::attestation::getJwtFromReport(
-        accless::attestation::snp::getAsEndpoint(false), body);
+        asUrl, asCertPath, accless::attestation::snp::getAsEndpoint(false),
+        body);
 }
 
 /**
@@ -51,14 +54,17 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
  * @param maxParallelism The number of parallel threads to use.
  * @return The time elapsed to run the number of requests.
  */
-std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
+std::chrono::duration<double> runRequests(int numRequests, int maxParallelism,
+                                          const std::string &asUrl,
+                                          const std::string &asCertPath) {
     // =======================================================================
     // CP-ABE Preparation
     // =======================================================================
 
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
-    auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
+    auto [id, partialMpk] =
+        accless::attestation::getAttestationServiceState(asUrl, asCertPath);
     std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
 
     std::string gid = "baz";
@@ -106,18 +112,18 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
         // Limit how many threads we spawn in parallel by acquiring a semaphore.
         semaphore.acquire();
 
-        threads.emplace_back(
-            [&semaphore, &report, &reportDataVec, &gid, &wfId, &nodeId]() {
-                auto response = sendSingleAcclessRequest(report, reportDataVec,
-                                                         gid, wfId, nodeId);
-                // And releasing when the thread is done.
-                semaphore.release();
-            });
+        threads.emplace_back([&semaphore, &asUrl, &asCertPath, &report,
+                              &reportDataVec, &gid, &wfId, &nodeId]() {
+            auto response = sendSingleAcclessRequest(
+                asUrl, asCertPath, report, reportDataVec, gid, wfId, nodeId);
+            // And releasing when the thread is done.
+            semaphore.release();
+        });
     }
 
     // Send one request out of the loop, to easily process the result.
-    auto response =
-        sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
+    auto response = sendSingleAcclessRequest(asUrl, asCertPath, report,
+                                             reportDataVec, gid, wfId, nodeId);
 
     // Wait for all requests to finish. We do this now, and not at the end
     // to emulate the situation where we would have N independent clients.
@@ -201,7 +207,8 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
 
 void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
                  int numRepeats, bool maa, const std::string &resultsFile,
-                 const std::string &maaUrl) {
+                 const std::string &maaUrl, const std::string &asUrl,
+                 const std::string &asCertPath) {
     // Write elapsed time to CSV
     std::ofstream csvFile(resultsFile, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
@@ -212,7 +219,7 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
             for (int j = 0; j < numWarmupRepeats; j++) {
                 // Pre-warming is only necessary for regular Accless.
                 if (!maa) {
-                    runRequests(i, maxParallelism);
+                    runRequests(i, maxParallelism, asUrl, asCertPath);
                 }
             }
 
@@ -224,7 +231,8 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
                     // race conditions.
                     elapsedTimeSecs = runMaaRequests(i, 10, maaUrl);
                 } else {
-                    elapsedTimeSecs = runRequests(i, maxParallelism);
+                    elapsedTimeSecs =
+                        runRequests(i, maxParallelism, asUrl, asCertPath);
                 }
                 csvFile << i << "," << elapsedTimeSecs.count() << '\n';
             }
@@ -260,6 +268,8 @@ int main(int argc, char **argv) {
     int numWarmupRepeats = 1;
     int numRepeats = 3;
     std::string resultsFile;
+    std::string asUrl;
+    std::string asCertPath;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -306,6 +316,22 @@ int main(int argc, char **argv) {
                           << std::endl;
                 return 1;
             }
+        } else if (arg == "--as-url") {
+            if (i + 1 < argc) {
+                asUrl = argv[++i];
+            } else {
+                std::cerr << "--as-url option requires one argument."
+                          << std::endl;
+                return 1;
+            }
+        } else if (arg == "--as-cert-path") {
+            if (i + 1 < argc) {
+                asCertPath = argv[++i];
+            } else {
+                std::cerr << "--as-cert-path option requires one argument."
+                          << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -321,7 +347,7 @@ int main(int argc, char **argv) {
     }
 
     doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa, resultsFile,
-                maaUrl);
+                maaUrl, asUrl, asCertPath);
 
     return 0;
 }
