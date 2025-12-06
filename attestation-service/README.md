@@ -44,7 +44,7 @@ need to be hard-coded in the TEEs. In particular, we need to pass the path
 to the certificate's PEM file to the application build process:
 
 ```bash
-accli applications build --clean --cert-path /path/to/cert.pem
+accli applications build --clean --cert-dir /path/to/certs_dir
 ```
 
 when starting the attestation service, you may force re-generation of the
