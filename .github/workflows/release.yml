@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'VERSION'
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -32,4 +33,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Build and push images"
-        run: ./scripts/accli_wrapper.sh docker build-all --push
+        run: ./scripts/accli_wrapper.sh dev docker build-all --push
