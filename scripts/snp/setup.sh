@@ -25,6 +25,13 @@ check_host_reqs() {
 
     print_info "Checking host system requirements..."
 
+    # Check we can run `cpuid`.
+    if [[ ! -e "/dev/cpu/0/cpuid" ]]; then
+        print_error "check_host_reqs(): cpuid kernel module is not loaded"
+        print_error "check_host_reqs(): fix: run 'sudo modprobe cpuid' once or add 'cpuid' to /etc/modules-load.d/cpuid.conf."
+        exit 1
+    fi
+
     # Check `/dev/sev` exists.
     if [[ ! -e "$device" ]]; then
         print_error "check_host_reqs(): $device does not exist"

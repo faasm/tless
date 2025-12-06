@@ -6,6 +6,9 @@
   </p>
 
   <p>
+    <a href="https://github.com/faasm/tless/blob/main/VERSION">
+      <img src="version.svg" alt="Accless Version" />
+    </a>
     <a href="https://github.com/faasm/tless/actions/workflows/tests.yml">
       <img src="https://github.com/faasm/tless/actions/workflows/tests.yml/badge.svg"
            alt="Integration Tests" />

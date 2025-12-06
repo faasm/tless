@@ -6,9 +6,41 @@ on:
       - main
     paths:
       - 'VERSION'
+  workflow_dispatch:
 
 jobs:
+  version-badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Read version"
+        id: version
+        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: "Generate SVG badge"
+        run: |
+          cat > version.svg <<EOF
+          <svg xmlns="http://www.w3.org/2000/svg" width="140" height="20">
+            <rect width="60" height="20" fill="#555"/>
+            <rect x="60" width="80" height="20" fill="#007ec6"/>
+            <text x="30" y="14" fill="#fff" font-family="Verdana" font-size="11">version</text>
+            <text x="100" y="14" fill="#fff" font-family="Verdana" font-size="11">${VERSION}</text>
+          </svg>
+          EOF
+
+      - name: "Commit badge"
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add version.svg
+          git commit -m "[build] E: Update Version Badge To ${VERSION}" || echo "No changes"
+          git push
+
+  # Run this job strictly after updating the version badge, so that the updated
+  # badge makes it into the tag.
   build-and-push:
+    needs: version-badge
     runs-on: ubuntu-latest
     steps:
       - name: "Check out the repo"
@@ -32,4 +64,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Build and push images"
-        run: ./scripts/accli_wrapper.sh docker build-all --push
+        run: ./scripts/accli_wrapper.sh dev docker build-all --push
