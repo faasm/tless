@@ -98,6 +98,9 @@ enum AttestationServiceCommand {
         /// Overwrite the public IP of the attestation service.
         #[arg(long)]
         overwrite_external_ip: Option<String>,
+        /// Unique ID for this attestation service instance.
+        #[arg(long)]
+        id: Option<String>,
     },
     /// Stop a running attestation service (started with --background).
     Stop {},
@@ -950,6 +953,7 @@ async fn main() -> anyhow::Result<()> {
                 rebuild,
                 background,
                 overwrite_external_ip,
+                id,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -960,6 +964,7 @@ async fn main() -> anyhow::Result<()> {
                     *rebuild,
                     *background,
                     overwrite_external_ip.clone(),
+                    id.clone(),
                 )?;
             }
             AttestationServiceCommand::Stop {} => {

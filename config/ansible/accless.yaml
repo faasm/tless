@@ -34,7 +34,7 @@
   tasks:
   - name: "Build Attestation Service"
     # FIXME: remove branch name.
-    shell: git checkout feature-multi-as && ./scripts/accli_wrapper.sh attestation-service build
+    shell: git fetch origin && git checkout feature-multi-as && ./scripts/accli_wrapper.sh attestation-service build
     args:
       chdir: "{{ accless_code_dir }}"
       executable: /bin/bash
@@ -52,7 +52,7 @@
 
         [Service]
         WorkingDirectory={{ accless_code_dir }}
-        ExecStart=/bin/bash -lc './scripts/accli_wrapper.sh attestation-service run --overwrite-external-ip {{ as_ip }}'
+        ExecStart=/bin/bash -lc './scripts/accli_wrapper.sh attestation-service run --overwrite-external-ip {{ as_ip }} --id {{ inventory_hostname | b64encode }}'
         Restart=on-failure
         User={{ ansible_user }}
 

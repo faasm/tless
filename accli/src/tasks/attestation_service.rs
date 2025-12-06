@@ -51,6 +51,7 @@ impl AttestationService {
         rebuild: bool,
         background: bool,
         overwrite_external_ip: Option<String>,
+        id: Option<String>,
     ) -> Result<()> {
         if rebuild {
             Self::build()?;
@@ -79,6 +80,9 @@ impl AttestationService {
         }
         if let Some(ip) = overwrite_external_ip {
             cmd.arg("--overwrite-external-ip").arg(ip);
+        }
+        if let Some(id) = id {
+            cmd.arg("--id").arg(id);
         }
 
         if background {
