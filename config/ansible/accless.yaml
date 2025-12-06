@@ -33,8 +33,7 @@
   hosts: accless_as
   tasks:
   - name: "Build Attestation Service"
-    # FIXME: remove branch name.
-    shell: git fetch origin && git checkout feature-multi-as && ./scripts/accli_wrapper.sh attestation-service build
+    shell: ./scripts/accli_wrapper.sh attestation-service build
     args:
       chdir: "{{ accless_code_dir }}"
       executable: /bin/bash
@@ -107,8 +106,7 @@
   # pulls the work-on container image and builds `accli`, so it may take a while.
   - name: "Build applications"
     when: inventory_hostname == "accless-cvm"
-    # FIXME: remove branch name
-    shell: git checkout feature-multi-as && ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir {{ as_cert_dir }}
+    shell: ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir {{ as_cert_dir }}
     args:
       chdir: "{{ accless_code_dir }}"
       executable: /bin/bash
