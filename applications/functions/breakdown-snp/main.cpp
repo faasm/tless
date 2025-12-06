@@ -10,13 +10,31 @@
 #include <iostream>
 
 int main(int argc, char **argv) {
+    std::vector<std::string> args(argv + 1, argv + argc);
+    if (args.size() != 4) {
+        throw std::runtime_error(
+            "Expected 2 arguments: --as-url and --as-cert-path");
+    }
+    std::string asUrl;
+    std::string asCertPath;
+    for (size_t i = 0; i < args.size(); i += 2) {
+        if (args[i] == "--as-url") {
+            asUrl = args[i + 1];
+        } else if (args[i] == "--as-cert-path") {
+            asCertPath = args[i + 1];
+        } else {
+            throw std::runtime_error("Invalid argument: " + args[i]);
+        }
+    }
+
     // =======================================================================
     // CP-ABE Preparation
     // =======================================================================
 
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
-    auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
+    auto [id, partialMpk] =
+        accless::attestation::getAttestationServiceState(asUrl, asCertPath);
     std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
 
     std::string gid = "baz";
@@ -62,8 +80,8 @@ int main(int argc, char **argv) {
 
     // Send the request to Accless' attestation service, and get the response
     // back.
-    auto response =
-        accless::attestation::getJwtFromReport("/verify-snp-report", body);
+    auto response = accless::attestation::getJwtFromReport(
+        asUrl, asCertPath, "/verify-snp-report", body);
     tb.checkpoint("send report to AS");
 
     // Accless' authorization is equivalent to checking if we can decrypt

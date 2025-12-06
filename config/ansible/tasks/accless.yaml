@@ -49,14 +49,14 @@
 - name: "Wait for attestation-service certificate to exist"
   when: inventory_hostname == "accless-as"
   ansible.builtin.wait_for:
-    path: "{{ as_cert_path }}"
+    path: "{{ as_cert_dir }}/cert.pem"
     state: present
     timeout: 120
 
 - name: "Read attestation-service certificate (slurp)"
   when: inventory_hostname == "accless-as"
   ansible.builtin.slurp:
-    src: "{{ as_cert_path }}"
+    src: "{{ as_cert_dir }}/cert.pem"
   register: as_cert_pem
 
 # =============================================================================
@@ -67,13 +67,13 @@
 - name: "Ensure cert directory exists on client"
   when: inventory_hostname == "accless-cvm"
   ansible.builtin.file:
-    path: "{{ as_cert_path | dirname }}"
+    path: "{{ as_cert_dir }}"
     state: directory
     mode: "0755"
 - name: "Write attestation-service certificate on client"
   when: inventory_hostname == "accless-cvm"
   ansible.builtin.copy:
-    dest: "{{ as_cert_path }}"
+    dest: "{{ as_cert_dir }}/cert.pem"
     mode: "0600"
     content: "{{ hostvars['accless-as'].as_cert_pem.content | b64decode }}"
 
@@ -82,7 +82,7 @@
 - name: "Build applications"
   when: inventory_hostname == "accless-cvm"
   # FIXME: remove branch name
-  shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh applications build --clean --as-cert-path {{ as_cert_path }}
+  shell: git checkout enhancement-escrow-xput && ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir {{ as_cert_dir }}
   args:
     chdir: "{{ accless_code_dir }}"
     executable: /bin/bash

@@ -277,7 +277,9 @@ std::string getAsEndpoint(bool isMock) {
     throw std::runtime_error("No known SNP device found!");
 }
 
-std::string getAttestationJwt(const std::string &gid,
+std::string getAttestationJwt(const std::string &asUrl,
+                              const std::string &certPath,
+                              const std::string &gid,
                               const std::string &workflowId,
                               const std::string &nodeId) {
     // Generate ephemeral EC keypair.
@@ -309,8 +311,8 @@ std::string getAttestationJwt(const std::string &gid,
         reportB64, runtimeDataB64, gid, workflowId, nodeId);
 
     // Send the request, and get the response back.
-    std::string response =
-        accless::attestation::getJwtFromReport(getAsEndpoint(isMock), body);
+    std::string response = accless::attestation::getJwtFromReport(
+        asUrl, certPath, getAsEndpoint(isMock), body);
     std::string encryptedB64 =
         accless::attestation::utils::extractJsonStringField(response,
                                                             "encrypted_token");

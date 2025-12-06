@@ -14,7 +14,8 @@ pub mod workflows;
 pub const ACCLESS_MAA_NAME: &str = "accless";
 pub const ACCLESS_VM_CODE_DIR: &str = "git/faasm/accless";
 pub const ACCLESS_VM_NAME: &str = "accless-cvm";
-pub const ACCLESS_ATTESTATION_SERVICE_VM_NAME: &str = "accless-as";
+pub const ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME: &str = "accless-as";
+pub const ACCLESS_NUM_ATTESTATION_SERVICES: usize = 3;
 
 pub const ATTESTATION_SERVICE_VM_NAME: &str = "attestation-service";
 

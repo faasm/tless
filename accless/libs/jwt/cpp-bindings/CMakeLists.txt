@@ -13,12 +13,21 @@ endif ()
 
 add_library(jwt_rust_lib STATIC IMPORTED GLOBAL)
 
-# This cert path can be set from: -DACCLESS_AS_CERT_PEM=/path/to/cert.pem
-message(STATUS "Injecting AS certificates to JWT library from: '${ACCLESS_AS_CERT_PEM}'")
+# This cert path can be set from: -DACCLESS_AS_CERT_DIR=/path/to/cert/dir
+message(STATUS "Injecting AS certificates to JWT library from: '${ACCLESS_AS_CERT_DIR}'")
+
+# It may be that we are building the accless library as a third-party dependency
+# from another project (like when we build guest modules for Knative). In that
+# case, we want to be able to inject the AS certificate path as a CMake argument
+# that is then passed to the Rust build as an env. var.
+set_property(TARGET jwt_rust_lib APPEND PROPERTY
+    CARGO_ENV
+        ACCLESS_AS_CERT_DIR=${ACCLESS_AS_CERT_DIR}
+)
 add_custom_command(
     OUTPUT ${JWT_RUST_LIBRARY}
     COMMAND ${CMAKE_COMMAND} -E env
-            ACCLESS_AS_CERT_PEM=${ACCLESS_AS_CERT_PEM}
+            ACCLESS_AS_CERT_DIR=${ACCLESS_AS_CERT_DIR}
             cargo build -p jwt ${CARGO_FLAGS} > /dev/null 2>&1
     COMMENT "Building JWT staticlib with Cargo"
     WORKING_DIRECTORY ${ACCLESS_ROOT}/..

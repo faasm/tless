@@ -175,10 +175,9 @@ impl TemplateGraph {
         let graph: TemplateGraph = serde_yaml::from_str(yaml)?;
 
         if graph.authorities.attestation_services.is_empty() {
-            error!("Template graph must contain at least one attestation service");
-            return Err(serde_yaml::Error::custom(
-                "`authorities.attestation-services` must not be empty.",
-            ));
+            let reason = "`authorities.attestation-services` must not be empty";
+            error!("from_yaml(): {reason}");
+            return Err(serde_yaml::Error::custom(reason));
         }
 
         let mut aps_ids: std::collections::HashSet<String> = graph
@@ -194,11 +193,13 @@ impl TemplateGraph {
                 for i in 0..policy.len() {
                     let (attr, _) = policy.get(i);
                     if !aps_ids.contains(attr.authority()) {
-                        return Err(serde_yaml::Error::custom(format!(
-                            "Authority '{}' in node policy for '{}' not found in attribute providing services.",
+                        let reason = format!(
+                            "authority '{}' in node policy for '{}' not found in attribute providing services.",
                             attr.authority(),
                             node.name
-                        ).as_str()));
+                        );
+                        error!("from_yaml(): {reason}");
+                        return Err(serde_yaml::Error::custom(reason));
                     }
                 }
             }
@@ -238,10 +239,9 @@ output:
         let result = TemplateGraph::from_yaml(yaml_content);
         assert!(result.is_err());
         let error = result.err().unwrap();
-        assert!(
-            error
-                .to_string()
-                .contains("`authorities.attestation-services` must not be empty.")
+        assert_eq!(
+            error.to_string(),
+            "`authorities.attestation-services` must not be empty"
         );
     }
 
@@ -467,6 +467,9 @@ output:
         let result = TemplateGraph::from_yaml(yaml_content);
         assert!(result.is_err());
         let error = result.err().unwrap();
-        assert!(error.to_string().contains("Authority 'finra' in node policy for 'fetch_private' not found in attribute providing services."));
+        assert_eq!(
+            error.to_string(),
+            "authority 'finra' in node policy for 'fetch_private' not found in attribute providing services."
+        );
     }
 }

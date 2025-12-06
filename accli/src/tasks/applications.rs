@@ -1,5 +1,5 @@
 use crate::tasks::{
-    attestation_service, cvm,
+    cvm,
     docker::{DOCKER_ACCLESS_CODE_MOUNT_DIR, Docker},
 };
 use anyhow::Result;
@@ -10,6 +10,12 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum ApplicationBackend {
+    Cvm,
+    Docker,
+}
 
 #[derive(Clone, Debug, ValueEnum)]
 pub enum ApplicationType {
@@ -49,6 +55,8 @@ pub enum ApplicationName {
     EscrowXput,
     #[value(name = "hello-snp")]
     HelloSnp,
+    #[value(name = "multi-as")]
+    MultiAs,
 }
 
 impl Display for ApplicationName {
@@ -59,6 +67,7 @@ impl Display for ApplicationName {
             ApplicationName::BreakdownSnp => write!(f, "breakdown-snp"),
             ApplicationName::EscrowXput => write!(f, "escrow-xput"),
             ApplicationName::HelloSnp => write!(f, "hello-snp"),
+            ApplicationName::MultiAs => write!(f, "multi-as"),
         }
     }
 }
@@ -73,46 +82,46 @@ impl FromStr for ApplicationName {
             "breakdown-snp" => Ok(ApplicationName::BreakdownSnp),
             "escrow-xput" => Ok(ApplicationName::EscrowXput),
             "hello-snp" => Ok(ApplicationName::HelloSnp),
+            "multi-as" => Ok(ApplicationName::MultiAs),
             _ => anyhow::bail!("Invalid Function: {}", s),
         }
     }
 }
 
-fn host_cert_path_to_target_path(
-    as_cert_path: &Path,
-    in_cvm: bool,
-    in_docker: bool,
+pub fn host_cert_dir_to_target_path(
+    as_cert_dir: &Path,
+    backend: &ApplicationBackend,
 ) -> Result<PathBuf> {
-    if in_cvm & in_docker {
-        let reason = "cannot set in_cvm and in_docker";
-        error!("as_cert_path_arg_to_real_path(): {reason}");
-        anyhow::bail!(reason);
-    }
-
-    if !as_cert_path.exists() {
+    if !as_cert_dir.exists() {
         let reason = format!(
-            "as certificate path does not exist (path={})",
-            as_cert_path.display()
+            "as certificate directory does not exist (path={})",
+            as_cert_dir.display()
         );
-        error!("as_cert_path_arg_to_real_path(): {reason}");
+        error!("host_cert_dir_to_target_path(): {reason}");
         anyhow::bail!(reason);
     }
 
-    if !as_cert_path.is_file() {
+    if !as_cert_dir.is_dir() {
         let reason = format!(
-            "as certificate path does not point to a file (path={})",
-            as_cert_path.display()
+            "as certificate path does not point to a directory (path={})",
+            as_cert_dir.display()
         );
-        error!("as_cert_path_arg_to_real_path(): {reason}");
+        error!("host_cert_dir_to_target_path(): {reason}");
         anyhow::bail!(reason);
     }
 
-    if in_docker {
-        Ok(Docker::remap_to_docker_path(as_cert_path)?)
-    } else if in_cvm {
-        Ok(cvm::remap_to_cvm_path(as_cert_path)?)
-    } else {
-        Ok(as_cert_path.to_path_buf())
+    if as_cert_dir.read_dir()?.next().is_none() {
+        let reason = format!(
+            "passed --cert-dir variable points to an empty directory: {}",
+            as_cert_dir.display()
+        );
+        error!("host_cert_dir_to_target_path(): {reason}");
+        anyhow::bail!(reason);
+    }
+
+    match backend {
+        ApplicationBackend::Cvm => Ok(cvm::remap_to_cvm_path(as_cert_dir)?),
+        ApplicationBackend::Docker => Ok(Docker::remap_to_docker_path(as_cert_dir)?),
     }
 }
 
@@ -123,7 +132,7 @@ impl Applications {
     pub fn build(
         clean: bool,
         debug: bool,
-        as_cert_path: Option<PathBuf>,
+        as_cert_dir: Option<PathBuf>,
         capture_output: bool,
         in_cvm: bool,
     ) -> Result<Option<String>> {
@@ -151,12 +160,13 @@ impl Applications {
         if in_cvm {
             // Make sure the certificates are available in the cVM.
             let mut scp_files: Vec<(PathBuf, PathBuf)> = vec![];
-            if let Some(host_cert_path) = as_cert_path {
-                let guest_cert_path = host_cert_path_to_target_path(&host_cert_path, true, false)?;
-                scp_files.push((host_cert_path, guest_cert_path.clone()));
+            if let Some(host_cert_dir) = as_cert_dir {
+                let guest_cert_dir =
+                    host_cert_dir_to_target_path(&host_cert_dir, &ApplicationBackend::Cvm)?;
+                scp_files.push((host_cert_dir, guest_cert_dir.clone()));
 
-                cmd.push("--as-cert-path".to_string());
-                cmd.push(guest_cert_path.display().to_string());
+                cmd.push("--as-cert-dir".to_string());
+                cmd.push(guest_cert_dir.display().to_string());
             }
 
             cvm::run(
@@ -170,10 +180,11 @@ impl Applications {
             )?;
             Ok(None)
         } else {
-            if let Some(host_cert_path) = as_cert_path {
-                let docker_cert_path = host_cert_path_to_target_path(&host_cert_path, false, true)?;
-                cmd.push("--as-cert-path".to_string());
-                cmd.push(docker_cert_path.display().to_string());
+            if let Some(host_cert_dir) = as_cert_dir {
+                let docker_cert_dir =
+                    host_cert_dir_to_target_path(&host_cert_dir, &ApplicationBackend::Docker)?;
+                cmd.push("--as-cert-dir".to_string());
+                cmd.push(docker_cert_dir.display().to_string());
             }
             let workdir = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR).join("applications");
             let workdir_str = workdir.to_str().ok_or_else(|| {
@@ -193,98 +204,71 @@ impl Applications {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run(
-        app_type: ApplicationType,
-        app_name: ApplicationName,
-        in_cvm: bool,
-        as_url: Option<String>,
-        as_cert_path: Option<PathBuf>,
+        app_type: &ApplicationType,
+        app_name: &ApplicationName,
+        app_backend: &ApplicationBackend,
         run_as_root: bool,
         extra_docker_flags: Option<&[&str]>,
         args: Vec<String>,
     ) -> anyhow::Result<Option<String>> {
-        // If --in-cvm flag is passed, we literally re run the same `accli` command, but
-        // inside the cVM.
-        if in_cvm {
-            let mut cmd = vec![
-                "./scripts/accli_wrapper.sh".to_string(),
-                "applications".to_string(),
-                "run".to_string(),
-                format!("{app_type}"),
-                format!("{app_name}"),
-            ];
+        match app_backend {
+            // If --in-cvm flag is passed, we literally re run the same `accli` command, but
+            // inside the cVM.
+            ApplicationBackend::Cvm => {
+                let mut cmd = vec![
+                    "./scripts/accli_wrapper.sh".to_string(),
+                    "applications".to_string(),
+                    "run".to_string(),
+                    format!("{app_type}"),
+                    format!("{app_name}"),
+                ];
 
-            if let Some(as_url) = as_url {
-                cmd.push("--as-url".to_string());
-                cmd.push(as_url.to_string());
-            }
-
-            if let Some(host_cert_path) = as_cert_path {
-                cmd.push("--as-cert-path".to_string());
-                cmd.push(
-                    host_cert_path_to_target_path(&host_cert_path, true, false)?
-                        .display()
-                        .to_string(),
-                );
-            }
-
-            if run_as_root {
-                cmd.push("--run-as-root".to_string());
-            }
-
-            if !args.is_empty() {
-                cmd.push("--".to_string());
-                cmd.extend(args);
-            }
-
-            // We don't need to SCP any files here, because we assume that the certificates
-            // have been copied during the build stage, and persisted in the
-            // disk image.
-            cvm::run(&cmd, None, None)?;
-
-            Ok(None)
-        } else {
-            let dir_name = match app_type {
-                ApplicationType::Function => "functions",
-                ApplicationType::Test => "test",
-            };
-            // Path matches CMake build directory:
-            // ./applications/build-natie/{functions,test,workflows}/{name}/{binary_name}
-            let binary_path = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR)
-                .join("applications/build-native")
-                .join(dir_name)
-                .join(format!("{app_name}"))
-                .join(format!("{app_name}"));
-
-            let binary_path_str = binary_path.to_str().ok_or_else(|| {
-                anyhow::anyhow!("Binary path is not valid UTF-8: {}", binary_path.display())
-            })?;
-            let mut cmd = if run_as_root {
-                vec!["sudo".to_string(), binary_path_str.to_string()]
-            } else {
-                vec![binary_path_str.to_string()]
-            };
-            cmd.extend(args);
-
-            let as_env_vars: Vec<String> = match (as_url, as_cert_path) {
-                (Some(as_url), Some(host_cert_path)) => {
-                    let docker_cert_path =
-                        host_cert_path_to_target_path(&host_cert_path, false, true)?
-                            .display()
-                            .to_string();
-                    attestation_service::get_as_env_vars(&as_url, &docker_cert_path)
+                if run_as_root {
+                    cmd.push("--run-as-root".to_string());
                 }
-                _ => vec![],
-            };
 
-            Docker::run(
-                &cmd,
-                true,
-                None,
-                &as_env_vars,
-                true,
-                false,
-                extra_docker_flags,
-            )
+                if !args.is_empty() {
+                    cmd.push("--".to_string());
+                    cmd.extend(args);
+                }
+
+                // We don't need to SCP any files here, because we assume that the certificates
+                // have been copied during the build stage, and persisted in the
+                // disk image.
+                cvm::run(&cmd, None, None)?;
+
+                Ok(None)
+            }
+            ApplicationBackend::Docker => {
+                let dir_name = match app_type {
+                    ApplicationType::Function => "functions",
+                    ApplicationType::Test => "test",
+                };
+                // Path matches CMake build directory:
+                // ./applications/build-natie/{functions,test,workflows}/{name}/{binary_name}
+                let binary_path = Path::new(DOCKER_ACCLESS_CODE_MOUNT_DIR)
+                    .join("applications/build-native")
+                    .join(dir_name)
+                    .join(format!("{app_name}"))
+                    .join(format!("{app_name}"));
+
+                let binary_path_str = binary_path.to_str().ok_or_else(|| {
+                    let reason = format!(
+                        "binary path is not valid UTF-8 (path={})",
+                        binary_path.display()
+                    );
+                    error!("run(): {reason}");
+                    anyhow::anyhow!(reason)
+                })?;
+                let mut cmd = if run_as_root {
+                    vec!["sudo".to_string(), binary_path_str.to_string()]
+                } else {
+                    vec![binary_path_str.to_string()]
+                };
+                cmd.extend(args);
+
+                Docker::run(&cmd, true, None, &[], true, false, extra_docker_flags)
+            }
         }
     }
 }

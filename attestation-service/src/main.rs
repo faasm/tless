@@ -55,6 +55,9 @@ struct Cli {
     /// Overwrite the public IP of the attestation service.
     #[arg(long)]
     overwrite_external_ip: Option<String>,
+    /// Overwrite the attestation service ID.
+    #[arg(long)]
+    id: Option<String>,
 }
 
 async fn health(Extension(state): Extension<Arc<AttestationServiceState>>) -> impl IntoResponse {
@@ -125,6 +128,7 @@ async fn main() -> Result<()> {
         cli.sgx_pccs_url.clone(),
         cli.mock,
         external_url.clone(),
+        cli.id.clone(),
     )?);
 
     // Start HTTPS server.

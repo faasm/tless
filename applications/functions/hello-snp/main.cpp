@@ -3,6 +3,8 @@
 #include "accless/jwt/jwt.h"
 
 #include <iostream>
+#include <stdexcept>
+#include <vector>
 
 /**
  * @brief Performs a single secret-key-release operation using Accless.
@@ -12,10 +14,11 @@
  * deployed in a genuine SNP cVM. Either in a para-virtualized environment on
  * Azure, or on bare-metal.
  */
-int doAcclessSkr() {
+int doAcclessSkr(const std::string &asUrl, const std::string &asCertPath) {
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
-    auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
+    auto [id, partialMpk] =
+        accless::attestation::getAttestationServiceState(asUrl, asCertPath);
     std::cout << "escrow-xput: got attesation service's state" << std::endl;
     std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
     std::cout << "escrow-xput: packed partial MPK into full MPK" << std::endl;
@@ -43,8 +46,8 @@ int doAcclessSkr() {
 
     std::cout << "escrow-xput: running remote attestation..." << std::endl;
     try {
-        const std::string jwt =
-            accless::attestation::snp::getAttestationJwt(gid, wfId, nodeId);
+        const std::string jwt = accless::attestation::snp::getAttestationJwt(
+            asUrl, asCertPath, gid, wfId, nodeId);
         if (jwt.empty()) {
             std::cerr << "escrow-xput: empty JWT returned" << std::endl;
             return 1;
@@ -97,4 +100,24 @@ int doAcclessSkr() {
     return 0;
 }
 
-int main(int argc, char **argv) { return doAcclessSkr(); }
+int main(int argc, char **argv) {
+    std::vector<std::string> args(argv + 1, argv + argc);
+    if (args.size() != 4) {
+        std::cerr << "Expected 2 arguments: --as-url and --as-cert-path"
+                  << std::endl;
+        return 1;
+    }
+    std::string asUrl;
+    std::string asCertPath;
+    for (size_t i = 0; i < args.size(); i += 2) {
+        if (args[i] == "--as-url") {
+            asUrl = args[i + 1];
+        } else if (args[i] == "--as-cert-path") {
+            asCertPath = args[i + 1];
+        } else {
+            std::cerr << "Invalid argument: " + args[i] << std::endl;
+            return 1;
+        }
+    }
+    return doAcclessSkr(asUrl, asCertPath);
+}

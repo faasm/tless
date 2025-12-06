@@ -1,6 +1,6 @@
 import argparse
 from faasmtools.compile_util import wasm_cmake, wasm_copy_upload
-from os import environ, makedirs
+from os import environ, makedirs, listdir
 from os.path import abspath, dirname, exists, join, realpath
 from shutil import rmtree
 from subprocess import run
@@ -10,7 +10,7 @@ APPS_ROOT = dirname(realpath(__file__))
 PROJ_ROOT = dirname(APPS_ROOT)
 
 
-def compile(wasm=False, native=False, debug=False, clean=False, as_cert_path=None):
+def compile(wasm=False, native=False, debug=False, clean=False, as_cert_dir=None):
     """
     Compile the different applications supported in Accless.
     """
@@ -24,11 +24,14 @@ def compile(wasm=False, native=False, debug=False, clean=False, as_cert_path=Non
     if not exists(build_dir):
         makedirs(build_dir)
 
-    if as_cert_path is not None:
-        if not exists(as_cert_path):
-            print(f"ERROR: passed --cert-path variable but path does not exist")
+    if as_cert_dir is not None:
+        if not exists(as_cert_dir):
+            print(f"ERROR: passed --cert-dir variable but path does not exist")
             exit(1)
-        as_cert_path = abspath(as_cert_path)
+        # Add check for empty directory
+        if not listdir(as_cert_dir): # Check if directory is empty
+            print(f"WARNING: Passed --cert-dir variable points to an empty directory: {as_cert_dir}")
+        as_cert_dir = abspath(as_cert_dir)
 
     # if wasm:
     #     wasm_cmake(
@@ -47,7 +50,7 @@ def compile(wasm=False, native=False, debug=False, clean=False, as_cert_path=Non
             "-DCMAKE_BUILD_TYPE={}".format("Debug" if debug else "Release"),
             "-DCMAKE_C_COMPILER=/usr/bin/clang-17",
             "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-17",
-            f"-DACCLESS_AS_CERT_PEM={as_cert_path}" if as_cert_path is not None else "",
+            f"-DACCLESS_AS_CERT_DIR={as_cert_dir}" if as_cert_dir is not None else "",
             APPS_ROOT,
         ]
         cmake_cmd = " ".join(cmake_cmd)
@@ -71,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug", action="store_true", help="Build in debug mode."
     )
-    parser.add_argument("--as-cert-path", type=str, help="Path to certificate PEM file.")
+    parser.add_argument("--as-cert-dir", type=str, help="Path to certificate PEM file.")
     args = parser.parse_args()
 
     if args.clean:
@@ -84,11 +87,11 @@ if __name__ == "__main__":
         wasm=True,
         debug=args.debug,
         clean=args.clean,
-        as_cert_path=args.as_cert_path,
+        as_cert_dir=args.as_cert_dir,
     )
     compile(
         native=True,
         debug=args.debug,
         clean=args.clean,
-        as_cert_path=args.as_cert_path,
+        as_cert_dir=args.as_cert_dir,
     )

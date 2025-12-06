@@ -12,7 +12,35 @@
 #include <semaphore>
 #include <thread>
 
-std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
+#include "maa.h"
+
+#include "accless/abe4/abe4.h"
+#include "accless/attestation/attestation.h"
+#include "accless/attestation/ec_keypair.h"
+#include "accless/base64/base64.h"
+#include "accless/jwt/jwt.h"
+
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <semaphore>
+#include <sstream>
+#include <thread>
+#include <vector>
+
+std::vector<std::string> split(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+std::string sendSingleAcclessRequest(const std::string &asUrl,
+                                     const std::string &asCertPath,
+                                     const std::vector<uint8_t> &report,
                                      const std::vector<uint8_t> &reportData,
                                      const std::string &gid,
                                      const std::string &workflowId,
@@ -25,7 +53,8 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
     // Send the request to Accless' attestation service, and get the response
     // back.
     return accless::attestation::getJwtFromReport(
-        accless::attestation::snp::getAsEndpoint(false), body);
+        asUrl, asCertPath, accless::attestation::snp::getAsEndpoint(false),
+        body);
 }
 
 /**
@@ -51,15 +80,26 @@ std::string sendSingleAcclessRequest(const std::vector<uint8_t> &report,
  * @param maxParallelism The number of parallel threads to use.
  * @return The time elapsed to run the number of requests.
  */
-std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
+std::chrono::duration<double>
+runRequests(int numRequests, int maxParallelism,
+            const std::vector<std::string> &asUrls,
+            const std::vector<std::string> &asCertPaths) {
     // =======================================================================
     // CP-ABE Preparation
     // =======================================================================
 
     // Get the ID and MPK we need to encrypt ciphertexts with attributes from
     // this attestation service instance.
-    auto [id, partialMpk] = accless::attestation::getAttestationServiceState();
-    std::string mpk = accless::abe4::packFullKey({id}, {partialMpk});
+    std::vector<std::string> ids;
+    std::vector<std::string> partialMpks;
+    for (size_t i = 0; i < asUrls.size(); ++i) {
+        auto [id, partialMpk] =
+            accless::attestation::getAttestationServiceState(asUrls[i],
+                                                             asCertPaths[i]);
+        ids.push_back(id);
+        partialMpks.push_back(partialMpk);
+    }
+    std::string mpk = accless::abe4::packFullKey(ids, partialMpks);
 
     std::string gid = "baz";
     std::string wfId = "foo";
@@ -67,8 +107,16 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
 
     // Pick the simplest policy that only relies on the attributes `wf` and
     // `node` which are provided by the attestation-service after a succesful
-    // remote attestation.
-    std::string policy = id + ".wf:" + wfId + " & " + id + ".node:" + nodeId;
+    // remote attestation. We do a conjunction over all registered attestation
+    // services, in order to improve throughput by load-balancing.
+    std::string policy;
+    for (size_t i = 0; i < ids.size(); ++i) {
+        policy += "(" + ids[i] + ".wf:" + wfId + " & " + ids[i] +
+                  ".node:" + nodeId + ")";
+        if (i < ids.size() - 1) {
+            policy += " | ";
+        }
+    }
 
     // Generate a test ciphertext that only us, after a succesful attestation,
     // should be able to decrypt.
@@ -106,18 +154,20 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
         // Limit how many threads we spawn in parallel by acquiring a semaphore.
         semaphore.acquire();
 
-        threads.emplace_back(
-            [&semaphore, &report, &reportDataVec, &gid, &wfId, &nodeId]() {
-                auto response = sendSingleAcclessRequest(report, reportDataVec,
-                                                         gid, wfId, nodeId);
-                // And releasing when the thread is done.
-                semaphore.release();
-            });
+        threads.emplace_back([&semaphore, &asUrls, &asCertPaths, &report,
+                              &reportDataVec, &gid, &wfId, &nodeId, i,
+                              numAs = asUrls.size()]() {
+            auto response = sendSingleAcclessRequest(
+                asUrls[i % numAs], asCertPaths[i % numAs], report,
+                reportDataVec, gid, wfId, nodeId);
+            // And releasing when the thread is done.
+            semaphore.release();
+        });
     }
 
     // Send one request out of the loop, to easily process the result.
-    auto response =
-        sendSingleAcclessRequest(report, reportDataVec, gid, wfId, nodeId);
+    auto response = sendSingleAcclessRequest(asUrls[0], asCertPaths[0], report,
+                                             reportDataVec, gid, wfId, nodeId);
 
     // Wait for all requests to finish. We do this now, and not at the end
     // to emulate the situation where we would have N independent clients.
@@ -174,7 +224,7 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
                   << std::endl;
         throw std::runtime_error("escrow-xput: bad JWT");
     }
-    std::string uskB64 = accless::abe4::packFullKey({id}, {partialUskB64});
+    std::string uskB64 = accless::abe4::packFullKey({ids[0]}, {partialUskB64});
 
     // Run decryption.
     std::optional<std::string> decrypted_gt =
@@ -201,18 +251,20 @@ std::chrono::duration<double> runRequests(int numRequests, int maxParallelism) {
 
 void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
                  int numRepeats, bool maa, const std::string &resultsFile,
-                 const std::string &maaUrl) {
+                 const std::string &maaUrl,
+                 const std::vector<std::string> &asUrls,
+                 const std::vector<std::string> &asCertPaths) {
     // Write elapsed time to CSV
     std::ofstream csvFile(resultsFile, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
 
-    int maxParallelism = 100;
+    int maxParallelism = 10;
     try {
         for (const auto &i : numRequests) {
             for (int j = 0; j < numWarmupRepeats; j++) {
                 // Pre-warming is only necessary for regular Accless.
                 if (!maa) {
-                    runRequests(i, maxParallelism);
+                    runRequests(i, maxParallelism, asUrls, asCertPaths);
                 }
             }
 
@@ -224,7 +276,8 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
                     // race conditions.
                     elapsedTimeSecs = runMaaRequests(i, 10, maaUrl);
                 } else {
-                    elapsedTimeSecs = runRequests(i, maxParallelism);
+                    elapsedTimeSecs =
+                        runRequests(i, maxParallelism, asUrls, asCertPaths);
                 }
                 csvFile << i << "," << elapsedTimeSecs.count() << '\n';
             }
@@ -260,6 +313,8 @@ int main(int argc, char **argv) {
     int numWarmupRepeats = 1;
     int numRepeats = 3;
     std::string resultsFile;
+    std::vector<std::string> asUrls;
+    std::vector<std::string> asCertPaths;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -306,6 +361,22 @@ int main(int argc, char **argv) {
                           << std::endl;
                 return 1;
             }
+        } else if (arg == "--as-urls") {
+            if (i + 1 < argc) {
+                asUrls = split(argv[++i], ',');
+            } else {
+                std::cerr << "--as-urls option requires one argument."
+                          << std::endl;
+                return 1;
+            }
+        } else if (arg == "--as-cert-paths") {
+            if (i + 1 < argc) {
+                asCertPaths = split(argv[++i], ',');
+            } else {
+                std::cerr << "--as-cert-paths option requires one argument."
+                          << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -315,13 +386,25 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if (!maa && (asUrls.empty() || asCertPaths.empty())) {
+        std::cerr << "Usage: --as-urls and --as-cert-paths are mandatory when "
+                     "--maa is not set"
+                  << std::endl;
+        return 1;
+    }
+
     if (numRequests.empty()) {
         std::cerr << "Missing mandatory argument --num-requests" << std::endl;
         return 1;
     }
 
+    if (resultsFile.empty()) {
+        std::cerr << "Missing mandatory argument --results-file" << std::endl;
+        return 1;
+    }
+
     doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa, resultsFile,
-                maaUrl);
+                maaUrl, asUrls, asCertPaths);
 
     return 0;
 }

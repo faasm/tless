@@ -9,6 +9,7 @@ use shellexpand;
 use std::{
     collections::HashMap,
     fs,
+    path::Path,
     process::{Command, ExitStatus},
     time::Duration,
 };
@@ -562,33 +563,42 @@ impl Azure {
     // Ansible Provisioning Functions
     // -------------------------------------------------------------------------
 
-    // WARNING: this method assumes that the VM names are prefixed with the
-    // VM deployment group name
-    // WARNING: this method assumes that the inventory name is the same than
-    // the yaml file containing the tasks
     pub fn provision_with_ansible(
-        vm_deployment: &str,
-        inventory_name: &str,
-        extra_vars: Option<HashMap<&str, &str>>,
+        deployment_name: &str,
+        inventory_contents: HashMap<&str, Vec<String>>,
+        tasks_yaml_file: &Path,
+        extra_vars: Option<HashMap<&str, HashMap<&str, &str>>>,
     ) -> Result<()> {
-        let mut inventory_file = Env::ansible_root().join("inventory");
+        let mut inventory_file = Env::ansible_root().join(format!("inventory-{deployment_name}"));
         fs::create_dir_all(&inventory_file)?;
         inventory_file.push("vms.ini");
 
         info!(
-            "provision_with_ansible(): provisioning VM deployment (name={vm_deployment}, inv_file={}, extra_vars={extra_vars:?})",
+            "provision_with_ansible(): provisioning VM deployment (name={deployment_name}, inv_file={}, extra_vars={extra_vars:?})",
             inventory_file.display()
         );
 
-        let mut inventory = vec![format!("[{inventory_name}]")];
-        let vms: Vec<Value> = Self::list_all_resources("vm", Some(vm_deployment))?;
-        for vm in vms {
-            let name = vm["name"].as_str().unwrap();
-            let ip = Self::get_vm_ip(name)?;
-            inventory.push(format!(
-                "{} ansible_host={} ansible_user={}",
-                name, ip, AZURE_USERNAME
-            ));
+        let mut inventory = vec![];
+        for (group, vm_names) in inventory_contents {
+            inventory.push(format!("[{group}]"));
+            for vm_name in &vm_names {
+                let vm_ip = Self::get_vm_ip(vm_name)?;
+                let mut entry = format!(
+                    "{} ansible_host={} ansible_user={}",
+                    vm_name, vm_ip, AZURE_USERNAME
+                );
+                if let Some(extra_vars) = &extra_vars
+                    && let Some(vm_vars) = extra_vars.get(vm_name.as_str())
+                {
+                    let vm_vars_str = vm_vars
+                        .iter()
+                        .map(|(k, v)| format!("{k}={v}"))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    entry = format!("{entry} {vm_vars_str}");
+                }
+                inventory.push(entry);
+            }
         }
 
         fs::write(&inventory_file, inventory.join("\n") + "\n")
@@ -603,10 +613,7 @@ impl Azure {
             "ANSIBLE_CONFIG={} ansible-playbook -i {} {} {}",
             Env::ansible_root().join("ansible.cfg").to_str().unwrap(),
             inventory_file.to_str().unwrap(),
-            Env::ansible_root()
-                .join(format!("{inventory_name}.yaml"))
-                .to_str()
-                .unwrap(),
+            tasks_yaml_file.display(),
             match extra_vars {
                 Some(val) => {
                     let json = serde_json::to_string(&val).unwrap();

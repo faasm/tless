@@ -10,7 +10,8 @@ constexpr size_t SGX_REPORT_DATA_SIZE = 64;
 const std::array<uint8_t, 8> MOCK_QUOTE_MAGIC_SGX = {'A', 'C', 'C', 'L',
                                                      'S', 'G', 'X', '!'};
 
-std::string getMockSgxAttestationJwt() {
+std::string getMockSgxAttestationJwt(const std::string &asUrl,
+                                     const std::string &certPath) {
     // Generate ephemeral EC keypair.
     accless::attestation::ec::EcKeyPair keyPair;
 
@@ -28,8 +29,8 @@ std::string getMockSgxAttestationJwt() {
     std::string body = utils::buildRequestBody(quoteB64, runtimeB64, MOCK_GID,
                                                MOCK_WORKFLOW_ID, MOCK_NODE_ID);
 
-    std::string response =
-        accless::attestation::getJwtFromReport("/verify-sgx-report", body);
+    std::string response = accless::attestation::getJwtFromReport(
+        asUrl, certPath, "/verify-sgx-report", body);
     std::string encryptedB64 =
         accless::attestation::utils::extractJsonStringField(response,
                                                             "encrypted_token");
