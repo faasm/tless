@@ -1021,6 +1021,11 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
         let file_name_len = file_name.len();
         let baseline: EscrowBaseline = file_name[0..file_name_len - 4].parse().unwrap();
 
+        // For the moment we do not plot the AcclessMaa baseline.
+        if baseline == EscrowBaseline::AcclessMaa {
+            continue;
+        };
+
         // Open the CSV and deserialize records
         let mut reader = ReaderBuilder::new()
             .has_headers(true)
@@ -1037,9 +1042,10 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
             count += 1;
             let n_req = record.num_requests;
             let request_counts = match baseline {
-                EscrowBaseline::Trustee | EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
-                    REQUEST_COUNTS_TRUSTEE
-                }
+                EscrowBaseline::Trustee
+                | EscrowBaseline::Accless
+                | EscrowBaseline::AcclessMaa
+                | EscrowBaseline::AcclessSingleAuth => REQUEST_COUNTS_TRUSTEE,
                 EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
             };
             let idx = request_counts
@@ -1120,7 +1126,10 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
                             match baseline {
                                 EscrowBaseline::Trustee
                                 | EscrowBaseline::Accless
-                                | EscrowBaseline::AcclessMaa => REQUEST_COUNTS_TRUSTEE[x] as i32,
+                                | EscrowBaseline::AcclessMaa
+                                | EscrowBaseline::AcclessSingleAuth => {
+                                    REQUEST_COUNTS_TRUSTEE[x] as i32
+                                }
                                 EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
                             },
                             *y,
@@ -1144,7 +1153,8 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
                                 match baseline {
                                     EscrowBaseline::Trustee
                                     | EscrowBaseline::Accless
-                                    | EscrowBaseline::AcclessMaa => {
+                                    | EscrowBaseline::AcclessMaa
+                                    | EscrowBaseline::AcclessSingleAuth => {
                                         REQUEST_COUNTS_TRUSTEE[x] as i32
                                     }
                                     EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
@@ -1181,7 +1191,10 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     }
 
     // NOTE: we combine the labels with the figure that is placed side-by-side
-    for baseline in [EscrowBaseline::ManagedHSM, EscrowBaseline::AcclessMaa] {
+    for baseline in [
+        EscrowBaseline::ManagedHSM,
+        EscrowBaseline::AcclessSingleAuth,
+    ] {
         // Calculate position for each legend item
         let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 

@@ -74,6 +74,7 @@ pub enum EscrowBaseline {
     ManagedHSM,
     Accless,
     AcclessMaa,
+    AcclessSingleAuth,
 }
 
 impl fmt::Display for EscrowBaseline {
@@ -81,8 +82,9 @@ impl fmt::Display for EscrowBaseline {
         match self {
             EscrowBaseline::Trustee => write!(f, "trustee"),
             EscrowBaseline::ManagedHSM => write!(f, "managed-hsm"),
-            EscrowBaseline::AcclessMaa => write!(f, "accless-maa"),
             EscrowBaseline::Accless => write!(f, "accless"),
+            EscrowBaseline::AcclessMaa => write!(f, "accless-maa"),
+            EscrowBaseline::AcclessSingleAuth => write!(f, "accless-single-auth"),
         }
     }
 }
@@ -116,8 +118,10 @@ impl EscrowBaseline {
         match self {
             EscrowBaseline::Trustee => get_color_from_label("dark-orange"),
             EscrowBaseline::ManagedHSM => get_color_from_label("dark-green"),
-            EscrowBaseline::AcclessMaa => get_color_from_label("dark-blue"),
             EscrowBaseline::Accless => get_color_from_label("accless"),
+            EscrowBaseline::AcclessMaa | EscrowBaseline::AcclessSingleAuth => {
+                get_color_from_label("dark-blue")
+            }
         }
     }
 }

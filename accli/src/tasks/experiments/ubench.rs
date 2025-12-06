@@ -222,7 +222,9 @@ async fn measure_requests_latency(
                 let owned_escrow_url = escrow_url.to_string();
                 tokio::spawn(wrap_key_in_mhsm(owned_escrow_url))
             }
-            EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+            EscrowBaseline::Accless
+            | EscrowBaseline::AcclessMaa
+            | EscrowBaseline::AcclessSingleAuth => {
                 panic!("accless-based baselines must be run from different script")
             }
         })
@@ -266,7 +268,9 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
     let request_counts = match run_args.baseline {
         EscrowBaseline::Trustee => REQUEST_COUNTS_TRUSTEE,
         EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
-        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => REQUEST_COUNTS_ACCLESS,
+        EscrowBaseline::Accless
+        | EscrowBaseline::AcclessMaa
+        | EscrowBaseline::AcclessSingleAuth => REQUEST_COUNTS_ACCLESS,
     };
 
     match run_args.baseline {
@@ -282,7 +286,7 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
             }
         }
         // The Accless baselines run a function that performs SKR and CP-ABE keygen.
-        EscrowBaseline::Accless => {
+        EscrowBaseline::Accless | EscrowBaseline::AcclessSingleAuth => {
             // These paths are hard-coded during the Ansible provisioning of
             // the attestation-service.
             let mut cert_paths = vec![];
@@ -411,16 +415,23 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
             format!("{}", run_args.baseline),
         ];
 
-        let client_vm_name = match run_args.baseline {
+        let client_vm_name = match &run_args.baseline {
             EscrowBaseline::Trustee => {
                 cmd_in_vm.push("--escrow-url".to_string());
                 cmd_in_vm.push(Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?);
 
                 experiments::TRUSTEE_CLIENT_VM_NAME
             }
-            EscrowBaseline::Accless => {
+            baseline @ (EscrowBaseline::Accless | EscrowBaseline::AcclessSingleAuth) => {
+                // Decide number of attestation-services based on baseline.
+                let num_as = if matches!(baseline, EscrowBaseline::Accless) {
+                    experiments::ACCLESS_NUM_ATTESTATION_SERVICES
+                } else {
+                    1
+                };
                 let mut as_urls = vec![];
-                for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+
+                for i in 0..num_as {
                     let as_ip = Azure::get_vm_ip(&format!(
                         "{}-{i}",
                         experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
