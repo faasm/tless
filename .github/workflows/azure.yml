@@ -1,0 +1,23 @@
+name: "SNP End-to-End Tests"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+# Cancel previous running actions for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  snp-vtpm-test:
+    runs-on: [self-hosted]
+    steps:
+      - name: "Check out the code"
+        uses: actions/checkout@v4
+
