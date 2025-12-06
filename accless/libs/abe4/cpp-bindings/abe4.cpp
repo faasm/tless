@@ -160,6 +160,13 @@ unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
 std::vector<uint8_t>
 packFullKey(const std::vector<std::string> &authorities,
             const std::vector<std::vector<uint8_t>> &partial_keys) {
+    if (authorities.size() != partial_keys.size()) {
+        std::cerr << "accless(abe4): packFullKey(): size mismatch between"
+                  << " authorities (" << authorities.size() << ") and partial"
+                  << "keys (" << partial_keys.size() << ")" << std::endl;
+        throw std::runtime_error("accless(abe4): size mismatch packing full key");
+    }
+
     std::map<std::string, std::vector<uint8_t>> key_map;
     for (size_t i = 0; i < authorities.size(); ++i) {
         key_map[authorities[i]] = partial_keys[i];
