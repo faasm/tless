@@ -164,7 +164,8 @@ packFullKey(const std::vector<std::string> &authorities,
         std::cerr << "accless(abe4): packFullKey(): size mismatch between"
                   << " authorities (" << authorities.size() << ") and partial"
                   << "keys (" << partial_keys.size() << ")" << std::endl;
-        throw std::runtime_error("accless(abe4): size mismatch packing full key");
+        throw std::runtime_error(
+            "accless(abe4): size mismatch packing full key");
     }
 
     std::map<std::string, std::vector<uint8_t>> key_map;

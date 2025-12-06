@@ -324,8 +324,10 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                     run_args.num_repeats.to_string(),
                     "--num-requests".to_string(),
                     num_reqs,
-                    "--results_file".to_string(),
-                    Docker::remap_to_docker_path(&results_file)?.display().to_string(),
+                    "--results-file".to_string(),
+                    Docker::remap_to_docker_path(&results_file)?
+                        .display()
+                        .to_string(),
                 ],
             )?;
         }

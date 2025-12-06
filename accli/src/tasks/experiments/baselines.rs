@@ -72,8 +72,8 @@ impl SystemBaseline {
 pub enum EscrowBaseline {
     Trustee,
     ManagedHSM,
-    AcclessMaa,
     Accless,
+    AcclessMaa,
 }
 
 impl fmt::Display for EscrowBaseline {

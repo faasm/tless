@@ -398,6 +398,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if (resultsFile.empty()) {
+        std::cerr << "Missing mandatory argument --results-file" << std::endl;
+        return 1;
+    }
+
     doBenchmark(numRequests, numWarmupRepeats, numRepeats, maa, resultsFile,
                 maaUrl, asUrls, asCertPaths);
 
