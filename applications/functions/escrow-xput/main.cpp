@@ -28,6 +28,91 @@
 #include <thread>
 #include <vector>
 
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <queue>
+
+class ThreadPool {
+  public:
+    ThreadPool(size_t threads) : stop(false), in_flight_tasks(0) {
+        for (size_t i = 0; i < threads; ++i) {
+            workers.emplace_back([this] {
+                for (;;) {
+                    std::function<void()> task;
+
+                    {
+                        std::unique_lock<std::mutex> lock(this->queue_mutex);
+                        this->condition.wait(lock, [this] {
+                            return this->stop || !this->tasks.empty();
+                        });
+                        if (this->stop && this->tasks.empty()) {
+                            return;
+                        }
+                        task = std::move(this->tasks.front());
+                        this->tasks.pop();
+                    }
+
+                    task();
+
+                    {
+                        std::unique_lock<std::mutex> lock(this->tasks_mutex);
+                        this->in_flight_tasks--;
+                    }
+                    this->tasks_cv.notify_one();
+                }
+            });
+        }
+    }
+
+    template <class F, class... Args> void enqueue(F &&f, Args &&...args) {
+        auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+
+            if (stop) {
+                throw std::runtime_error("enqueue on stopped ThreadPool");
+            }
+
+            tasks.emplace(task);
+            {
+                std::unique_lock<std::mutex> lock(this->tasks_mutex);
+                this->in_flight_tasks++;
+            }
+        }
+        condition.notify_one();
+    }
+
+    void wait() {
+        std::unique_lock<std::mutex> lock(this->tasks_mutex);
+        this->tasks_cv.wait(lock,
+                            [this] { return this->in_flight_tasks == 0; });
+    }
+
+    ~ThreadPool() {
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            stop = true;
+        }
+        condition.notify_all();
+        for (std::thread &worker : workers) {
+            worker.join();
+        }
+    }
+
+  private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+
+    std::mutex queue_mutex;
+    std::condition_variable condition;
+    bool stop;
+
+    std::mutex tasks_mutex;
+    std::condition_variable tasks_cv;
+    size_t in_flight_tasks;
+};
+
 std::vector<std::string> split(const std::string &s, char delimiter) {
     std::vector<std::string> tokens;
     std::string token;
@@ -81,7 +166,7 @@ std::string sendSingleAcclessRequest(const std::string &asUrl,
  * @return The time elapsed to run the number of requests.
  */
 std::chrono::duration<double>
-runRequests(int numRequests, int maxParallelism,
+runRequests(ThreadPool &pool, int numRequests, int maxParallelism,
             const std::vector<std::string> &asUrls,
             const std::vector<std::string> &asCertPaths) {
     // =======================================================================
@@ -135,9 +220,6 @@ runRequests(int numRequests, int maxParallelism,
     std::cout << "escrow-xput: beginning benchmark. num reqs: " << numRequests
               << std::endl;
 
-    std::counting_semaphore semaphore(maxParallelism);
-    std::vector<std::thread> threads;
-
     auto start = std::chrono::steady_clock::now();
 
     // Generate ephemeral EC keypair.
@@ -151,31 +233,19 @@ runRequests(int numRequests, int maxParallelism,
     auto report = accless::attestation::snp::getReport(reportData);
 
     for (int i = 1; i < numRequests; ++i) {
-        // Limit how many threads we spawn in parallel by acquiring a semaphore.
-        semaphore.acquire();
-
-        threads.emplace_back([&semaphore, &asUrls, &asCertPaths, &report,
-                              &reportDataVec, &gid, &wfId, &nodeId, i,
-                              numAs = asUrls.size()]() {
-            auto response = sendSingleAcclessRequest(
-                asUrls[i % numAs], asCertPaths[i % numAs], report,
-                reportDataVec, gid, wfId, nodeId);
-            // And releasing when the thread is done.
-            semaphore.release();
-        });
+        pool.enqueue(sendSingleAcclessRequest,
+                     std::cref(asUrls[i % asUrls.size()]),
+                     std::cref(asCertPaths[i % asCertPaths.size()]),
+                     std::cref(report), std::cref(reportDataVec),
+                     std::cref(gid), std::cref(wfId), std::cref(nodeId));
     }
 
     // Send one request out of the loop, to easily process the result.
     auto response = sendSingleAcclessRequest(asUrls[0], asCertPaths[0], report,
                                              reportDataVec, gid, wfId, nodeId);
 
-    // Wait for all requests to finish. We do this now, and not at the end
-    // to emulate the situation where we would have N independent clients.
-    for (auto &t : threads) {
-        if (t.joinable()) {
-            t.join();
-        }
-    }
+    // Wait for all in-flight requests to finish.
+    pool.wait();
 
     // Accless' authorization is equivalent to checking if we can decrypt
     // the originaly ciphertext from the AS' response.
@@ -258,13 +328,14 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
     std::ofstream csvFile(resultsFile, std::ios::out);
     csvFile << "NumRequests,TimeElapsed\n";
 
-    int maxParallelism = 100;
+    int maxParallelism = 10;
+    ThreadPool pool(maxParallelism);
     try {
         for (const auto &i : numRequests) {
             for (int j = 0; j < numWarmupRepeats; j++) {
                 // Pre-warming is only necessary for regular Accless.
                 if (!maa) {
-                    runRequests(i, maxParallelism, asUrls, asCertPaths);
+                    runRequests(pool, i, maxParallelism, asUrls, asCertPaths);
                 }
             }
 
@@ -276,8 +347,8 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
                     // race conditions.
                     elapsedTimeSecs = runMaaRequests(i, 10, maaUrl);
                 } else {
-                    elapsedTimeSecs =
-                        runRequests(i, maxParallelism, asUrls, asCertPaths);
+                    elapsedTimeSecs = runRequests(pool, i, maxParallelism,
+                                                  asUrls, asCertPaths);
                 }
                 csvFile << i << "," << elapsedTimeSecs.count() << '\n';
             }
