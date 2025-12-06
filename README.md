@@ -6,7 +6,7 @@
   </p>
 
   <p>
-    <a href="#">
+    <a href="https://github.com/faasm/tless/blob/main/VERSION">
       <img src="version.svg" alt="Accless Version" />
     </a>
     <a href="https://github.com/faasm/tless/actions/workflows/tests.yml">
