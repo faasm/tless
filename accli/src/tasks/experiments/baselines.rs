@@ -96,8 +96,9 @@ impl FromStr for EscrowBaseline {
         match input {
             "trustee" => Ok(EscrowBaseline::Trustee),
             "managed-hsm" => Ok(EscrowBaseline::ManagedHSM),
-            "accless-maa" => Ok(EscrowBaseline::AcclessMaa),
             "accless" => Ok(EscrowBaseline::Accless),
+            "accless-maa" => Ok(EscrowBaseline::AcclessMaa),
+            "accless-single-auth" => Ok(EscrowBaseline::AcclessSingleAuth),
             _ => Err(()),
         }
     }
@@ -105,11 +106,12 @@ impl FromStr for EscrowBaseline {
 
 impl EscrowBaseline {
     pub fn iter_variants() -> std::slice::Iter<'static, EscrowBaseline> {
-        static VARIANTS: [EscrowBaseline; 4] = [
+        static VARIANTS: [EscrowBaseline; 5] = [
             EscrowBaseline::Trustee,
             EscrowBaseline::ManagedHSM,
-            EscrowBaseline::AcclessMaa,
             EscrowBaseline::Accless,
+            EscrowBaseline::AcclessMaa,
+            EscrowBaseline::AcclessSingleAuth,
         ];
         VARIANTS.iter()
     }

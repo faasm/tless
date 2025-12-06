@@ -1008,6 +1008,11 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     // Collect data
     let mut data = BTreeMap::<EscrowBaseline, [f64; REQUEST_COUNTS_TRUSTEE.len()]>::new();
     for baseline in EscrowBaseline::iter_variants() {
+        // Temporarily skip plotting Accless Maa.
+        if baseline == &EscrowBaseline::AcclessMaa {
+            continue;
+        }
+
         data.insert(baseline.clone(), [0.0; REQUEST_COUNTS_TRUSTEE.len()]);
     }
 
@@ -1115,6 +1120,7 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     .unwrap();
 
     for (baseline, values) in data {
+        info!("{baseline}");
         // Draw line
         chart
             .draw_series(LineSeries::new(
@@ -1185,16 +1191,13 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
 
         match baseline {
             EscrowBaseline::ManagedHSM => (legend_x_start, legend_y_pos),
-            EscrowBaseline::AcclessMaa => (legend_x_start + 220, legend_y_pos),
+            EscrowBaseline::Trustee => (legend_x_start + 220, legend_y_pos),
             _ => panic!(),
         }
     }
 
     // NOTE: we combine the labels with the figure that is placed side-by-side
-    for baseline in [
-        EscrowBaseline::ManagedHSM,
-        EscrowBaseline::AcclessSingleAuth,
-    ] {
+    for baseline in [EscrowBaseline::ManagedHSM, EscrowBaseline::Trustee] {
         // Calculate position for each legend item
         let (x_pos, y_pos) = legend_label_pos_for_baseline(&baseline);
 
@@ -1246,27 +1249,26 @@ fn plot_escrow_cost() {
     // Rounded monthly cost (in USD) of a Standard_DCas_v5 as of 17/04/2025
     const UNIT_MONTHLY_COST_DC2: u32 = 62;
 
-    // We obtain this numbers by following the instructions to run the escrow-xput
-    // benchmark, and do a run where we modify the number of requests to be [0, 10]
-    // These numbers are run when the server is a D2
+    // FIXME: grab this values from the escrow-xput run.
     const ACCLESS_LATENCY_D2: &[f64] = &[
         0.091594, 0.100394, 0.107495, 0.111224, 0.11829, 0.122359, 0.126534, 0.131722, 0.127414,
         0.123334,
     ];
+    let trustee_latency_single_req = 0.05;
 
     // Variables:
-    let trustee_latency_single_req = 0.05;
     let trustee_unit_cost = UNIT_MONTHLY_COST_DC2;
-    let accless_unit_cost = UNIT_MONTHLY_COST_DC2;
+    let accless_unit_cost = UNIT_MONTHLY_COST_DC2 * 3;
     let num_max_users = 10;
     let accless_latency: Vec<(u32, f64)> = (1..=ACCLESS_LATENCY_D2.len() as u32)
         .map(|x| (x, ACCLESS_LATENCY_D2[x as usize - 1]))
         .collect();
 
-    let plot_path = Env::experiments_root()
+    let mut plot_path = Env::experiments_root()
         .join(Experiment::ESCROW_COST_NAME)
-        .join("plots")
-        .join("cost.svg");
+        .join("plots");
+    fs::create_dir_all(plot_path.clone()).unwrap();
+    plot_path.push(format!("{}.svg", Experiment::ESCROW_COST_NAME));
     let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
@@ -1415,17 +1417,17 @@ fn plot_escrow_cost() {
         .unwrap();
 
     fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
-        let legend_x_start = 100;
+        let legend_x_start = 20;
         let legend_y_pos = 6;
 
         match baseline {
-            EscrowBaseline::Trustee => (legend_x_start, legend_y_pos),
-            EscrowBaseline::Accless => (legend_x_start + 120, legend_y_pos),
+            EscrowBaseline::Accless => (legend_x_start, legend_y_pos),
+            EscrowBaseline::AcclessSingleAuth => (legend_x_start + 120, legend_y_pos),
             _ => panic!(),
         }
     }
 
-    for baseline in &[EscrowBaseline::Trustee, EscrowBaseline::Accless] {
+    for baseline in &[EscrowBaseline::Accless, EscrowBaseline::AcclessSingleAuth] {
         // Calculate position for each legend item
         let (x_pos, y_pos) = legend_label_pos_for_baseline(baseline);
 
@@ -1457,7 +1459,10 @@ fn plot_escrow_cost() {
     }
 
     root.present().unwrap();
-    println!("invrs: generated plot at: {}", plot_path.display());
+    info!(
+        "plot_escrow_cost(): generated plot at: {}",
+        plot_path.display()
+    );
 }
 
 pub fn plot(exp: &Experiment) -> Result<()> {
