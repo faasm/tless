@@ -93,7 +93,7 @@ async fn set_reference_values(escrow_url: &str) -> Result<()> {
     let reference_values: HashMap<&str, String> = HashMap::from([
         (
             "measurement",
-            base64::engine::general_purpose::STANDARD.encode(snp_report.report_data),
+            base64::engine::general_purpose::STANDARD.encode(snp_report.measurement),
         ),
         (
             "snp_pcr11",
@@ -176,9 +176,7 @@ default runtime_opaque := 0
 default storage_opaque := 0
 default sourced_data := 0
 
-# The TEE name contains a dash, so we must use index syntax instead of
-# dot-notation to look it up in the input.
-az := input["az-snp-vtpm"]
+az := input.az_snp_vtpm
 
 executables := 3 if {
     az
@@ -233,6 +231,8 @@ trust_claims := {
             "set-attestation-policy",
             "--policy-file",
             tmp_file,
+            "--id",
+            "default_cpu",
         ])
         .output()?;
 
