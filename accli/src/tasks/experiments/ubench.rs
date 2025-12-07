@@ -86,7 +86,7 @@ async fn set_resource_policy(escrow_url: &str) -> Result<()> {
         r#"
 package policy
 default allow = false
-allow {{
+allow if {{
 input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
 }}
 "#,
