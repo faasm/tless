@@ -54,6 +54,31 @@ class Abe4ApiTest : public ::testing::Test {
 
         ASSERT_FALSE(decrypted_gt.has_value());
     }
+
+    void assert_hybrid_round_trip(
+        const std::vector<accless::abe4::UserAttribute> &user_attrs,
+        const std::string &policy, const std::string &plaintext,
+        const std::string &aad) {
+        auto auths = gather_authorities(user_attrs, policy);
+        accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+        std::string gid = "test_gid";
+        std::string usk_b64 =
+            accless::abe4::keygen(gid, setup_output.msk, user_attrs);
+
+        std::vector<uint8_t> plaintext_bytes(plaintext.begin(),
+                                             plaintext.end());
+        std::vector<uint8_t> aad_bytes(aad.begin(), aad.end());
+
+        auto hybrid_ct = accless::abe4::hybrid::encrypt(
+            setup_output.mpk, policy, plaintext_bytes, aad_bytes);
+        auto decrypted = accless::abe4::hybrid::decrypt(
+            usk_b64, gid, policy, hybrid_ct.abe_ciphertext,
+            hybrid_ct.sym_ciphertext, aad_bytes);
+
+        ASSERT_TRUE(decrypted.has_value());
+        std::string decrypted_str(decrypted->begin(), decrypted->end());
+        EXPECT_EQ(plaintext, decrypted_str);
+    }
 };
 
 TEST_F(Abe4ApiTest, SingleAuthSingleOk) {
@@ -189,4 +214,71 @@ TEST_F(Abe4ApiTest, SimpleNegationOk) {
     };
     std::string policy = "!A.c:2";
     assert_decryption_ok(user_attrs, policy);
+}
+
+TEST_F(Abe4ApiTest, HybridRoundTripOk) {
+    std::vector<accless::abe4::UserAttribute> user_attrs = {
+        {"A", "a", "0"},
+        {"A", "c", "1"},
+    };
+    std::string policy = "A.a:0 & !A.c:0";
+    std::string plaintext = "hybrid plaintext payload";
+    std::string aad = "hybrid aad data";
+    assert_hybrid_round_trip(user_attrs, policy, plaintext, aad);
+}
+
+TEST_F(Abe4ApiTest, HybridDecryptFailsForUnauthorizedUser) {
+    std::vector<accless::abe4::UserAttribute> user_attrs = {};
+    std::string policy = "A.a:0";
+    std::string plaintext = "hybrid plaintext payload";
+    std::string aad = "hybrid aad data";
+
+    auto auths = gather_authorities(user_attrs, policy);
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    std::string gid = "test_gid";
+    std::string usk_b64 =
+        accless::abe4::keygen(gid, setup_output.msk, user_attrs);
+
+    std::vector<uint8_t> plaintext_bytes(plaintext.begin(), plaintext.end());
+    std::vector<uint8_t> aad_bytes(aad.begin(), aad.end());
+    auto hybrid_ct = accless::abe4::hybrid::encrypt(setup_output.mpk, policy,
+                                                    plaintext_bytes, aad_bytes);
+
+    auto decrypted = accless::abe4::hybrid::decrypt(
+        usk_b64, gid, policy, hybrid_ct.abe_ciphertext,
+        hybrid_ct.sym_ciphertext, aad_bytes);
+    ASSERT_FALSE(decrypted.has_value());
+}
+
+TEST_F(Abe4ApiTest, HybridRejectsModifiedAad) {
+    std::vector<accless::abe4::UserAttribute> user_attrs = {{"A", "a", "0"}};
+    std::string policy = "A.a:0";
+    std::string plaintext = "hybrid plaintext payload";
+    std::string aad = "hybrid aad data";
+    std::string wrong_aad = "tampered aad";
+
+    auto auths = gather_authorities(user_attrs, policy);
+    accless::abe4::SetupOutput setup_output = accless::abe4::setup(auths);
+    std::string gid = "test_gid";
+    std::string usk_b64 =
+        accless::abe4::keygen(gid, setup_output.msk, user_attrs);
+
+    std::vector<uint8_t> plaintext_bytes(plaintext.begin(), plaintext.end());
+    std::vector<uint8_t> aad_bytes(aad.begin(), aad.end());
+    std::vector<uint8_t> wrong_aad_bytes(wrong_aad.begin(), wrong_aad.end());
+
+    auto hybrid_ct = accless::abe4::hybrid::encrypt(setup_output.mpk, policy,
+                                                    plaintext_bytes, aad_bytes);
+
+    auto decrypted = accless::abe4::hybrid::decrypt(
+        usk_b64, gid, policy, hybrid_ct.abe_ciphertext,
+        hybrid_ct.sym_ciphertext, aad_bytes);
+    ASSERT_TRUE(decrypted.has_value());
+    std::string decrypted_str(decrypted->begin(), decrypted->end());
+    EXPECT_EQ(plaintext, decrypted_str);
+
+    auto tampered = accless::abe4::hybrid::decrypt(
+        usk_b64, gid, policy, hybrid_ct.abe_ciphertext,
+        hybrid_ct.sym_ciphertext, wrong_aad_bytes);
+    ASSERT_FALSE(tampered.has_value());
 }

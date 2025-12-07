@@ -127,6 +127,55 @@ std::optional<std::string> decrypt(const std::string &usk,
     return gt_b64;
 }
 
+namespace hybrid {
+
+EncryptOutput encrypt(const std::string &mpk, const std::string &policy,
+                      const std::vector<uint8_t> &plaintext,
+                      const std::vector<uint8_t> &aad) {
+    std::string plaintext_b64 = accless::base64::encode(plaintext);
+    std::string aad_b64 = accless::base64::encode(aad);
+
+    char *result = encrypt_hybrid_abe4(mpk.c_str(), policy.c_str(),
+                                       plaintext_b64.c_str(), aad_b64.c_str());
+    if (!result) {
+        std::cerr
+            << "accless(abe4): FFI call to encrypt_hybrid_abe4 failed. See "
+               "Rust logs for details."
+            << std::endl;
+        throw std::runtime_error(
+            "accless(abe4): encrypt_hybrid_abe4 FFI call failed");
+    }
+
+    auto result_json = nlohmann::json::parse(result);
+    free_string(result);
+
+    return {result_json["abe_ct"], result_json["sym_ct"]};
+}
+
+std::optional<std::vector<uint8_t>>
+decrypt(const std::string &usk, const std::string &gid,
+        const std::string &policy, const std::string &abe_ct,
+        const std::string &sym_ct, const std::vector<uint8_t> &aad) {
+    std::string aad_b64 = accless::base64::encode(aad);
+    char *result =
+        decrypt_hybrid_abe4(usk.c_str(), gid.c_str(), policy.c_str(),
+                            abe_ct.c_str(), sym_ct.c_str(), aad_b64.c_str());
+    if (!result) {
+        std::cerr
+            << "accless(abe4): FFI call to decrypt_hybrid_abe4 failed. See "
+               "Rust logs for details."
+            << std::endl;
+        return std::nullopt;
+    }
+
+    std::string plaintext_b64(result);
+    free_string(result);
+
+    return accless::base64::decode(plaintext_b64);
+}
+
+} // namespace hybrid
+
 std::map<std::string, std::vector<uint8_t>>
 unpackFullKey(const std::vector<uint8_t> &full_key_bytes) {
     std::map<std::string, std::vector<uint8_t>> result;
