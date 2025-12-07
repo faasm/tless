@@ -84,7 +84,7 @@ fn get_kbs_client_path() -> String {
     format!("{}/trustee/target/release/kbs-client", get_coco_code_dir())
 }
 
-async fn set_reference_values(escrow_url: &str) -> Result<()> {
+async fn compute_reference_values() -> Result<HashMap<&'static str, String>> {
     let report = vtpm::get_report()?;
     let quote = vtpm::get_quote(&[])?;
     let hcl_report = HclReport::new(report.clone())?;
@@ -126,6 +126,12 @@ async fn set_reference_values(escrow_url: &str) -> Result<()> {
         ),
     ]);
 
+    Ok(reference_values)
+}
+
+async fn set_reference_values(escrow_url: &str) -> Result<()> {
+    let reference_values = compute_reference_values().await?;
+
     for (name, value) in &reference_values {
         let output = Command::new("sudo")
             .args([
@@ -163,7 +169,9 @@ async fn set_reference_values(escrow_url: &str) -> Result<()> {
 }
 
 async fn set_attestation_policy(escrow_url: &str) -> Result<()> {
-    let tee_att_policy_rego = r#"
+    let reference_values = compute_reference_values().await?;
+    let tee_att_policy_rego = format!(
+        r#"
 package policy
 import rego.v1
 
@@ -178,31 +186,31 @@ default sourced_data := 0
 
 az := input.az_snp_vtpm
 
-executables := 3 if {
+executables := 3 if {{
     az
-    az.measurement in query_reference_value("measurement")
-    az.tpm.pcr11 in query_reference_value("snp_pcr11")
-}
+    az.measurement == "{measurement}"
+    az.tpm.pcr11 == "{snp_pcr11}"
+}}
 
-hardware := 2 if {
+hardware := 2 if {{
     az
-    az.reported_tcb_bootloader in query_reference_value("tcb_bootloader")
-    az.reported_tcb_microcode in query_reference_value("tcb_microcode")
-    az.reported_tcb_snp in query_reference_value("tcb_snp")
-    az.reported_tcb_tee in query_reference_value("tcb_tee")
-}
+    az.reported_tcb_bootloader == "{tcb_bootloader}"
+    az.reported_tcb_microcode == "{tcb_microcode}"
+    az.reported_tcb_snp == "{tcb_snp}"
+    az.reported_tcb_tee == "{tcb_tee}"
+}}
 
-configuration := 2 if {
+configuration := 2 if {{
     az
-    az.platform_smt_enabled in query_reference_value("smt_enabled")
-    az.platform_tsme_enabled in query_reference_value("tsme_enabled")
-    az.policy_abi_major in query_reference_value("abi_major")
-    az.policy_abi_minor in query_reference_value("abi_minor")
-    az.policy_single_socket in query_reference_value("single_socket")
-    az.policy_smt_allowed in query_reference_value("smt_allowed")
-}
+    az.platform_smt_enabled == "{smt_enabled}"
+    az.platform_tsme_enabled == "{tsme_enabled}"
+    az.policy_abi_major == "{abi_major}"
+    az.policy_abi_minor == "{abi_minor}"
+    az.policy_single_socket == "{single_socket}"
+    az.policy_smt_allowed == "{smt_allowed}"
+}}
 
-trust_claims := {
+trust_claims := {{
     "executables": executables,
     "hardware": hardware,
     "configuration": configuration,
@@ -211,8 +219,21 @@ trust_claims := {
     "runtime-opaque": runtime_opaque,
     "storage-opaque": storage_opaque,
     "sourced-data": sourced_data,
-}
-"#;
+}}
+"#,
+        measurement = reference_values["measurement"],
+        snp_pcr11 = reference_values["snp_pcr11"],
+        tcb_bootloader = reference_values["tcb_bootloader"],
+        tcb_microcode = reference_values["tcb_microcode"],
+        tcb_snp = reference_values["tcb_snp"],
+        tcb_tee = reference_values["tcb_tee"],
+        smt_enabled = reference_values["smt_enabled"],
+        tsme_enabled = reference_values["tsme_enabled"],
+        abi_major = reference_values["abi_major"],
+        abi_minor = reference_values["abi_minor"],
+        single_socket = reference_values["single_socket"],
+        smt_allowed = reference_values["smt_allowed"],
+    );
 
     let tmp_file = "/tmp/tee_attestation_policy.rego";
     fs::write(tmp_file, &tee_att_policy_rego)?;
