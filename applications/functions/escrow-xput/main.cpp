@@ -332,12 +332,17 @@ void doBenchmark(const std::vector<int> &numRequests, int numWarmupRepeats,
     ThreadPool pool(maxParallelism);
     try {
         for (const auto &i : numRequests) {
+            /*
             for (int j = 0; j < numWarmupRepeats; j++) {
                 // Pre-warming is only necessary for regular Accless.
                 if (!maa) {
                     runRequests(pool, i, maxParallelism, asUrls, asCertPaths);
                 }
             }
+            */
+            // As a warm-up run one request in each attestation-service to
+            // pre-warm all the collateral.
+            runRequests(pool, asUrls.size(), maxParallelism, asUrls, asCertPaths);
 
             for (int j = 0; j < numRepeats; j++) {
                 std::chrono::duration<double> elapsedTimeSecs;
