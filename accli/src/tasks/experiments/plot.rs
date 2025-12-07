@@ -13,7 +13,14 @@ use csv::ReaderBuilder;
 use log::{debug, error, info};
 use plotters::prelude::*;
 use serde::Deserialize;
-use std::{collections::BTreeMap, env, fs, path::PathBuf, str};
+use std::{
+    collections::BTreeMap,
+    env,
+    fs::{self, File},
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    str,
+};
 
 fn get_all_data_files(exp: &Experiment) -> Result<Vec<PathBuf>> {
     let data_path = format!("{}/{exp}/data", Env::experiments_root().display());
@@ -1079,7 +1086,7 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     root.fill(&WHITE).unwrap();
 
     let x_max = 200;
-    let y_max: f64 = 3.0;
+    let y_max: f64 = 2.0;
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(40)
         .y_label_area_size(40)
@@ -1121,13 +1128,18 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
 
     for (baseline, values) in data {
         // Draw line
+        let mut point_exceeded: Option<(i32, f64)> = None;
         chart
             .draw_series(LineSeries::new(
                 (0..values.len())
                     .zip(values[0..].iter())
-                    .filter(|(_, y)| **y <= y_max)
+                    // .filter(|(_, y)| **y <= y_max)
                     .map(|(x, y)| {
-                        (
+                        // Draw the line until the last point that exceeds y_max.
+                        if let Some(point_exceeded) = point_exceeded {
+                            return point_exceeded;
+                        }
+                        let point = (
                             match baseline {
                                 EscrowBaseline::Trustee
                                 | EscrowBaseline::Accless
@@ -1138,7 +1150,13 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
                                 EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM[x] as i32,
                             },
                             *y,
-                        )
+                        );
+
+                        if point_exceeded.is_none() & (*y > y_max) {
+                            point_exceeded = Some(point);
+                        }
+
+                        point
                     }),
                 EscrowBaseline::get_color(&baseline)
                     .unwrap()
@@ -1244,23 +1262,64 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     );
 }
 
+fn get_escrow_cost_data(path: &str, n: usize) -> Vec<f64> {
+    let file = File::open(path).expect("get_escrow_cost_data(): could not open file (path={path})");
+    let reader = BufReader::new(file);
+
+    // 1. Parse the file and filter for NumRequests == 1
+    let data: Vec<f64> = reader
+        .lines()
+        .skip(1) // Skip CSV header
+        .filter_map(|line| line.ok()) // Unwrap lines safely
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split(',').collect();
+
+            // Check if first column (NumRequests) is "1"
+            if parts.first()?.trim() == "1" {
+                // Parse second column (TimeElapsed)
+                parts.get(1)?.trim().parse::<f64>().ok()
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if data.is_empty() {
+        panic!("get_escrow_cost_data(): no entries for 1 request found (path={path})");
+    }
+
+    // 2. Cycle through the data to fill N positions
+    data.into_iter().cycle().take(n).collect()
+}
+
 fn plot_escrow_cost() {
-    // Rounded monthly cost (in USD) of a Standard_DCas_v5 as of 17/04/2025
+    // Rounded monthly cost (in USD) of a Standard_DCas_v5 as of 17/04/2025.
     const UNIT_MONTHLY_COST_DC2: u32 = 62;
 
-    // FIXME: grab this values from the escrow-xput run.
-    const ACCLESS_LATENCY_D2: &[f64] = &[
-        0.091594, 0.100394, 0.107495, 0.111224, 0.11829, 0.122359, 0.126534, 0.131722, 0.127414,
-        0.123334,
-    ];
-    let trustee_latency_single_req = 0.05;
+    let trustee_latency_single_req = get_escrow_cost_data(
+        &format!(
+            "{}/escrow-xput/data/{}.csv",
+            Env::experiments_root().display(),
+            EscrowBaseline::Trustee
+        ),
+        1_usize,
+    )[0];
 
     // Variables:
     let trustee_unit_cost = UNIT_MONTHLY_COST_DC2;
     let accless_unit_cost = UNIT_MONTHLY_COST_DC2 * 3;
+    let accless_single_auth_unit_cost = UNIT_MONTHLY_COST_DC2;
     let num_max_users = 10;
-    let accless_latency: Vec<(u32, f64)> = (1..=ACCLESS_LATENCY_D2.len() as u32)
-        .map(|x| (x, ACCLESS_LATENCY_D2[x as usize - 1]))
+    let accless_latency_ys = get_escrow_cost_data(
+        &format!(
+            "{}/escrow-xput/data/{}.csv",
+            Env::experiments_root().display(),
+            EscrowBaseline::Accless
+        ),
+        num_max_users as usize,
+    );
+    let accless_latency: Vec<(u32, f64)> = (1..=accless_latency_ys.len() as u32)
+        .map(|x| (x, accless_latency_ys[x as usize - 1]))
         .collect();
 
     let mut plot_path = Env::experiments_root()
@@ -1271,6 +1330,7 @@ fn plot_escrow_cost() {
     let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
+    let y_max = 75.0;
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
         .margin_top(40)
@@ -1280,7 +1340,7 @@ fn plot_escrow_cost() {
         .x_label_area_size(40)
         .y_label_area_size(40)
         .right_y_label_area_size(40)
-        .build_cartesian_2d(1u32..num_max_users, 0.0f64..300.0)
+        .build_cartesian_2d(1u32..num_max_users, 0.0f64..y_max)
         .unwrap()
         .set_secondary_coord(
             1u32..num_max_users,
@@ -1400,24 +1460,49 @@ fn plot_escrow_cost() {
         }))
         .unwrap();
 
+    // Accless-single-auth cost
+    let accless_cost: Vec<(u32, f64)> = (1..=num_max_users)
+        .map(|x| (x, (accless_single_auth_unit_cost) as f64))
+        .collect();
+    chart
+        .draw_secondary_series(LineSeries::new(
+            accless_cost.clone(),
+            EscrowBaseline::get_color(&EscrowBaseline::AcclessSingleAuth)
+                .unwrap()
+                .stroke_width(STROKE_WIDTH),
+        ))
+        .unwrap();
+    chart
+        .draw_secondary_series(accless_cost.into_iter().map(|(x, y)| {
+            Circle::new(
+                (x, y),
+                7,
+                EscrowBaseline::get_color(&EscrowBaseline::AcclessSingleAuth)
+                    .unwrap()
+                    .filled(),
+            )
+        }))
+        .unwrap();
+
+    // Draw black frame.
     chart
         .plotting_area()
         .draw(&PathElement::new(
-            vec![(0, 1.0), (num_max_users, 1.0)],
+            vec![(1u32, y_max), (num_max_users, y_max)],
             BLACK,
         ))
         .unwrap();
     chart
         .plotting_area()
         .draw(&PathElement::new(
-            vec![(num_max_users, 0.0), (num_max_users, 1.0)],
+            vec![(num_max_users, 0.0), (num_max_users, y_max)],
             BLACK,
         ))
         .unwrap();
 
     fn legend_label_pos_for_baseline(baseline: &EscrowBaseline) -> (i32, i32) {
         let legend_x_start = 20;
-        let legend_y_pos = 6;
+        let legend_y_pos = 2;
 
         match baseline {
             EscrowBaseline::Accless => (legend_x_start, legend_y_pos),
