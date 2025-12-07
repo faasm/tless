@@ -5,7 +5,7 @@
 
 namespace accless::attestation::snp {
 
-// Returns concatenated PEM (VCEK + chain) or throws on failure.
+// Returns concatenated PEM (VCEK + chain) or an empty string on failure.
 const std::string &getVcekPemBundle();
 
 // If you prefer separate pieces:
