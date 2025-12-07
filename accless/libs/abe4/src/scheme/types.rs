@@ -10,7 +10,7 @@ use std::collections::{HashMap, hash_map::Entry};
 // -----------------------------------------------------------------------------------------------
 
 /// Structure representing a cipher-text.
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ciphertext {
     pub c_1_vec: Vec<H>,
     pub c_2_vec: Vec<G>,

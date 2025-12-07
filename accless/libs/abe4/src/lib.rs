@@ -1,11 +1,13 @@
 mod curve;
 mod hashing;
+pub mod hybrid;
 pub mod policy;
 pub mod scheme;
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::engine::{Engine as _, general_purpose};
 pub use curve::Gt;
+pub use hybrid::{decrypt_hybrid, encrypt_hybrid};
 pub use policy::{Policy, UserAttribute};
 pub use scheme::{decrypt, encrypt, iota, keygen, setup, tau};
 use scheme::{
