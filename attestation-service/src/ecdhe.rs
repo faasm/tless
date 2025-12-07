@@ -152,7 +152,8 @@ pub async fn do_ecdhe_ke(
         &node_data.workflow_id,
         &node_data.node_id,
     )
-    .await.context("do_ecdhe_ke(): error generating JWT claims")?;
+    .await
+    .context("do_ecdhe_ke(): error generating JWT claims")?;
     let header = jsonwebtoken::Header {
         alg: jsonwebtoken::Algorithm::RS256,
         ..Default::default()

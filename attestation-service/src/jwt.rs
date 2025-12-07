@@ -71,7 +71,11 @@ impl JwtClaims {
         workflow_id: &str,
         node_id: &str,
     ) -> Result<Vec<u8>> {
-        let cache_key = (gid.to_string(), workflow_id.to_string(), node_id.to_string());
+        let cache_key = (
+            gid.to_string(),
+            workflow_id.to_string(),
+            node_id.to_string(),
+        );
 
         // Fast path: read from the cache.
         let partial_usk_bytes = {
@@ -88,7 +92,9 @@ impl JwtClaims {
             abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
             abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_NODE_LABEL, node_id),
         ];
-        debug!("get_partial_usk_bytes(): generating partial USK (gid={gid}, wfid={workflow_id}, node_id={node_id})");
+        debug!(
+            "get_partial_usk_bytes(): generating partial USK (gid={gid}, wfid={workflow_id}, node_id={node_id})"
+        );
 
         let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
         let iota = abe4::scheme::iota::Iota::new(&user_attributes);
@@ -125,7 +131,8 @@ impl JwtClaims {
         workflow_id: &str,
         node_id: &str,
     ) -> Result<Self> {
-        let partial_usk_bytes = Self::get_partial_usk_bytes(state, gid, workflow_id, node_id).await?;
+        let partial_usk_bytes =
+            Self::get_partial_usk_bytes(state, gid, workflow_id, node_id).await?;
 
         Ok(Self {
             sub: "attested-client".to_string(),

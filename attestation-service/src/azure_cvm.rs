@@ -350,7 +350,9 @@ pub async fn verify_snp_vtpm_report(
         &Tee::AzureCvm,
         &payload.node_data,
         &raw_pubkey_bytes,
-    ).await {
+    )
+    .await
+    {
         Ok(response) => (StatusCode::OK, Json(response)),
         Err(e) => {
             error!("error encrypting JWT (error={e:?})");

@@ -37,7 +37,8 @@ pub struct AttestationServiceState {
     /// Master Pulic Key for the attestation service as one of the authorities
     /// of the decentralized CP-ABE scheme.
     pub partial_mpk: PartialMPK,
-    /// Cache of generated partial User Secret Key per GID, workflow Id, and node Id.
+    /// Cache of generated partial User Secret Key per GID, workflow Id, and
+    /// node Id.
     // TODO: periodically clean the cache.
     pub partial_usk_cache: RwLock<HashMap<(String, String, String), Vec<u8>>>,
 
