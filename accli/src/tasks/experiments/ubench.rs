@@ -87,7 +87,10 @@ async fn set_resource_policy(escrow_url: &str) -> Result<()> {
 package policy
 default allow = false
 allow if {{
-input.submods.cpu0["ear.veraison.annotated-evidence"]["{}"]
+    az := input.submods.cpu0["ear.veraison.annotated-evidence"]["{}"]
+
+    # Overall appraisal must be good.
+    input.submods.cpu0["ear.status"] == "affirming"
 }}
 "#,
         TEE
