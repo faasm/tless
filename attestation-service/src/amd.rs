@@ -305,7 +305,7 @@ where
     // Slow path: fetch collateral from request or, if empty, from AMD's KDS.
     let vcek = if let Some(vcek_str) = maybe_vcek {
         debug!("get_snp_vcek(): cache miss, parsing VCEK from collateral");
-        SnpVcek::from_bytes(&vcek_str.as_bytes())?
+        SnpVcek::from_bytes(vcek_str.as_bytes())?
     } else {
         debug!("get_snp_vcek(): cache miss, fetching VCEK from AMD's KDS");
         fetch_vcek_from_kds(&proc_type, report).await?
