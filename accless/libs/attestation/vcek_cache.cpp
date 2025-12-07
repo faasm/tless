@@ -25,13 +25,15 @@ VcekCache g_cache;
 
 size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata) {
     auto *out = static_cast<std::string *>(userdata);
-    if (!out) return 0;
+    if (!out)
+        return 0;
     const size_t total = size * nmemb;
     out->append(ptr, total);
     return total;
 }
 
-// Perform one-time VCEK fetch, but *never throw*. If unavailable, returns empty PEM strings.
+// Perform one-time VCEK fetch, but *never throw*. If unavailable, returns empty
+// PEM strings.
 void initVcekCache() {
     CURL *curl = curl_easy_init();
     if (!curl) {
@@ -47,7 +49,7 @@ void initVcekCache() {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L);      // do not block
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L); // do not block
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 300L);
 
     // Add Metadata:true header
@@ -98,9 +100,7 @@ void initVcekCache() {
     }
 }
 
-void ensureInitialized() {
-    std::call_once(g_cache.once, initVcekCache);
-}
+void ensureInitialized() { std::call_once(g_cache.once, initVcekCache); }
 
 } // namespace
 
