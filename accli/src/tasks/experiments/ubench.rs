@@ -154,11 +154,11 @@ async fn set_reference_values(escrow_url: &str) -> Result<()> {
             let reason = format!("error setting reference value (name={name})");
             error!("set_reference_values(): {reason}");
             error!(
-                "set_resource_policy(): stdout: {}",
+                "set_reference_values(): stdout: {}",
                 String::from_utf8_lossy(&output.stdout)
             );
             error!(
-                "set_resource_policy(): stderr: {}",
+                "set_reference_values(): stderr: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
             anyhow::bail!(reason);
