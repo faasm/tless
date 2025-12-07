@@ -181,19 +181,17 @@ fn parse_quote_bytes(quote_bytes: &[u8]) -> Result<(HclReport, Quote)> {
     Ok((vtpm_report, quote))
 }
 
-/*
-fn get_vcek_from_collateral(collateral: Option<Collateral>) -> Result<Vcek> {
-    let collateral = collateral.ok_or_else(|| {
-        let reason = format!("azure cVM requests must include collateral");
-        error!("get_vcek_from_collateral(): {reason})");
-        anyhow::anyhow!(reason)
-    })?;
-
-    // FIXME: integrate with cache here.
-
-    Ok(Vcek(X509::from_pem(collateral.vcek_cert_pem.as_bytes())?))
-}
-*/
+// fn get_vcek_from_collateral(collateral: Option<Collateral>) -> Result<Vcek> {
+// let collateral = collateral.ok_or_else(|| {
+// let reason = format!("azure cVM requests must include collateral");
+// error!("get_vcek_from_collateral(): {reason})");
+// anyhow::anyhow!(reason)
+// })?;
+//
+// FIXME: integrate with cache here.
+//
+// Ok(Vcek(X509::from_pem(collateral.vcek_cert_pem.as_bytes())?))
+// }
 
 pub async fn verify_snp_vtpm_report(
     Extension(state): Extension<Arc<AttestationServiceState>>,

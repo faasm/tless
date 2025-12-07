@@ -268,7 +268,11 @@ where
 /// When running in Azure cVMs, clients may self-report their collateral using
 /// Azure's THIM layer, in which case we use that instead of AMD's KDS to
 /// populate the cache.
-pub async fn get_snp_vcek<R>(report: &R, state: &Arc<AttestationServiceState>, maybe_collateral: Option<Collateral>) -> Result<SnpVcek>
+pub async fn get_snp_vcek<R>(
+    report: &R,
+    state: &Arc<AttestationServiceState>,
+    maybe_collateral: Option<Collateral>,
+) -> Result<SnpVcek>
 where
     R: AmdKdsReport,
 {
