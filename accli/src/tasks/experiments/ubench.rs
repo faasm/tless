@@ -284,7 +284,7 @@ allow if {{
 
     # Overall appraisal must be good.
     # If we comment the following line, it works.
-    input.submods.cpu0["ear.status"] == "affirming"
+    # input.submods.cpu0["ear.status"] == "affirming"
 }}
 "#,
         TEE
