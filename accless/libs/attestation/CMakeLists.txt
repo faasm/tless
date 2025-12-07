@@ -25,6 +25,7 @@ add_library(${CMAKE_PROJECT_TARGET}
     mock_snp.cpp
     utils.cpp
     snp.cpp
+    vcek_cache.cpp
 )
 target_link_libraries(${CMAKE_PROJECT_TARGET} PUBLIC
     azguestattestation

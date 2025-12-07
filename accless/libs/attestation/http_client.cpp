@@ -1,4 +1,5 @@
 #include "attestation.h"
+#include "vcek_cache.h"
 
 #include <cstring>
 #include <curl/curl.h>
@@ -19,6 +20,11 @@ static size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb,
 }
 
 HttpClient::HttpClient(const std::string &certPath) : certPath_(certPath) {
+    // Initialize process-wide VCEK cache once. This is only populated if
+    // we are deployed inside an Azure cVM, otherwise will return empty
+    // strings.
+    accless::attestation::snp::getVcekPemBundle();
+
     curl_ = curl_easy_init();
     if (!curl_) {
         throw std::runtime_error("accless(att): failed to init curl");

@@ -1,12 +1,13 @@
 use crate::{
     amd::get_snp_vcek,
     ecdhe,
-    request::{Tee, snp::SnpRequest},
+    request::{Tee, snp::{Collateral, SnpRequest}},
     state::AttestationServiceState,
 };
 use anyhow::Result;
 use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use az_snp_vtpm::{
+    certs::Vcek,
     hcl::HclReport,
     report::{AttestationReport, Validateable},
     vtpm::Quote,
@@ -181,6 +182,18 @@ fn parse_quote_bytes(quote_bytes: &[u8]) -> Result<(HclReport, Quote)> {
     Ok((vtpm_report, quote))
 }
 
+fn get_vcek_from_collateral(collateral: Option<Collateral>) -> Result<Vcek> {
+    let collateral = collateral.ok_or_else(|| {
+        let reason = format!("azure cVM requests must include collateral");
+        error!("get_vcek_from_collateral(): {reason})");
+        anyhow::anyhow!(reason)
+    })?;
+
+    // FIXME: integrate with cache here.
+
+    Ok(Vcek(X509::from_pem(collateral.vcek_cert_pem.as_bytes())?))
+}
+
 pub async fn verify_snp_vtpm_report(
     Extension(state): Extension<Arc<AttestationServiceState>>,
     Json(payload): Json<SnpRequest>,
@@ -236,7 +249,22 @@ pub async fn verify_snp_vtpm_report(
         }
     };
 
+    // Requests from Azure cVMs include their collateral in the payload.
+    let vcek = match get_vcek_from_collateral(payload.collateral) {
+        Ok(vcek) => vcek,
+        Err(e) => {
+            error!(
+                "verify_snp_vtpm_report(): error parsing VCEK from payload (error={e:?})"
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "invalid request payload, missing collateral" })),
+            );
+        }
+    };
+
     // Verify the SNP report using the host's VCEK.
+    /*
     let vcek = match get_snp_vcek(&snp_report, &state).await {
         Ok(report) => report,
         Err(e) => {
@@ -251,7 +279,8 @@ pub async fn verify_snp_vtpm_report(
     // we need to work-around their different Vcek definitions by converting to
     // an OpenSSL struct.
     let az_vcek = az_snp_vtpm::certs::Vcek(X509::from(vcek));
-    match snp_report.validate(&az_vcek) {
+    */
+    match snp_report.validate(&vcek) {
         Ok(()) => {
             info!("verify_snp_vtpm_report(): verified SNP-vTPM report");
         }
