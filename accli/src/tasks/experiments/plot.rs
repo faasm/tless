@@ -1079,7 +1079,7 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     root.fill(&WHITE).unwrap();
 
     let x_max = 200;
-    let y_max: f64 = 5.0;
+    let y_max: f64 = 3.0;
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(40)
         .y_label_area_size(40)
@@ -1120,7 +1120,6 @@ fn plot_escrow_xput(data_files: &Vec<PathBuf>) {
     .unwrap();
 
     for (baseline, values) in data {
-        info!("{baseline}");
         // Draw line
         chart
             .draw_series(LineSeries::new(
