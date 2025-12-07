@@ -61,8 +61,51 @@ pub struct JwtClaims {
 }
 
 impl JwtClaims {
-    /// # Description
+    /// Retrieve the partial USK from the cache, create if missing.
     ///
+    /// We cache partial user secret keys for scale-out requests coming from
+    /// the same user, for the same function, in the same workflow.
+    async fn get_partial_usk_bytes(
+        state: &AttestationServiceState,
+        gid: &str,
+        workflow_id: &str,
+        node_id: &str,
+    ) -> Result<Vec<u8>> {
+        let cache_key = (gid.to_string(), workflow_id.to_string(), node_id.to_string());
+
+        // Fast path: read from the cache.
+        let partial_usk_bytes = {
+            let cache = state.partial_usk_cache.read().await;
+            cache.get(&cache_key).cloned()
+        };
+        if let Some(partial_usk_bytes) = partial_usk_bytes {
+            return Ok(partial_usk_bytes);
+        }
+
+        // Slow path: generate partial USK and populate cache.
+        let rng = rand::thread_rng();
+        let user_attributes: Vec<UserAttribute> = vec![
+            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
+            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_NODE_LABEL, node_id),
+        ];
+        debug!("get_partial_usk_bytes(): generating partial USK (gid={gid}, wfid={workflow_id}, node_id={node_id})");
+
+        let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
+        let iota = abe4::scheme::iota::Iota::new(&user_attributes);
+        let partial_usk: PartialUSK =
+            abe4::scheme::keygen_partial(rng, gid, &state.partial_msk, &user_attribute_refs, &iota);
+        let mut partial_usk_bytes: Vec<u8> = Vec::new();
+        partial_usk.serialize_compressed(&mut partial_usk_bytes)?;
+
+        // Cache key bytes for future use.
+        {
+            let mut cache = state.partial_usk_cache.write().await;
+            cache.insert(cache_key, partial_usk_bytes.clone());
+        }
+
+        Ok(partial_usk_bytes)
+    }
+
     /// Generates a new JWT based on the attestation service state, and the
     /// specific request metadata.
     ///
@@ -75,29 +118,14 @@ impl JwtClaims {
     ///   executing.
     /// - `node_id`: unique identifier of the node in the workflow graph we are
     ///   executing.
-    pub fn new(
+    pub async fn new(
         state: &AttestationServiceState,
         tee: &Tee,
         gid: &str,
         workflow_id: &str,
         node_id: &str,
     ) -> Result<Self> {
-        let rng = rand::thread_rng();
-        let user_attributes: Vec<UserAttribute> = vec![
-            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_WORKFLOW_LABEL, workflow_id),
-            abe4::policy::UserAttribute::new(&state.id, ATTRIBUTE_NODE_LABEL, node_id),
-        ];
-        debug!("Generating partial USK for gid: {}", gid);
-        debug!("- Workflow ID: {}", workflow_id);
-        debug!("- Node ID: {}", node_id);
-        debug!("- User Attributes: {:?}", user_attributes);
-
-        let user_attribute_refs: Vec<&UserAttribute> = user_attributes.iter().collect();
-        let iota = abe4::scheme::iota::Iota::new(&user_attributes);
-        let partial_usk: PartialUSK =
-            abe4::scheme::keygen_partial(rng, gid, &state.partial_msk, &user_attribute_refs, &iota);
-        let mut partial_usk_bytes: Vec<u8> = Vec::new();
-        partial_usk.serialize_compressed(&mut partial_usk_bytes)?;
+        let partial_usk_bytes = Self::get_partial_usk_bytes(state, gid, workflow_id, node_id).await?;
 
         Ok(Self {
             sub: "attested-client".to_string(),

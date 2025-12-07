@@ -124,7 +124,7 @@ pub fn generate_ecdhe_keys_and_derive_secret(
     Ok((my_pubkey.as_ref().to_vec(), shared_secret))
 }
 
-pub fn do_ecdhe_ke(
+pub async fn do_ecdhe_ke(
     state: &AttestationServiceState,
     tee: &Tee,
     node_data: &NodeData,
@@ -152,7 +152,7 @@ pub fn do_ecdhe_ke(
         &node_data.workflow_id,
         &node_data.node_id,
     )
-    .context("do_ecdhe_ke(): error generating JWT claims")?;
+    .await.context("do_ecdhe_ke(): error generating JWT claims")?;
     let header = jsonwebtoken::Header {
         alg: jsonwebtoken::Algorithm::RS256,
         ..Default::default()
