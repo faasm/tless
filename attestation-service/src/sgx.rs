@@ -282,7 +282,7 @@ pub async fn verify_sgx_report(
     // Now that we have verified the attestation report, run the server-side part of
     // the attribute minting protocol which involves running ECDHE and running
     // CP-ABE keygen.
-    match ecdhe::do_ecdhe_ke(&state, &Tee::Sgx, &payload.node_data, &raw_pubkey_bytes) {
+    match ecdhe::do_ecdhe_ke(&state, &Tee::Sgx, &payload.node_data, &raw_pubkey_bytes).await {
         Ok(response) => (StatusCode::OK, Json(response)),
         Err(e) => {
             error!("error encrypting JWT (error={e:?})");

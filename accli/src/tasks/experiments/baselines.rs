@@ -72,8 +72,9 @@ impl SystemBaseline {
 pub enum EscrowBaseline {
     Trustee,
     ManagedHSM,
-    AcclessMaa,
     Accless,
+    AcclessMaa,
+    AcclessSingleAuth,
 }
 
 impl fmt::Display for EscrowBaseline {
@@ -81,8 +82,9 @@ impl fmt::Display for EscrowBaseline {
         match self {
             EscrowBaseline::Trustee => write!(f, "trustee"),
             EscrowBaseline::ManagedHSM => write!(f, "managed-hsm"),
-            EscrowBaseline::AcclessMaa => write!(f, "accless-maa"),
             EscrowBaseline::Accless => write!(f, "accless"),
+            EscrowBaseline::AcclessMaa => write!(f, "accless-maa"),
+            EscrowBaseline::AcclessSingleAuth => write!(f, "accless-single-auth"),
         }
     }
 }
@@ -94,8 +96,9 @@ impl FromStr for EscrowBaseline {
         match input {
             "trustee" => Ok(EscrowBaseline::Trustee),
             "managed-hsm" => Ok(EscrowBaseline::ManagedHSM),
-            "accless-maa" => Ok(EscrowBaseline::AcclessMaa),
             "accless" => Ok(EscrowBaseline::Accless),
+            "accless-maa" => Ok(EscrowBaseline::AcclessMaa),
+            "accless-single-auth" => Ok(EscrowBaseline::AcclessSingleAuth),
             _ => Err(()),
         }
     }
@@ -103,11 +106,12 @@ impl FromStr for EscrowBaseline {
 
 impl EscrowBaseline {
     pub fn iter_variants() -> std::slice::Iter<'static, EscrowBaseline> {
-        static VARIANTS: [EscrowBaseline; 4] = [
+        static VARIANTS: [EscrowBaseline; 5] = [
             EscrowBaseline::Trustee,
             EscrowBaseline::ManagedHSM,
-            EscrowBaseline::AcclessMaa,
             EscrowBaseline::Accless,
+            EscrowBaseline::AcclessMaa,
+            EscrowBaseline::AcclessSingleAuth,
         ];
         VARIANTS.iter()
     }
@@ -116,8 +120,10 @@ impl EscrowBaseline {
         match self {
             EscrowBaseline::Trustee => get_color_from_label("dark-orange"),
             EscrowBaseline::ManagedHSM => get_color_from_label("dark-green"),
-            EscrowBaseline::AcclessMaa => get_color_from_label("dark-blue"),
             EscrowBaseline::Accless => get_color_from_label("accless"),
+            EscrowBaseline::AcclessMaa | EscrowBaseline::AcclessSingleAuth => {
+                get_color_from_label("dark-blue")
+            }
         }
     }
 }

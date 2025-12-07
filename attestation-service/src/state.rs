@@ -37,6 +37,10 @@ pub struct AttestationServiceState {
     /// Master Pulic Key for the attestation service as one of the authorities
     /// of the decentralized CP-ABE scheme.
     pub partial_mpk: PartialMPK,
+    /// Cache of generated partial User Secret Key per GID, workflow Id, and
+    /// node Id.
+    // TODO: periodically clean the cache.
+    pub partial_usk_cache: RwLock<HashMap<(String, String, String), Vec<u8>>>,
 
     // Fields related to verifying attestation reports from TEEs.
 
@@ -74,13 +78,15 @@ impl AttestationServiceState {
         sgx_pccs_url: Option<PathBuf>,
         mock_attestation: bool,
         external_url: String,
+        id: Option<String>,
     ) -> Result<Self> {
         let certs_dir = certs_dir.unwrap_or_else(get_default_certs_dir);
 
         // Initialize CP-ABE authority.
         let mut rng = rand::thread_rng();
+        let id = id.unwrap_or(ATTESTATION_SERVICE_ID.to_string());
         let (partial_msk, partial_mpk): (PartialMSK, PartialMPK) =
-            abe4::scheme::setup_partial(&mut rng, ATTESTATION_SERVICE_ID);
+            abe4::scheme::setup_partial(&mut rng, &id);
 
         // Fetch AMD signing keys.
 
@@ -88,9 +94,10 @@ impl AttestationServiceState {
             external_url,
             mock_attestation,
             jwt_encoding_key: jwt::generate_encoding_key(&certs_dir)?,
-            id: ATTESTATION_SERVICE_ID.to_string(),
+            id,
             partial_msk,
             partial_mpk,
+            partial_usk_cache: RwLock::new(HashMap::new()),
             #[cfg(feature = "sgx")]
             sgx_pccs_url,
             #[cfg(feature = "sgx")]

@@ -19,6 +19,7 @@ set(AZ_GUEST_ATTESTATION_INCLUDE_DIRS
 add_library(${CMAKE_PROJECT_TARGET}
     attestation.cpp
     ec_keypair.cpp
+    http_client.cpp
     mock.cpp
     mock_sgx.cpp
     mock_snp.cpp

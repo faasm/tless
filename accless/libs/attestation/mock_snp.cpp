@@ -11,8 +11,9 @@ using namespace accless::attestation::ec;
 
 namespace accless::attestation::mock {
 
-std::string getMockSnpAttestationJwt() {
+std::string getMockSnpAttestationJwt(const std::string &asUrl,
+                                     const std::string &certPath) {
     return accless::attestation::snp::getAttestationJwt(
-        MOCK_GID, MOCK_WORKFLOW_ID, MOCK_NODE_ID);
+        asUrl, certPath, MOCK_GID, MOCK_WORKFLOW_ID, MOCK_NODE_ID);
 }
 } // namespace accless::attestation::mock

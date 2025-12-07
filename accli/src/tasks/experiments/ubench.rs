@@ -1,8 +1,12 @@
 use crate::{
     env::Env,
     tasks::{
-        applications::{ApplicationName, ApplicationType, Applications},
+        applications::{
+            ApplicationBackend, ApplicationName, ApplicationType, Applications,
+            host_cert_dir_to_target_path,
+        },
         azure::{self, Azure},
+        docker::Docker,
         experiments::{self, Experiment, baselines::EscrowBaseline},
     },
 };
@@ -82,7 +86,7 @@ async fn set_resource_policy(escrow_url: &str) -> Result<()> {
         r#"
 package policy
 default allow = false
-allow {{
+allow if {{
 input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
 }}
 "#,
@@ -218,7 +222,9 @@ async fn measure_requests_latency(
                 let owned_escrow_url = escrow_url.to_string();
                 tokio::spawn(wrap_key_in_mhsm(owned_escrow_url))
             }
-            EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => {
+            EscrowBaseline::Accless
+            | EscrowBaseline::AcclessMaa
+            | EscrowBaseline::AcclessSingleAuth => {
                 panic!("accless-based baselines must be run from different script")
             }
         })
@@ -262,7 +268,9 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
     let request_counts = match run_args.baseline {
         EscrowBaseline::Trustee => REQUEST_COUNTS_TRUSTEE,
         EscrowBaseline::ManagedHSM => REQUEST_COUNTS_MHSM,
-        EscrowBaseline::Accless | EscrowBaseline::AcclessMaa => REQUEST_COUNTS_ACCLESS,
+        EscrowBaseline::Accless
+        | EscrowBaseline::AcclessMaa
+        | EscrowBaseline::AcclessSingleAuth => REQUEST_COUNTS_ACCLESS,
     };
 
     match run_args.baseline {
@@ -278,14 +286,25 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
             }
         }
         // The Accless baselines run a function that performs SKR and CP-ABE keygen.
-        EscrowBaseline::Accless => {
-            // This path is hard-coded during the Ansible provisioning of the
-            // attestation-service.
-            let cert_path = Env::proj_root()
-                .join("config")
-                .join("attestation-service")
-                .join("certs")
-                .join("cert.pem");
+        EscrowBaseline::Accless | EscrowBaseline::AcclessSingleAuth => {
+            // These paths are hard-coded during the Ansible provisioning of
+            // the attestation-service.
+            let mut cert_paths = vec![];
+            let cert_path_base = host_cert_dir_to_target_path(
+                &Env::proj_root()
+                    .join("config")
+                    .join("attestation-service")
+                    .join("certs"),
+                &ApplicationBackend::Docker,
+            )?;
+            for i in 0..(escrow_url.matches(",").count() + 1) {
+                cert_paths.push(
+                    cert_path_base
+                        .join(format!("accless-as-{i}.pem"))
+                        .display()
+                        .to_string(),
+                );
+            }
             let num_reqs = request_counts
                 .iter()
                 .map(|n| n.to_string())
@@ -293,22 +312,26 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 .join(",");
 
             Applications::run(
-                ApplicationType::Function,
-                ApplicationName::EscrowXput,
-                false,
-                Some(format!("https://{escrow_url}:8443")),
-                Some(cert_path),
+                &ApplicationType::Function,
+                &ApplicationName::EscrowXput,
+                &ApplicationBackend::Docker,
                 false,
                 None,
                 vec![
+                    "--as-urls".to_string(),
+                    escrow_url.to_string(),
+                    "--as-cert-paths".to_string(),
+                    cert_paths.join(","),
                     "--num-warmup-repeats".to_string(),
                     run_args.num_warmup_repeats.to_string(),
                     "--num-repeats".to_string(),
                     run_args.num_repeats.to_string(),
                     "--num-requests".to_string(),
                     num_reqs,
-                    "--results_file".to_string(),
-                    results_file.display().to_string(),
+                    "--results-file".to_string(),
+                    Docker::remap_to_docker_path(&results_file)?
+                        .display()
+                        .to_string(),
                 ],
             )?;
         }
@@ -320,11 +343,9 @@ async fn run_escrow_ubench(escrow_url: &str, run_args: &UbenchRunArgs) -> Result
                 .join(",");
 
             Applications::run(
-                ApplicationType::Function,
-                ApplicationName::EscrowXput,
-                false,
-                None,
-                None,
+                &ApplicationType::Function,
+                &ApplicationName::EscrowXput,
+                &ApplicationBackend::Docker,
                 true, // Must run application as root.
                 // When running the Accless MAA baseline, we need additional access to the TPM
                 // logs, as required by the Azure library. We currently don't need these for
@@ -394,18 +415,32 @@ pub async fn run(ubench: &Experiment, run_args: &UbenchRunArgs) -> Result<()> {
             format!("{}", run_args.baseline),
         ];
 
-        let client_vm_name = match run_args.baseline {
+        let client_vm_name = match &run_args.baseline {
             EscrowBaseline::Trustee => {
                 cmd_in_vm.push("--escrow-url".to_string());
                 cmd_in_vm.push(Azure::get_vm_ip(experiments::TRUSTEE_SERVER_VM_NAME)?);
 
                 experiments::TRUSTEE_CLIENT_VM_NAME
             }
-            EscrowBaseline::Accless => {
+            baseline @ (EscrowBaseline::Accless | EscrowBaseline::AcclessSingleAuth) => {
+                // Decide number of attestation-services based on baseline.
+                let num_as = if matches!(baseline, EscrowBaseline::Accless) {
+                    experiments::ACCLESS_NUM_ATTESTATION_SERVICES
+                } else {
+                    1
+                };
+                let mut as_urls = vec![];
+
+                for i in 0..num_as {
+                    let as_ip = Azure::get_vm_ip(&format!(
+                        "{}-{i}",
+                        experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                    ))?;
+                    as_urls.push(format!("https://{as_ip}:8443"));
+                }
+
                 cmd_in_vm.push("--escrow-url".to_string());
-                cmd_in_vm.push(Azure::get_vm_ip(
-                    experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                )?);
+                cmd_in_vm.push(as_urls.join(","));
 
                 experiments::ACCLESS_VM_NAME
             }

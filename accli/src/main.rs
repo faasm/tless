@@ -26,9 +26,6 @@ struct Cli {
     // The name of the task to execute
     #[clap(subcommand)]
     task: Command,
-
-    #[arg(short, long, global = true)]
-    debug: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -101,6 +98,9 @@ enum AttestationServiceCommand {
         /// Overwrite the public IP of the attestation service.
         #[arg(long)]
         overwrite_external_ip: Option<String>,
+        /// Unique ID for this attestation service instance.
+        #[arg(long)]
+        id: Option<String>,
     },
     /// Stop a running attestation service (started with --background).
     Stop {},
@@ -110,7 +110,7 @@ enum AttestationServiceCommand {
         url: Option<String>,
         /// Path to the attestation service's public certificate PEM file
         #[arg(long)]
-        cert_path: Option<PathBuf>,
+        cert_dir: Option<PathBuf>,
     },
 }
 
@@ -400,7 +400,7 @@ enum ApplicationsCommand {
         debug: bool,
         /// Path to the attestation service's public certificate PEM file.
         #[arg(long)]
-        as_cert_path: Option<PathBuf>,
+        as_cert_dir: Option<PathBuf>,
         /// Whether to build the application inside a cVM.
         #[arg(long, default_value_t = false)]
         in_cvm: bool,
@@ -411,15 +411,9 @@ enum ApplicationsCommand {
         app_type: applications::ApplicationType,
         /// Name of the application to run
         app_name: applications::ApplicationName,
-        /// Whether to run the application inside a cVM.
-        #[arg(long, default_value_t = false)]
-        in_cvm: bool,
-        /// URL of the attestation service to contact.
+        /// Application backend.
         #[arg(long)]
-        as_url: Option<String>,
-        /// Path to the attestation service's public certificate PEM file.
-        #[arg(long)]
-        as_cert_path: Option<PathBuf>,
+        backend: Option<applications::ApplicationBackend>,
         /// Run the application with sudo privileges.
         #[arg(long, default_value_t = false)]
         run_as_root: bool,
@@ -455,17 +449,15 @@ async fn main() -> anyhow::Result<()> {
             ApplicationsCommand::Build {
                 clean,
                 debug,
-                as_cert_path,
+                as_cert_dir,
                 in_cvm,
             } => {
-                Applications::build(*clean, *debug, as_cert_path.clone(), false, *in_cvm)?;
+                Applications::build(*clean, *debug, as_cert_dir.clone(), false, *in_cvm)?;
             }
             ApplicationsCommand::Run {
                 app_type,
                 app_name,
-                in_cvm,
-                as_url,
-                as_cert_path,
+                backend,
                 run_as_root,
                 extra_docker_flags,
                 args,
@@ -473,12 +465,16 @@ async fn main() -> anyhow::Result<()> {
                 let extra_docker_flags_str: Option<Vec<&str>> = extra_docker_flags
                     .as_ref()
                     .map(|flags| flags.iter().map(AsRef::as_ref).collect());
+                let app_backend = if let Some(backend) = backend {
+                    backend
+                } else {
+                    &applications::ApplicationBackend::Docker
+                };
+
                 Applications::run(
-                    app_type.clone(),
-                    app_name.clone(),
-                    *in_cvm,
-                    as_url.clone(),
-                    as_cert_path.clone(),
+                    app_type,
+                    app_name,
+                    app_backend,
                     *run_as_root,
                     extra_docker_flags_str.as_deref(),
                     args.clone(),
@@ -644,42 +640,92 @@ async fn main() -> anyhow::Result<()> {
         Command::Azure { az_command } => match az_command {
             AzureCommand::Accless { az_sub_command } => match az_sub_command {
                 AzureSubCommand::Create {} => {
+                    let mut as_names = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        as_names.push(format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        ));
+                    }
+
                     Azure::create_snp_guest(experiments::ACCLESS_VM_NAME, "Standard_DC8as_v5")?;
-                    Azure::create_snp_guest(
-                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                        "Standard_DC2as_v5",
-                    )?;
+                    for as_name in &as_names {
+                        Azure::create_snp_guest(as_name, "Standard_DC2as_v5")?;
+                    }
                     Azure::create_aa(experiments::ACCLESS_MAA_NAME)?;
 
                     Azure::open_vm_ports(experiments::ACCLESS_VM_NAME, &[22])?;
-                    Azure::open_vm_ports(
-                        experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME,
-                        &[22, 8443],
-                    )?;
+                    for as_name in &as_names {
+                        Azure::open_vm_ports(as_name, &[22, 8443])?;
+                    }
                 }
                 AzureSubCommand::Provision {} => {
-                    let server_ip =
-                        Azure::get_vm_ip(experiments::ACCLESS_ATTESTATION_SERVICE_VM_NAME)?;
+                    let mut as_names = vec![];
+                    let mut as_ips = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        let as_name = format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        );
+                        as_ips.push(Azure::get_vm_ip(&as_name)?);
+                        as_names.push(as_name);
+                    }
+
                     let accless_code_dir = format!(
                         "/home/{}/{}",
                         azure::AZURE_USERNAME,
                         experiments::ACCLESS_VM_CODE_DIR
                     );
-                    let as_cert_path =
-                        format!("{accless_code_dir}/config/attestation-service/certs/cert.pem");
-
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("as_ip", server_ip.as_str()),
-                        ("accless_code_dir", accless_code_dir.as_str()),
-                        ("as_cert_path", as_cert_path.as_str()),
+                    let as_cert_dir =
+                        format!("{accless_code_dir}/config/attestation-service/certs");
+                    let inventory: HashMap<&str, Vec<String>> = HashMap::from([
+                        ("accless_as", as_names.clone()),
+                        (
+                            "accless_cli",
+                            vec![experiments::ACCLESS_VM_NAME.to_string()],
+                        ),
                     ]);
-                    Azure::provision_with_ansible("accless", "accless", Some(vars))?;
+
+                    let mut vars: HashMap<&str, HashMap<&str, &str>> = HashMap::new();
+                    vars.insert(
+                        experiments::ACCLESS_VM_NAME,
+                        HashMap::from([
+                            ("accless_code_dir", accless_code_dir.as_str()),
+                            ("as_cert_dir", as_cert_dir.as_str()),
+                        ]),
+                    );
+                    for (as_name, as_ip) in as_names.iter().zip(as_ips.iter()) {
+                        vars.insert(
+                            as_name,
+                            HashMap::from([
+                                ("as_ip", as_ip.as_str()),
+                                ("accless_code_dir", accless_code_dir.as_str()),
+                                ("as_cert_dir", as_cert_dir.as_str()),
+                            ]),
+                        );
+                    }
+                    Azure::provision_with_ansible(
+                        "accless",
+                        inventory,
+                        &Env::ansible_root().join("accless.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
+                    let mut as_names = vec![];
+                    for i in 0..experiments::ACCLESS_NUM_ATTESTATION_SERVICES {
+                        as_names.push(format!(
+                            "{}-{i}",
+                            experiments::ACCLESS_ATTESTATION_SERVICE_BASE_VM_NAME
+                        ));
+                    }
+
                     println!("client:");
                     println!("{}", Azure::build_ssh_command("accless-cvm")?);
-                    println!("attestation server:");
-                    println!("{}", Azure::build_ssh_command("accless-as")?);
+                    println!("attestation servers:");
+                    for as_name in &as_names {
+                        println!("- {as_name}: {}", Azure::build_ssh_command(as_name)?);
+                    }
                 }
                 AzureSubCommand::Delete {} => {
                     Azure::delete_snp_guest("accless-cvm")?;
@@ -698,10 +744,18 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let service_ip = Azure::get_vm_ip(experiments::ATTESTATION_SERVICE_VM_NAME)?;
 
-                    let vars: HashMap<&str, &str> = HashMap::from([("as_ip", service_ip.as_str())]);
+                    let inventory = HashMap::from([(
+                        "attestation_service",
+                        vec![experiments::ATTESTATION_SERVICE_VM_NAME.to_string()],
+                    )]);
+                    let vars = HashMap::from([(
+                        experiments::ATTESTATION_SERVICE_VM_NAME,
+                        HashMap::from([("as_ip", service_ip.as_str())]),
+                    )]);
                     Azure::provision_with_ansible(
                         "attestation-service",
-                        "attestationservice",
+                        inventory,
+                        &Env::ansible_root().join("attestation_service.yaml"),
                         Some(vars),
                     )?;
                 }
@@ -732,7 +786,16 @@ async fn main() -> anyhow::Result<()> {
                     Azure::open_vm_ports(experiments::MHSM_CLIENT_VM_NAME, &[22])?;
                 }
                 AzureSubCommand::Provision {} => {
-                    Azure::provision_with_ansible("accless-mhsm", "mhsm", None)?;
+                    let inventory = HashMap::from([(
+                        "mhsm",
+                        vec![experiments::MHSM_CLIENT_VM_NAME.to_string()],
+                    )]);
+                    Azure::provision_with_ansible(
+                        "mhsm",
+                        inventory,
+                        &Env::ansible_root().join("mhsm.yaml"),
+                        None,
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!(
@@ -753,11 +816,21 @@ async fn main() -> anyhow::Result<()> {
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
                     let faasm_version = Env::get_faasm_version();
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("accless_version", version.as_str()),
-                        ("faasm_version", faasm_version.as_str()),
-                    ]);
-                    Azure::provision_with_ansible("sgx-faasm", "sgxfaasm", Some(vars))?;
+                    let inventory =
+                        HashMap::from([("sgx_faasm", vec!["sgx-faasm-vm".to_string()])]);
+                    let vars = HashMap::from([(
+                        "sgx-faasm-vm",
+                        HashMap::from([
+                            ("accless_version", version.as_str()),
+                            ("faasm_version", faasm_version.as_str()),
+                        ]),
+                    )]);
+                    Azure::provision_with_ansible(
+                        "sgx_faasm",
+                        inventory,
+                        &Env::ansible_root().join("sgx_faasm.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("sgx-faasm-vm")?);
@@ -772,9 +845,18 @@ async fn main() -> anyhow::Result<()> {
                 }
                 AzureSubCommand::Provision {} => {
                     let version = Env::get_version().unwrap();
-                    let vars: HashMap<&str, &str> =
-                        HashMap::from([("accless_version", version.as_str())]);
-                    Azure::provision_with_ansible("snp-knative", "snpknative", Some(vars))?;
+                    let inventory =
+                        HashMap::from([("snp_knative", vec!["snp-knative-vm".to_string()])]);
+                    let vars = HashMap::from([(
+                        "snp-knative-vm",
+                        HashMap::from([("accless_version", version.as_str())]),
+                    )]);
+                    Azure::provision_with_ansible(
+                        "snp_knative",
+                        inventory,
+                        &Env::ansible_root().join("snp_knative.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("{}", Azure::build_ssh_command("snp-knative-vm")?);
@@ -806,13 +888,28 @@ async fn main() -> anyhow::Result<()> {
                     );
                     let accless_code_dir =
                         format!("/home/{}/git/faasm/accless", azure::AZURE_USERNAME);
-
-                    let vars: HashMap<&str, &str> = HashMap::from([
-                        ("kbs_ip", server_ip.as_str()),
-                        ("trustee_code_dir", trustee_code_dir.as_str()),
-                        ("accless_code_dir", accless_code_dir.as_str()),
-                    ]);
-                    Azure::provision_with_ansible("accless-trustee", "trustee", Some(vars))?;
+                    let vm_names = vec![
+                        experiments::TRUSTEE_CLIENT_VM_NAME.to_string(),
+                        experiments::TRUSTEE_SERVER_VM_NAME.to_string(),
+                    ];
+                    let inventory = HashMap::from([("trustee", vm_names.clone())]);
+                    let mut vars: HashMap<&str, HashMap<&str, &str>> = HashMap::new();
+                    for vm_name in &vm_names {
+                        vars.insert(
+                            vm_name,
+                            HashMap::from([
+                                ("kbs_ip", server_ip.as_str()),
+                                ("trustee_code_dir", trustee_code_dir.as_str()),
+                                ("accless_code_dir", accless_code_dir.as_str()),
+                            ]),
+                        );
+                    }
+                    Azure::provision_with_ansible(
+                        "trustee",
+                        inventory,
+                        &Env::ansible_root().join("trustee.yaml"),
+                        Some(vars),
+                    )?;
                 }
                 AzureSubCommand::Ssh {} => {
                     println!("client:");
@@ -856,6 +953,7 @@ async fn main() -> anyhow::Result<()> {
                 rebuild,
                 background,
                 overwrite_external_ip,
+                id,
             } => {
                 AttestationService::run(
                     certs_dir.as_deref(),
@@ -866,13 +964,14 @@ async fn main() -> anyhow::Result<()> {
                     *rebuild,
                     *background,
                     overwrite_external_ip.clone(),
+                    id.clone(),
                 )?;
             }
             AttestationServiceCommand::Stop {} => {
                 AttestationService::stop()?;
             }
-            AttestationServiceCommand::Health { url, cert_path } => {
-                AttestationService::health(url.clone(), cert_path.clone()).await?;
+            AttestationServiceCommand::Health { url, cert_dir } => {
+                AttestationService::health(url.clone(), cert_dir.clone()).await?;
             }
         },
     }
