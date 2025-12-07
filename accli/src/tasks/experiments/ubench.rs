@@ -97,7 +97,7 @@ async fn compute_reference_values() -> Result<HashMap<&'static str, String>> {
         ),
         (
             "snp_pcr11",
-            hex::encode(quote.pcrs_sha256().nth(11).unwrap()),
+            hex::encode(quote.pcrs_sha256().nth(11).expect("Expected at least 12 PCRs in quote")),
         ),
         (
             "tcb_bootloader",
