@@ -282,8 +282,8 @@ default allow = false
 allow if {{
     az := input.submods.cpu0["ear.veraison.annotated-evidence"]["{}"]
 
-    # Overall appraisal must be good.
-    # If we comment the following line, it works.
+    # FIXME (#67): if we comment this out, no matter how we configure the
+    # policies or reference values, we can not get it to 'affirming'.
     # input.submods.cpu0["ear.status"] == "affirming"
 }}
 "#,
