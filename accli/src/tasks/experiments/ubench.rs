@@ -48,7 +48,7 @@ pub struct UbenchRunArgs {
 // Trustee methods and constants
 // -------------------------------------------------------------------------
 
-const TEE: &str = "azsnpvtpm";
+const TEE: &str = "az-snp-vtpm";
 
 fn get_coco_code_dir() -> String {
     format!(
@@ -87,7 +87,7 @@ async fn set_resource_policy(escrow_url: &str) -> Result<()> {
 package policy
 default allow = false
 allow if {{
-input["submods"]["cpu"]["ear.veraison.annotated-evidence"]["{}"]
+input.submods.cpu0["ear.veraison.annotated-evidence"]["{}"]
 }}
 "#,
         TEE
