@@ -176,7 +176,9 @@ default runtime_opaque := 0
 default storage_opaque := 0
 default sourced_data := 0
 
-az := input.az_snp_vtpm
+# The TEE name contains a dash, so we must use index syntax instead of
+# dot-notation to look it up in the input.
+az := input["az-snp-vtpm"]
 
 executables := 3 if {
     az
@@ -260,7 +262,8 @@ allow if {{
     az := input.submods.cpu0["ear.veraison.annotated-evidence"]["{}"]
 
     # Overall appraisal must be good.
-    # input.submods.cpu0["ear.status"] == "affirming"
+    # If we comment the following line, it works.
+    input.submods.cpu0["ear.status"] == "affirming"
 }}
 "#,
         TEE
