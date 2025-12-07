@@ -44,7 +44,7 @@ jobs:
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
-        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-path ./certs/cert.pem --in-cvm
+        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir ./certs/cert.pem --in-cvm
 
       - name: "Run supported SNP applications"
         run: |
@@ -52,7 +52,7 @@ jobs:
           AS_URL=$(./scripts/accli_wrapper.sh attestation-service health --url "https://0.0.0.0:8443" --cert-path ./certs/cert.pem 2>&1 \
             | grep "attestation service is healthy and reachable on:" | awk '{print $NF}')
           echo "Got AS URL: ${AS_URL}"
-          ./scripts/accli_wrapper.sh applications run function hello-snp --backend cvm -- --as-url ${AS_URL} --as-cert-dir ./certs/cert.pem
+          ./scripts/accli_wrapper.sh applications run function hello-snp --backend cvm -- --as-url ${AS_URL} --as-cert-path ./certs/cert.pem
 
       - name: "Stop attestation service in the background"
         run: ./scripts/accli_wrapper.sh attestation-service stop
