@@ -122,6 +122,48 @@
     environment:
       PATH: "/home/{{ ansible_user }}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+  # Generate JWK set from token key.
+  - name: "Generate JWKS from EC public key point"
+    when: inventory_hostname == "accless-trustee-server"
+    shell: |
+      set -euo pipefail
+
+      openssl ec -in work/token.key -pubout -outform DER -conv_form uncompressed > /tmp/token-pub.der
+      tail -c 65 /tmp/token-pub.der > /tmp/token-point.bin
+
+      python3 - << 'PY'
+      import base64, json, sys
+
+      pt = open("/tmp/token-point.bin","rb").read()
+      if len(pt) != 65 or pt[0] != 4:
+          sys.exit("unexpected EC point format")
+      x, y = pt[1:33], pt[33:65]
+      b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+      jwk = {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": b64(x),
+        "y": b64(y),
+        "kid": "simple",
+        "alg": "ES256",
+        "use": "sig"
+      }
+      payload = json.dumps({"keys":[jwk]}, indent=2)
+      print(payload)
+      open("work/token.jwks","w").write(json.dumps({"keys":[jwk]}))
+      PY
+    args:
+      chdir: "{{ trustee_code_dir }}/kbs/test"
+      executable: /bin/bash
+  - name: "Ensure trusted_jwk_sets is configured in kbs_config"
+    when: inventory_hostname == "accless-trustee-server"
+    ansible.builtin.lineinfile:
+      path: "{{ trustee_code_dir }}/kbs/test/config/kbs.toml"
+      insertafter: '^trusted_certs_paths'
+      regexp: '^trusted_jwk_sets'
+      line: 'trusted_jwk_sets = ["file://{{ trustee_code_dir }}/kbs/test/work/token.jwks"]'
+
+  # Load server key material for the client.
   - name: "Load server key material (https.crt)"
     when: inventory_hostname == "accless-trustee-server"
     ansible.builtin.slurp:

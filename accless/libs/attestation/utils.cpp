@@ -1,4 +1,5 @@
 #include "attestation.h"
+#include "vcek_cache.h"
 
 #include <nlohmann/json.hpp>
 
@@ -49,6 +50,15 @@ std::string buildRequestBody(const std::string &quoteB64,
     body["quote"] = quoteB64;
     body["runtimeData"]["data"] = runtimeB64;
     body["runtimeData"]["dataType"] = "Binary";
+
+    const auto &vcekPem = accless::attestation::snp::getVcekCertPem();
+    const auto &chainPem = accless::attestation::snp::getVcekChainPem();
+
+    if (!vcekPem.empty()) {
+        body["collateral"]["vcekCertPem"] = vcekPem;
+        body["collateral"]["certificateChainPem"] = chainPem;
+    }
+
     return body.dump();
 }
 } // namespace accless::attestation::utils

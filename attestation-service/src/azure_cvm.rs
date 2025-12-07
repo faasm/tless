@@ -237,7 +237,7 @@ pub async fn verify_snp_vtpm_report(
     };
 
     // Verify the SNP report using the host's VCEK.
-    let vcek = match get_snp_vcek(&snp_report, &state).await {
+    let vcek = match get_snp_vcek(&snp_report, &state, payload.collateral).await {
         Ok(report) => report,
         Err(e) => {
             error!("verify_snp_report(): error fetching SNP VCEK (error={e:?})");

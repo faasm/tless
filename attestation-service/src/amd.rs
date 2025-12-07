@@ -1,4 +1,5 @@
 use crate::{
+    request::snp::Collateral,
     state::AttestationServiceState,
     types::snp::{SnpCa, SnpProcType, SnpVcek},
 };
@@ -178,6 +179,7 @@ where
 async fn get_snp_ca(
     proc_type: &SnpProcType,
     state: &Arc<AttestationServiceState>,
+    maybe_ca: Option<String>,
 ) -> Result<SnpCa> {
     debug!("get_snp_ca(): getting CA chain for SNP processor (type={proc_type})");
 
@@ -186,15 +188,24 @@ async fn get_snp_ca(
         let cache = state.amd_signing_keys.read().await;
         cache.get(proc_type).cloned()
     };
-
     if let Some(ca) = ca {
         debug!("get_snp_ca(): cache hit, fetching CA from local cache");
         return Ok(ca);
     }
 
-    // This method also verifies the CA signatures.
+    // Slow path: parse from collateral (if provided) or fetch from AMD's KDS.
+
     debug!("get_snp_ca(): cache miss, fetching CA from AMD's KDS");
-    let ca = fetch_ca_from_kds(proc_type).await?;
+    let ca = if let Some(ca_str) = maybe_ca {
+        let ca_chain = Chain::from_pem_bytes(ca_str.as_bytes())?;
+        ca_chain.verify()?;
+
+        trace!("get_snp_ca(): verified CA's signature from collateral");
+        ca_chain
+    } else {
+        // This method also verifies the CA signatures.
+        fetch_ca_from_kds(proc_type).await?
+    };
 
     // Cache CA for future use.
     {
@@ -254,13 +265,25 @@ where
 /// Helper method to fetch the VCEK certificate to validate an SNP quote. We
 /// cache the certificates based on the platform and TCB info to avoid
 /// round-trips to the AMD servers during verification (in the general case).
-pub async fn get_snp_vcek<R>(report: &R, state: &Arc<AttestationServiceState>) -> Result<SnpVcek>
+/// When running in Azure cVMs, clients may self-report their collateral using
+/// Azure's THIM layer, in which case we use that instead of AMD's KDS to
+/// populate the cache.
+pub async fn get_snp_vcek<R>(
+    report: &R,
+    state: &Arc<AttestationServiceState>,
+    maybe_collateral: Option<Collateral>,
+) -> Result<SnpVcek>
 where
     R: AmdKdsReport,
 {
+    // Split the collateral into the certificate chain and the VCEK proper.
+    let (maybe_vcek, maybe_chain): (Option<String>, Option<String>) = maybe_collateral
+        .map(|c| (Some(c.vcek_cert_pem), Some(c.certificate_chain_pem)))
+        .unwrap_or((None, None));
+
     // Fetch the certificate chain from the processor model.
     let proc_type = get_processor_model(report)?;
-    let ca = get_snp_ca(&proc_type, state).await?;
+    let ca = get_snp_ca(&proc_type, state, maybe_chain).await?;
 
     // Work-out cache key from report.
     let tcb_version = report.tcb_version();
@@ -274,15 +297,19 @@ where
         let cache = state.snp_vcek_cache.read().await;
         cache.get(&cache_key).cloned()
     };
-
     if let Some(vcek) = vcek {
         debug!("get_snp_vcek(): cache hit, fetching VCEK from local cache");
         return Ok(vcek);
     }
 
-    // Slow path: fetch collateral from AMD's KDS.
-    debug!("get_snp_vcek(): cache miss, fetching VCEK from AMD's KDS");
-    let vcek = fetch_vcek_from_kds(&proc_type, report).await?;
+    // Slow path: fetch collateral from request or, if empty, from AMD's KDS.
+    let vcek = if let Some(vcek_str) = maybe_vcek {
+        debug!("get_snp_vcek(): cache miss, parsing VCEK from collateral");
+        SnpVcek::from_bytes(vcek_str.as_bytes())?
+    } else {
+        debug!("get_snp_vcek(): cache miss, fetching VCEK from AMD's KDS");
+        fetch_vcek_from_kds(&proc_type, report).await?
+    };
 
     // Once we fetch a new VCEK, verify its certificate chain before caching it.
     (&ca.ask, &vcek).verify()?;

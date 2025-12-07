@@ -147,7 +147,7 @@ pub async fn verify_snp_report(
         };
 
         // Fetch the VCEK certificate.
-        let vcek = match get_snp_vcek(&report, &state).await {
+        let vcek = match get_snp_vcek(&report, &state, payload.collateral).await {
             Ok(report) => report,
             Err(e) => {
                 error!("verify_snp_report(): error fetching SNP VCEK (error={e:?})");

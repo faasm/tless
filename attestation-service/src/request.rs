@@ -96,6 +96,15 @@ pub mod snp {
         _data_type: String,
     }
 
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Collateral {
+        /// PEM string with the VCEK certificate.
+        pub vcek_cert_pem: String,
+        /// PEM string with the ASK+ARK chain.
+        pub certificate_chain_pem: String,
+    }
+
     /// This structure corresponds to the JSON we send to verify an SNP report,
     /// either for bare-metal or vTPM.
     #[derive(Debug, Deserialize)]
@@ -111,5 +120,7 @@ pub mod snp {
         /// easier to access as a standalone field, and we check its
         /// integrity from the quote itself, which is signed by the QE.
         pub runtime_data: RuntimeData,
+        /// Optional client-provided VCEK collateral (for Azure CVMs).
+        pub collateral: Option<Collateral>,
     }
 }
