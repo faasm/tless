@@ -8,7 +8,7 @@ use crate::{
         cvm::{self, Component, parse_host_guest_path},
         dev::Dev,
         docker::{Docker, DockerContainer},
-        experiments::{self, E2eSubScommand, Experiment, UbenchSubCommand},
+        experiments::{self, E2eSubScommand, Experiment, ProfileSubCommand, UbenchSubCommand},
         s3::S3,
     },
 };
@@ -584,6 +584,16 @@ async fn main() -> anyhow::Result<()> {
                     tasks::experiments::ubench::run(exp, run_args).await?;
                 }
                 UbenchSubCommand::Plot {} => {
+                    tasks::experiments::plot::plot(exp)?;
+                }
+            },
+            Experiment::PolicyDecryption {
+                profile_sub_command,
+            } => match profile_sub_command {
+                ProfileSubCommand::Run(run_args) => {
+                    tasks::experiments::profile::run(run_args)?;
+                }
+                ProfileSubCommand::Plot {} => {
                     tasks::experiments::plot::plot(exp)?;
                 }
             },

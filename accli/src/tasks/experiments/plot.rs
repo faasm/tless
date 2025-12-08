@@ -3,7 +3,7 @@ use crate::{
     tasks::experiments::{
         Experiment,
         baselines::{EscrowBaseline, SystemBaseline},
-        color::{FONT_SIZE, STROKE_WIDTH},
+        color::{FONT_SIZE, STROKE_WIDTH, get_color_from_label},
         ubench::{REQUEST_COUNTS_MHSM, REQUEST_COUNTS_TRUSTEE},
         workflows::Workflow,
     },
@@ -18,7 +18,7 @@ use std::{
     env,
     fs::{self, File},
     io::{BufRead, BufReader},
-    path::PathBuf,
+    path::{Path, PathBuf},
     str,
 };
 
@@ -1549,6 +1549,252 @@ fn plot_escrow_cost() {
     );
 }
 
+fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
+    #[derive(Debug, Deserialize)]
+    struct Record {
+        #[serde(rename = "NumAuthorities")]
+        num_authorities: usize,
+        #[serde(rename = "EncryptMs")]
+        encrypt_ms: f64,
+        #[serde(rename = "DecryptMs")]
+        decrypt_ms: f64,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    enum PolicyShape {
+        Conjunction,
+        Disjunction,
+    }
+
+    impl PolicyShape {
+        fn from_file(path: &Path) -> Option<Self> {
+            let stem = path.file_stem()?.to_str()?;
+            match stem {
+                "conjunction" => Some(Self::Conjunction),
+                "disjunction" => Some(Self::Disjunction),
+                _ => None,
+            }
+        }
+
+        fn label(&self) -> &str {
+            match self {
+                Self::Conjunction => "all conjunction policy",
+                Self::Disjunction => "all disjunction policy",
+            }
+        }
+
+        fn color(&self) -> Result<RGBColor> {
+            match self {
+                Self::Conjunction => get_color_from_label("dark-red"),
+                Self::Disjunction => get_color_from_label("dark-blue"),
+            }
+        }
+    }
+
+    let mut agg: BTreeMap<PolicyShape, BTreeMap<usize, (f64, f64, u32)>> = BTreeMap::new();
+
+    for csv_file in data_files {
+        let Some(shape) = PolicyShape::from_file(csv_file) else {
+            continue;
+        };
+
+        let mut reader = ReaderBuilder::new().has_headers(true).from_path(csv_file)?;
+
+        for result in reader.deserialize() {
+            let record: Record = result?;
+            let shape_map = agg.entry(shape).or_default();
+            let entry = shape_map
+                .entry(record.num_authorities)
+                .or_insert((0.0, 0.0, 0));
+            entry.0 += record.encrypt_ms;
+            entry.1 += record.decrypt_ms;
+            entry.2 += 1;
+        }
+    }
+
+    if agg.is_empty() {
+        anyhow::bail!("no data files found for policy-decryption plot");
+    }
+
+    let mut averages: BTreeMap<PolicyShape, BTreeMap<usize, (f64, f64)>> = BTreeMap::new();
+    for (shape, rows) in agg {
+        let mut shape_map = BTreeMap::new();
+        for (num_auth, (enc_sum, dec_sum, count)) in rows {
+            if count == 0 {
+                continue;
+            }
+            shape_map.insert(num_auth, (enc_sum / count as f64, dec_sum / count as f64));
+        }
+        averages.insert(shape, shape_map);
+    }
+
+    let mut plot_dir = Env::experiments_root();
+    plot_dir.push(Experiment::POLICY_DECRYPTION_NAME);
+    plot_dir.push("plots");
+    fs::create_dir_all(&plot_dir)?;
+
+    fn draw_chart(
+        plot_dir: &Path,
+        filename: &str,
+        y_label: &str,
+        selector: fn(&(f64, f64)) -> f64,
+        data: &BTreeMap<PolicyShape, BTreeMap<usize, (f64, f64)>>,
+        shape_in_legend: &PolicyShape,
+    ) -> Result<()> {
+        let plot_path = plot_dir.join(filename);
+
+        let x_min: i32 = 1;
+        let mut x_max: i32 = 1;
+        let mut y_max: f64 = 0.0;
+        for rows in data.values() {
+            if let Some(max_x) = rows.keys().max() {
+                x_max = x_max.max(*max_x as i32);
+            }
+            for val in rows.values() {
+                y_max = y_max.max(selector(val));
+            }
+        }
+        y_max = (y_max * 1.1).max(1.0);
+
+        let root = SVGBackend::new(&plot_path, (400, 300)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .x_label_area_size(40)
+            .y_label_area_size(40)
+            .margin(10)
+            .margin_top(40)
+            .margin_left(50)
+            .margin_right(25)
+            .margin_bottom(20)
+            .build_cartesian_2d(x_min..x_max, 0f64..y_max)
+            .unwrap();
+
+        chart
+            .configure_mesh()
+            .light_line_style(WHITE)
+            .x_labels(4)
+            .y_labels(4)
+            .x_label_style(("sans-serif", FONT_SIZE).into_font())
+            .y_label_style(("sans-serif", FONT_SIZE).into_font())
+            .draw()
+            .unwrap();
+
+        root.draw(&Text::new(
+            y_label,
+            (5, 220),
+            ("sans-serif", FONT_SIZE)
+                .into_font()
+                .transform(FontTransform::Rotate270)
+                .color(&BLACK),
+        ))?;
+        root.draw(&Text::new(
+            "# of attestation services",
+            (100, 275),
+            ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
+        ))?;
+
+        for (shape, rows) in data {
+            let series = rows.iter().map(|(x, vals)| (*x as i32, selector(vals)));
+
+            // Draw line.
+            chart.draw_series(LineSeries::new(
+                series,
+                shape.color()?.stroke_width(STROKE_WIDTH),
+            ))?;
+
+            // Draw points on line.
+            chart
+                .draw_series(rows.iter().map(|(x, vals)| {
+                    Circle::new(
+                        (*x as i32, selector(vals)),
+                        5,
+                        shape.color().unwrap().filled(),
+                    )
+                }))
+                .unwrap();
+        }
+
+        // Add solid frames
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_min, y_max), (x_max, y_max)],
+                BLACK,
+            ))
+            .unwrap();
+        chart
+            .plotting_area()
+            .draw(&PathElement::new(
+                vec![(x_max, 0_f64), (x_max, y_max)],
+                BLACK,
+            ))
+            .unwrap();
+
+        // legend as color box + text.
+        let x_pos = 100;
+        let y_pos = 5;
+        let square_side = 20;
+        root.draw(&Rectangle::new(
+            [(x_pos, y_pos), (x_pos + square_side, y_pos + square_side)],
+            shape_in_legend.color().unwrap().filled(),
+        ))
+        .unwrap();
+        root.draw(&PathElement::new(
+            vec![(x_pos, y_pos), (x_pos + 20, y_pos)],
+            BLACK,
+        ))
+        .unwrap();
+        root.draw(&PathElement::new(
+            vec![(x_pos + 20, y_pos), (x_pos + 20, y_pos + 20)],
+            BLACK,
+        ))
+        .unwrap();
+        root.draw(&PathElement::new(
+            vec![(x_pos, y_pos), (x_pos, y_pos + 20)],
+            BLACK,
+        ))
+        .unwrap();
+        root.draw(&PathElement::new(
+            vec![(x_pos, y_pos + 20), (x_pos + 20, y_pos + 20)],
+            BLACK,
+        ))
+        .unwrap();
+        root.draw(&Text::new(
+            shape_in_legend.label(),
+            (x_pos + 30, y_pos + 2),
+            ("sans-serif", FONT_SIZE).into_font(),
+        ))
+        .unwrap();
+
+        root.present()?;
+        info!(
+            "plot_policy_decryption(): generated plot at: {}",
+            plot_path.display()
+        );
+        Ok(())
+    }
+
+    draw_chart(
+        &plot_dir,
+        "policy-decryption-encrypt.svg",
+        "Latency [ms]",
+        |vals| vals.0,
+        &averages,
+        &PolicyShape::Conjunction,
+    )?;
+    draw_chart(
+        &plot_dir,
+        "policy-decryption-decrypt.svg",
+        "Latency [ms]",
+        |vals| vals.1,
+        &averages,
+        &PolicyShape::Disjunction,
+    )?;
+
+    Ok(())
+}
+
 pub fn plot(exp: &Experiment) -> Result<()> {
     match exp {
         Experiment::ColdStart { .. } => {
@@ -1572,6 +1818,10 @@ pub fn plot(exp: &Experiment) -> Result<()> {
         Experiment::EscrowXput { .. } => {
             let data_files = get_all_data_files(exp)?;
             plot_escrow_xput(&data_files);
+        }
+        Experiment::PolicyDecryption { .. } => {
+            let data_files = get_all_data_files(exp)?;
+            plot_policy_decryption(&data_files)?;
         }
         Experiment::ScaleUpLatency { .. } => {
             let data_files = get_all_data_files(exp)?;

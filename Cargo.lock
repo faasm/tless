@@ -91,7 +91,9 @@ dependencies = [
 name = "accli"
 version = "0.9.2"
 dependencies = [
+ "abe4",
  "anyhow",
+ "ark-std",
  "az-snp-vtpm",
  "base64 0.22.1",
  "bytes",
