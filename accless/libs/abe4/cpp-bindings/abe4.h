@@ -19,6 +19,11 @@ char *keygen_partial_abe4(const char *gid_cstr,
                           const char *partial_msk_b64_cstr,
                           const char *user_attrs_json);
 char *policy_authorities_abe4(const char *policy_str);
+char *encrypt_hybrid_abe4(const char *mpk_b64, const char *policy_str,
+                          const char *plaintext_b64, const char *aad_b64);
+char *decrypt_hybrid_abe4(const char *usk_b64, const char *gid,
+                          const char *policy_str, const char *abe_ct_b64,
+                          const char *sym_ct_b64, const char *aad_b64);
 
 } // extern "C"
 
@@ -208,4 +213,48 @@ std::string packFullKey(const std::vector<std::string> &authorities,
  * @return A vector with all the attributes that appear in the policy.
  */
 std::vector<std::string> getPolicyAuthorities(const std::string &policy);
+
+namespace hybrid {
+struct EncryptOutput {
+    std::string abe_ciphertext;
+    std::string sym_ciphertext;
+};
+
+/**
+ * @brief Encrypts plaintext and associated data using the hybrid CP-ABE scheme.
+ *
+ * This wrapper handles base64 encoding of the plaintext/AAD, calls the Rust
+ * FFI, and returns base64-encoded ciphertext components.
+ *
+ * @param mpk Base64-encoded master public key.
+ * @param policy Policy string.
+ * @param plaintext Plaintext bytes to encrypt.
+ * @param aad Associated data bound to the symmetric encryption.
+ * @return EncryptOutput containing the base64-encoded ABE and symmetric
+ * ciphertexts.
+ * @throws std::runtime_error on error.
+ */
+EncryptOutput encrypt(const std::string &mpk, const std::string &policy,
+                      const std::vector<uint8_t> &plaintext,
+                      const std::vector<uint8_t> &aad);
+
+/**
+ * @brief Decrypts a hybrid ciphertext using the provided keys and AAD.
+ *
+ * This wrapper calls the Rust FFI and base64-decodes the recovered plaintext.
+ *
+ * @param usk Base64-encoded user secret key.
+ * @param gid Group identifier.
+ * @param policy Policy string.
+ * @param abe_ct Base64-encoded ABE ciphertext.
+ * @param sym_ct Base64-encoded symmetric ciphertext.
+ * @param aad Associated data bound to the symmetric encryption.
+ * @return Optional plaintext bytes on success, or std::nullopt on failure.
+ */
+std::optional<std::vector<uint8_t>>
+decrypt(const std::string &usk, const std::string &gid,
+        const std::string &policy, const std::string &abe_ct,
+        const std::string &sym_ct, const std::vector<uint8_t> &aad);
+} // namespace hybrid
+
 } // namespace accless::abe4

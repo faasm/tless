@@ -6,6 +6,7 @@ pub mod baselines;
 pub mod color;
 pub mod e2e;
 pub mod plot;
+pub mod profile;
 pub mod ubench;
 pub mod workflows;
 
@@ -57,6 +58,11 @@ pub enum Experiment {
         #[command(subcommand)]
         ubench_sub_command: UbenchSubCommand,
     },
+    /// Profile policy encryption/decryption latency as policy size grows
+    PolicyDecryption {
+        #[command(subcommand)]
+        profile_sub_command: ProfileSubCommand,
+    },
     /// Evaluate the latency when scaling-up the number of functions in the
     /// workflow
     ScaleUpLatency {
@@ -71,6 +77,7 @@ impl Experiment {
     pub const E2E_LATENCY_COLD_NAME: &'static str = "e2e-latency-cold";
     pub const ESCROW_COST_NAME: &'static str = "escrow-cost";
     pub const ESCROW_XPUT_NAME: &'static str = "escrow-xput";
+    pub const POLICY_DECRYPTION_NAME: &'static str = "policy-decryption";
     pub const SCALE_UP_LATENCY_NAME: &'static str = "scale-up-latency";
 
     pub fn name(&self) -> &'static str {
@@ -80,6 +87,7 @@ impl Experiment {
             Experiment::E2eLatencyCold { .. } => "e2e-latency-cold",
             Experiment::EscrowCost { .. } => "escrow-cost",
             Experiment::EscrowXput { .. } => "escrow-xput",
+            Experiment::PolicyDecryption { .. } => "policy-decryption",
             Experiment::ScaleUpLatency { .. } => "scale-up-latency",
         }
     }
@@ -93,6 +101,7 @@ impl fmt::Display for Experiment {
             Experiment::E2eLatencyCold { .. } => write!(f, "{}", Self::E2E_LATENCY_COLD_NAME),
             Experiment::EscrowCost { .. } => write!(f, "{}", Self::ESCROW_COST_NAME),
             Experiment::EscrowXput { .. } => write!(f, "{}", Self::ESCROW_XPUT_NAME),
+            Experiment::PolicyDecryption { .. } => write!(f, "{}", Self::POLICY_DECRYPTION_NAME),
             Experiment::ScaleUpLatency { .. } => write!(f, "{}", Self::SCALE_UP_LATENCY_NAME),
         }
     }
@@ -115,6 +124,14 @@ pub enum E2eSubScommand {
 pub enum UbenchSubCommand {
     /// Run
     Run(UbenchRunArgs),
+    /// Plot
+    Plot {},
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ProfileSubCommand {
+    /// Run
+    Run(profile::ProfileRunArgs),
     /// Plot
     Plot {},
 }

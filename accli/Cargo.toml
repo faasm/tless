@@ -17,6 +17,8 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true
+abe4.workspace = true
+ark-std.workspace = true
 az-snp-vtpm.workspace = true
 base64.workspace = true
 bytes.workspace = true

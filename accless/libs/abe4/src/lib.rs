@@ -1,11 +1,13 @@
 mod curve;
 mod hashing;
+pub mod hybrid;
 pub mod policy;
 pub mod scheme;
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use base64::engine::{Engine as _, general_purpose};
 pub use curve::Gt;
+pub use hybrid::{decrypt_hybrid, encrypt_hybrid};
 pub use policy::{Policy, UserAttribute};
 pub use scheme::{decrypt, encrypt, iota, keygen, setup, tau};
 use scheme::{
@@ -716,6 +718,382 @@ pub unsafe extern "C" fn decrypt_abe4(
         }
         None => {
             eprintln!("[accless-abe4-rs] Decryption returned None");
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct HybridEncryptOutput {
+    abe_ct: String,
+    sym_ct: String,
+}
+
+/// # Description
+///
+/// FFI wrapper for the hybrid CP-ABE encryption function.
+///
+/// This function takes a base64-encoded master public key, a policy string, a
+/// base64-encoded plaintext, and a base64-encoded AAD. It encrypts the
+/// plaintext using the hybrid scheme (CP-ABE + AES-GCM-128) and returns the
+/// base64-encoded ABE ciphertext together with the base64-encoded symmetric
+/// ciphertext.
+///
+/// # Arguments
+///
+/// * `mpk_b64`: A C-style string containing the base64-encoded master public
+///   key.
+/// * `policy_str`: A C-style string containing the policy string.
+/// * `plaintext_b64`: A C-style string containing the base64-encoded plaintext
+///   to encrypt.
+/// * `aad_b64`: A C-style string containing the base64-encoded AAD to bind to
+///   the symmetric encryption.
+///
+/// # Returns
+///
+/// A C-style string containing a JSON object with two fields:
+/// - `abe_ct`: The base64-encoded ABE ciphertext.
+/// - `sym_ct`: The base64-encoded symmetric ciphertext.
+///
+/// Returns a null pointer on error.
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn encrypt_hybrid_abe4(
+    mpk_b64: *const c_char,
+    policy_str: *const c_char,
+    plaintext_b64: *const c_char,
+    aad_b64: *const c_char,
+) -> *mut c_char {
+    let mpk_b64_cstr = unsafe { CStr::from_ptr(mpk_b64) };
+    let policy_cstr = unsafe { CStr::from_ptr(policy_str) };
+    let plaintext_cstr = unsafe { CStr::from_ptr(plaintext_b64) };
+    let aad_cstr = unsafe { CStr::from_ptr(aad_b64) };
+
+    let mpk_b64_str = match mpk_b64_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert MPK C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mpk_bytes = match general_purpose::STANDARD.decode(mpk_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to decode MPK from base64: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mpk: MPK = match MPK::deserialize_compressed(&mpk_bytes[..]) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to deserialize MPK: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let policy_str = match policy_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert policy C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let policy = match Policy::parse(policy_str) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to parse policy: {:?}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let plaintext_b64_str = match plaintext_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert plaintext C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let plaintext = match general_purpose::STANDARD.decode(plaintext_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to decode plaintext from base64: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let aad_b64_str = match aad_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert AAD C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let aad = match general_purpose::STANDARD.decode(aad_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to decode AAD from base64: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mut rng = ark_std::rand::thread_rng();
+    let hybrid_ct = match encrypt_hybrid(&mut rng, &mpk, &policy, &plaintext, &aad) {
+        Ok(ct) => ct,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] encrypt_hybrid failed: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let mut abe_ct_bytes = Vec::new();
+    if hybrid_ct
+        .abe_ct
+        .serialize_compressed(&mut abe_ct_bytes)
+        .is_err()
+    {
+        eprintln!("[accless-abe4-rs] Failed to serialize HybridCiphertext ABE part");
+        return std::ptr::null_mut();
+    }
+
+    let output = HybridEncryptOutput {
+        abe_ct: general_purpose::STANDARD.encode(&abe_ct_bytes),
+        sym_ct: general_purpose::STANDARD.encode(&hybrid_ct.sym_ct),
+    };
+
+    let output_json = match serde_json::to_string(&output) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to serialize hybrid output to JSON: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    match CString::new(output_json) {
+        Ok(s) => s.into_raw(),
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to create CString for hybrid output: {}",
+                e
+            );
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// # Description
+///
+/// FFI wrapper for the hybrid CP-ABE decryption function.
+///
+/// This function takes a base64-encoded user secret key, a global identifier, a
+/// policy string, a base64-encoded ABE ciphertext, a base64-encoded symmetric
+/// ciphertext, and a base64-encoded AAD. It attempts to decrypt the ciphertext
+/// to recover the original plaintext.
+///
+/// # Arguments
+///
+/// * `usk_b64`: A C-style string containing the base64-encoded user secret key.
+/// * `gid`: A C-style string containing the global identifier of the user.
+/// * `policy_str`: A C-style string containing the policy string.
+/// * `abe_ct_b64`: A C-style string containing the base64-encoded ABE
+///   ciphertext.
+/// * `sym_ct_b64`: A C-style string containing the base64-encoded symmetric
+///   ciphertext.
+/// * `aad_b64`: A C-style string containing the base64-encoded AAD bound to the
+///   symmetric encryption.
+///
+/// # Returns
+///
+/// A C-style string containing the base64-encoded plaintext if decryption is
+/// successful, or a null pointer otherwise.
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn decrypt_hybrid_abe4(
+    usk_b64: *const c_char,
+    gid: *const c_char,
+    policy_str: *const c_char,
+    abe_ct_b64: *const c_char,
+    sym_ct_b64: *const c_char,
+    aad_b64: *const c_char,
+) -> *mut c_char {
+    let usk_b64_cstr = unsafe { CStr::from_ptr(usk_b64) };
+    let gid_cstr = unsafe { CStr::from_ptr(gid) };
+    let policy_cstr = unsafe { CStr::from_ptr(policy_str) };
+    let abe_ct_cstr = unsafe { CStr::from_ptr(abe_ct_b64) };
+    let sym_ct_cstr = unsafe { CStr::from_ptr(sym_ct_b64) };
+    let aad_cstr = unsafe { CStr::from_ptr(aad_b64) };
+
+    let usk_b64_str = match usk_b64_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert USK C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let usk_bytes = match general_purpose::STANDARD.decode(usk_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to decode USK from base64: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let usk: USK = match USK::deserialize_compressed(&usk_bytes[..]) {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to deserialize USK: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let policy_str_rs = match policy_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert policy C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let policy = match Policy::parse(policy_str_rs) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to parse policy: {:?}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let abe_ct_b64_str = match abe_ct_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert ABE Ciphertext C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let abe_ct_bytes = match general_purpose::STANDARD.decode(abe_ct_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to decode ABE Ciphertext from base64: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let abe_ct: Ciphertext = match Ciphertext::deserialize_compressed(&abe_ct_bytes[..]) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to deserialize ABE Ciphertext: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let sym_ct_b64_str = match sym_ct_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert symmetric Ciphertext C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let sym_ct = match general_purpose::STANDARD.decode(sym_ct_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to decode symmetric Ciphertext from base64: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let aad_b64_str = match aad_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert AAD C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let aad = match general_purpose::STANDARD.decode(aad_b64_str) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] Failed to decode AAD from base64: {}", e);
+            return std::ptr::null_mut();
+        }
+    };
+
+    let gid_str = match gid_cstr.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "[accless-abe4-rs] Failed to convert GID C string to Rust string: {}",
+                e
+            );
+            return std::ptr::null_mut();
+        }
+    };
+
+    let result = decrypt_hybrid(&usk, gid_str, &policy, &abe_ct, &sym_ct, &aad);
+
+    match result {
+        Ok(pt) => {
+            let pt_b64 = general_purpose::STANDARD.encode(&pt);
+            match CString::new(pt_b64) {
+                Ok(s) => s.into_raw(),
+                Err(e) => {
+                    eprintln!(
+                        "[accless-abe4-rs] Failed to create CString for plaintext: {}",
+                        e
+                    );
+                    std::ptr::null_mut()
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[accless-abe4-rs] decrypt_hybrid failed: {}", e);
             std::ptr::null_mut()
         }
     }

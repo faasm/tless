@@ -1,4 +1,9 @@
-use abe4::{Gt, Policy, UserAttribute, decrypt, encrypt, iota::Iota, keygen, setup, tau::Tau};
+use abe4::{
+    Gt, Policy, UserAttribute, decrypt, decrypt_hybrid, encrypt, encrypt_hybrid, iota::Iota,
+    keygen, setup, tau::Tau,
+};
+use anyhow::Result;
+use ark_std::rand::{SeedableRng, rngs::StdRng};
 use std::collections::HashSet;
 
 const USER_ID: &str = "TEST_USER_ID";
@@ -45,6 +50,90 @@ pub fn assert_decryption_ok(user_attrs: Vec<&str>, policy: &str) {
 pub fn assert_decryption_fail(user_attrs: Vec<&str>, policy: &str) {
     let (_, k_dec) = test_scheme(user_attrs, policy);
     assert!(k_dec.is_none());
+}
+
+fn test_hybrid_scheme(
+    user_attrs: Vec<&str>,
+    policy: &str,
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>> {
+    let (auths, user_attrs, policy) = prepare_test(&user_attrs, policy);
+    let mut rng = StdRng::seed_from_u64(0);
+    let auths: Vec<&str> = auths.iter().map(|s| s as &str).collect();
+    let iota = Iota::new(&user_attrs);
+    let (msk, mpk) = setup(&mut rng, &auths);
+    let usk = keygen(&mut rng, USER_ID, &msk, &user_attrs, &iota);
+
+    let hybrid_ct = encrypt_hybrid(&mut rng, &mpk, &policy, plaintext, aad)?;
+    decrypt_hybrid(
+        &usk,
+        USER_ID,
+        &policy,
+        &hybrid_ct.abe_ct,
+        &hybrid_ct.sym_ct,
+        aad,
+    )
+}
+
+#[test]
+fn hybrid_round_trip_ok() {
+    let user_attrs = vec!["A.a:0", "A.c:1"];
+    let policy = "A.a:0 & !A.c:0";
+    let plaintext = b"hybrid plaintext payload";
+    let aad = b"hybrid aad data";
+    let decrypted = test_hybrid_scheme(user_attrs, policy, plaintext, aad)
+        .expect("hybrid decrypt_hybrid failed");
+    assert_eq!(plaintext, decrypted.as_slice());
+}
+
+#[test]
+fn hybrid_decrypt_fails_for_unauthorized_user() {
+    let user_attrs = vec![];
+    let policy = "A.a:0";
+    let plaintext = b"hybrid plaintext payload";
+    let aad = b"hybrid aad data";
+    let result = test_hybrid_scheme(user_attrs, policy, plaintext, aad);
+    assert!(result.is_err());
+}
+
+#[test]
+fn hybrid_rejects_modified_aad() {
+    let user_attrs = vec!["A.a:0"];
+    let policy = "A.a:0";
+    let plaintext = b"hybrid plaintext payload";
+    let aad = b"hybrid aad data";
+    let wrong_aad = b"tampered aad";
+
+    let (auths, user_attrs, policy) = prepare_test(&user_attrs, policy);
+    let mut rng = StdRng::seed_from_u64(1);
+    let auths: Vec<&str> = auths.iter().map(|s| s as &str).collect();
+    let iota = Iota::new(&user_attrs);
+    let (msk, mpk) = setup(&mut rng, &auths);
+    let usk = keygen(&mut rng, USER_ID, &msk, &user_attrs, &iota);
+
+    let hybrid_ct =
+        encrypt_hybrid(&mut rng, &mpk, &policy, plaintext, aad).expect("encrypt_hybrid failed");
+    let recovered = decrypt_hybrid(
+        &usk,
+        USER_ID,
+        &policy,
+        &hybrid_ct.abe_ct,
+        &hybrid_ct.sym_ct,
+        aad,
+    )
+    .expect("decrypt_hybrid failed");
+    assert_eq!(plaintext, recovered.as_slice());
+
+    let tampered = decrypt_hybrid(
+        &usk,
+        USER_ID,
+        &policy,
+        &hybrid_ct.abe_ct,
+        &hybrid_ct.sym_ct,
+        wrong_aad,
+    );
+    assert!(tampered.is_err());
 }
 
 // Handcrafted test cases (single auth)
