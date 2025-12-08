@@ -7,6 +7,7 @@ use clap::ValueEnum;
 use log::error;
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
+    fs,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -163,7 +164,17 @@ impl Applications {
             if let Some(host_cert_dir) = as_cert_dir {
                 let guest_cert_dir =
                     host_cert_dir_to_target_path(&host_cert_dir, &ApplicationBackend::Cvm)?;
-                scp_files.push((host_cert_dir, guest_cert_dir.clone()));
+                for entry in fs::read_dir(&host_cert_dir)? {
+                    let entry = entry?;
+                    let file_type = entry.file_type()?;
+                    if !file_type.is_file() {
+                        anyhow::bail!(
+                            "certificate directory may only contain files (found: {})",
+                            entry.path().display()
+                        );
+                    }
+                    scp_files.push((entry.path(), guest_cert_dir.join(entry.file_name())));
+                }
 
                 cmd.push("--as-cert-dir".to_string());
                 cmd.push(guest_cert_dir.display().to_string());
