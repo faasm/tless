@@ -37,22 +37,22 @@ impl HybridCiphertext {
 ///
 /// gt is, precisely, what we get after a successful call to encrypt of a
 /// CP-ABEKEM scheme (i.e. the scheme we implement in the `scheme` module).
-fn derive_aes128_key_from_gt(gt: &Gt) -> [u8; 16] {
+fn derive_aes128_key_from_gt(gt: &Gt) -> Result<[u8; 16]> {
     let mut gt_bytes = Vec::new();
     // This should never fail for a valid group element
     gt.serialize_compressed(&mut gt_bytes)
-        .expect("Gt serialization failed");
+        .map_err(|e| anyhow::anyhow!("Gt serialization failed: {}", e))?;
 
     let hk = Hkdf::<Sha256>::new(Some(ABE4_KDF_SALT), &gt_bytes);
 
     let mut key = [0u8; 16];
     hk.expand(ABE4_KDF_INFO, &mut key)
-        .expect("HKDF expand failed");
+        .map_err(|e| anyhow::anyhow!("HKDF expand failed: {}", e))?;
 
     // gt_bytes only holds public data, no need to zeroize, but we could:
     gt_bytes.zeroize();
 
-    key
+    Ok(key)
 }
 
 /// Encrypt `plaintext` using AES-GCM-128 under a key derived from `gt`.
@@ -66,7 +66,7 @@ fn sym_encrypt_gt<R: RngCore + CryptoRng>(
     plaintext: &[u8],
     aad: &[u8],
 ) -> Result<Vec<u8>> {
-    let mut key_bytes = derive_aes128_key_from_gt(gt);
+    let mut key_bytes = derive_aes128_key_from_gt(gt)?;
     let cipher = Aes128Gcm::new_from_slice(&key_bytes)?;
 
     // 96-bit nonce as recommended for GCM.
@@ -113,7 +113,7 @@ fn sym_decrypt_gt(gt: &Gt, sym_ct: &[u8], aad: &[u8]) -> Result<Vec<u8>> {
     })?;
     let nonce = Nonce::from(nonce_arr);
 
-    let mut key_bytes = derive_aes128_key_from_gt(gt);
+    let mut key_bytes = derive_aes128_key_from_gt(gt)?;
     let cipher = Aes128Gcm::new_from_slice(&key_bytes)?;
 
     let payload = Payload { msg: ct_bytes, aad };
