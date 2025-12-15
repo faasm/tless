@@ -1,6 +1,6 @@
 use crate::env::Env;
 use anyhow::{Context, Result};
-use log::info;
+use log::{info, warn};
 use nix::{
     sys::signal::{Signal, kill},
     unistd::Pid,
@@ -154,7 +154,15 @@ impl AttestationService {
                     let path = entry.path();
                     if path.is_file() && path.extension().is_some_and(|s| s == "pem") {
                         let cert = fs::read(&path)?;
-                        let cert = reqwest::Certificate::from_pem(&cert)?;
+                        let cert = match reqwest::Certificate::from_pem(&cert) {
+                            Ok(cert) => cert,
+                            Err(e) => {
+                                warn!(
+                                    "health(): error parsing certificate PEM file (path={path:?}, error={e:?})"
+                                );
+                                continue;
+                            }
+                        };
                         client_builder = client_builder.add_root_certificate(cert);
                     }
                 }
