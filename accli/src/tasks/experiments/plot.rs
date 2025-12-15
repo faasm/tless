@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Result;
 use csv::ReaderBuilder;
 use log::{debug, error, info};
-use plotters::prelude::*;
+use plotters::{element::DashedPathElement, prelude::*};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -1378,7 +1378,7 @@ fn plot_escrow_cost() {
     ))
     .unwrap();
     root.draw(&Text::new(
-        "# of users ",
+        "# of tenants",
         (120, 280),
         ("sans-serif", FONT_SIZE).into_font().color(&BLACK),
     ))
@@ -1564,6 +1564,7 @@ fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
     enum PolicyShape {
         Conjunction,
         Disjunction,
+        DisjunctionSingleAuthority,
     }
 
     impl PolicyShape {
@@ -1572,6 +1573,7 @@ fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
             match stem {
                 "conjunction" => Some(Self::Conjunction),
                 "disjunction" => Some(Self::Disjunction),
+                "disjunction-single-authority" => Some(Self::DisjunctionSingleAuthority),
                 _ => None,
             }
         }
@@ -1580,14 +1582,21 @@ fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
             match self {
                 Self::Conjunction => "all conjunction policy",
                 Self::Disjunction => "all disjunction policy",
+                Self::DisjunctionSingleAuthority => "all disjunction policy (single authority)",
             }
         }
 
         fn color(&self) -> Result<RGBColor> {
             match self {
                 Self::Conjunction => get_color_from_label("dark-red"),
-                Self::Disjunction => get_color_from_label("dark-blue"),
+                Self::Disjunction | Self::DisjunctionSingleAuthority => {
+                    get_color_from_label("dark-blue")
+                }
             }
+        }
+
+        fn is_dashed(&self) -> bool {
+            matches!(self, Self::DisjunctionSingleAuthority)
         }
     }
 
@@ -1695,23 +1704,31 @@ fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
         ))?;
 
         for (shape, rows) in data {
-            let series = rows.iter().map(|(x, vals)| (*x as i32, selector(vals)));
+            let series: Vec<(i32, f64)> = rows
+                .iter()
+                .map(|(x, vals)| (*x as i32, selector(vals)))
+                .collect();
 
-            // Draw line.
-            chart.draw_series(LineSeries::new(
-                series,
-                shape.color()?.stroke_width(STROKE_WIDTH),
-            ))?;
+            if shape.is_dashed() {
+                chart.draw_series(std::iter::once(DashedPathElement::new(
+                    series.clone().into_iter(),
+                    5,
+                    5,
+                    shape.color()?.stroke_width(STROKE_WIDTH),
+                )))?;
+            } else {
+                chart.draw_series(LineSeries::new(
+                    series.clone(),
+                    shape.color()?.stroke_width(STROKE_WIDTH),
+                ))?;
+            }
 
-            // Draw points on line.
             chart
-                .draw_series(rows.iter().map(|(x, vals)| {
-                    Circle::new(
-                        (*x as i32, selector(vals)),
-                        5,
-                        shape.color().unwrap().filled(),
-                    )
-                }))
+                .draw_series(
+                    series
+                        .iter()
+                        .map(|(x, y)| Circle::new((*x, *y), 5, shape.color().unwrap().filled())),
+                )
                 .unwrap();
         }
 
@@ -1731,7 +1748,7 @@ fn plot_policy_decryption(data_files: &Vec<PathBuf>) -> Result<()> {
             ))
             .unwrap();
 
-        // legend as color box + text.
+        // legend as colored box + text
         let x_pos = 100;
         let y_pos = 5;
         let square_side = 20;

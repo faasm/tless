@@ -40,16 +40,16 @@ jobs:
             BRANCH=${GITHUB_REF_NAME}
           fi
           ./scripts/accli_wrapper.sh dev cvm run -- \
-            "git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH"
+            "git fetch origin $BRANCH && git checkout $BRANCH && git reset --hard origin/$BRANCH && ./scripts/apt.sh"
 
       # Build SNP applications and embed the attestation service's certificate.
       - name: "Build SNP applications"
-        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir ./certs/cert.pem --in-cvm
+        run: ./scripts/accli_wrapper.sh applications build --clean --as-cert-dir ./certs --in-cvm
 
       - name: "Run supported SNP applications"
         run: |
           # First get the external IP so that we can reach the attestation-service from the cVM.
-          AS_URL=$(./scripts/accli_wrapper.sh attestation-service health --url "https://0.0.0.0:8443" --cert-path ./certs/cert.pem 2>&1 \
+          AS_URL=$(./scripts/accli_wrapper.sh attestation-service health --url "https://0.0.0.0:8443" --cert-dir ./certs 2>&1 \
             | grep "attestation service is healthy and reachable on:" | awk '{print $NF}')
           echo "Got AS URL: ${AS_URL}"
           ./scripts/accli_wrapper.sh applications run function hello-snp --backend cvm -- --as-url ${AS_URL} --as-cert-path ./certs/cert.pem
