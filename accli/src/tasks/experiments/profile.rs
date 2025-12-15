@@ -12,6 +12,7 @@ use clap::Args;
 use csv::Writer;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{error, info};
+use rand::{seq::SliceRandom, thread_rng};
 use std::{
     fs::{self, File},
     path::PathBuf,
@@ -48,6 +49,21 @@ impl PolicyShape {
     }
 }
 
+#[derive(Clone, Copy)]
+enum AttributeFlavor {
+    AllAuthorities,
+    SingleAuthorityOnly,
+}
+
+impl AttributeFlavor {
+    fn file_suffix(&self) -> &'static str {
+        match self {
+            AttributeFlavor::AllAuthorities => "",
+            AttributeFlavor::SingleAuthorityOnly => "-single-authority",
+        }
+    }
+}
+
 #[derive(serde::Serialize)]
 struct Record {
     #[serde(rename = "NumAuthorities")]
@@ -64,12 +80,29 @@ fn build_authorities(num: usize) -> Vec<String> {
     (0..num).map(|idx| format!("as{idx:02}")).collect()
 }
 
-fn build_user_attributes(authorities: &[String]) -> Result<Vec<UserAttribute>> {
+fn build_user_attributes(
+    authorities: &[String],
+    flavor: AttributeFlavor,
+) -> Result<Vec<UserAttribute>> {
     let mut user_attrs = Vec::new();
-    for auth in authorities {
-        user_attrs.push(UserAttribute::parse(&format!("{auth}.wf:{WORKFLOW_ID}"))?);
-        user_attrs.push(UserAttribute::parse(&format!("{auth}.node:{NODE_ID}"))?);
-    }
+    match flavor {
+        AttributeFlavor::AllAuthorities => {
+            for auth in authorities {
+                user_attrs.push(UserAttribute::parse(&format!("{auth}.wf:{WORKFLOW_ID}"))?);
+                user_attrs.push(UserAttribute::parse(&format!("{auth}.node:{NODE_ID}"))?);
+            }
+        }
+        AttributeFlavor::SingleAuthorityOnly => {
+            // Pick an attribute at random.
+            let mut rng = thread_rng();
+            if let Some(auth) = authorities.choose(&mut rng) {
+                user_attrs.push(UserAttribute::parse(&format!("{auth}.wf:{WORKFLOW_ID}"))?);
+                user_attrs.push(UserAttribute::parse(&format!("{auth}.node:{NODE_ID}"))?);
+            } else {
+                anyhow::bail!("cannot build user attributes without authorities");
+            };
+        }
+    };
     Ok(user_attrs)
 }
 
@@ -119,12 +152,40 @@ fn measure_single_run(
 }
 
 fn run_shape(shape: PolicyShape, args: &ProfileRunArgs) -> Result<()> {
+    // Skip unsupported combinations.
+    if matches!(shape, PolicyShape::Conjunction) {
+        return run_shape_with_flavor(shape, AttributeFlavor::AllAuthorities, args);
+    }
+    run_shape_with_flavor(shape, AttributeFlavor::AllAuthorities, args)?;
+    run_shape_with_flavor(shape, AttributeFlavor::SingleAuthorityOnly, args)
+}
+
+fn run_shape_with_flavor(
+    shape: PolicyShape,
+    flavor: AttributeFlavor,
+    args: &ProfileRunArgs,
+) -> Result<()> {
+    if matches!(
+        (shape, flavor),
+        (
+            PolicyShape::Conjunction,
+            AttributeFlavor::SingleAuthorityOnly
+        )
+    ) {
+        info!("Skipping single-authority flavour for conjunction policy");
+        return Ok(());
+    }
+
     let data_dir = ensure_data_dir()?;
     let mut csv_path = data_dir;
-    csv_path.push(format!("{}.csv", shape.file_stem()));
+    csv_path.push(format!("{}{}.csv", shape.file_stem(), flavor.file_suffix()));
     let mut writer = Writer::from_writer(File::create(csv_path)?);
     let total_iters = (POLICY_SIZES.len() as u64) * (args.num_warmup_runs + args.num_runs) as u64;
-    let pb = ProgressBar::new(total_iters).with_message(shape.file_stem());
+    let pb = ProgressBar::new(total_iters).with_message(format!(
+        "{}{}",
+        shape.file_stem(),
+        flavor.file_suffix()
+    ));
     pb.set_style(
         ProgressStyle::with_template("{msg} [{bar:40.cyan/blue}] {pos}/{len}")
             .unwrap()
@@ -133,7 +194,7 @@ fn run_shape(shape: PolicyShape, args: &ProfileRunArgs) -> Result<()> {
 
     for &num_auth in POLICY_SIZES {
         let authorities = build_authorities(num_auth);
-        let user_attrs = build_user_attributes(&authorities)?;
+        let user_attrs = build_user_attributes(&authorities, flavor)?;
         let auths_ref: Vec<&str> = authorities.iter().map(|s| s.as_str()).collect();
 
         let mut rng = StdRng::seed_from_u64(1337 + num_auth as u64);
